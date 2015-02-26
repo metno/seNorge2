@@ -6,13 +6,9 @@ The spatial interpolation method is based on Bayesian statical interpolation and
 Any feedback is strongly appreciated. Please, report any idea/comment/bug to cristian.lussana@met.no
 !! Note that it is possible for observations affected by gross measurement errors to enter the spatial interpolation procedure.!!
 
-Input variables from KDVH Ulric:
-  TAMRR;Mean temperature (06-06 utc);Temperature; Dailyvalue:Arithmetic mean of 24 hourly values or a formula based mean value computed from fewer observations (06-06 utc).;ºC
-  RR;Precipitation;Precipitation; Daily total of precipitation (precipitation day 06-06 utc);mm
-  RR_1;Precipitation (1 hour); Precipitation;Amount of precipitation last hour;mm
-  TA;Air temperature; Temperature;Air temperature at time of observation;ºC
+Input variables from KDVH (through Ulric): TAMRR, RR, RR1, TA
 
-seNorge v 2.0 Outputs:
+seNorge v 2.0 Outputs:\\
     TEMP1d: Mean temperature (yesterday at 06 - today at 06 UTC); unit ºC
         input: TAMRR
         time range: 1957.01.01 to present
