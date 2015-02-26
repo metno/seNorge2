@@ -1,43 +1,39 @@
-# --~- Bspat_TEMP1d_v1_1.R  -~--
-# Bayesian spatial interpolation of daily mean air temperature (06-06 UTC)
+# --~- Bspat_TEMP1h_v1_1.R  -~--
+# Bayesian spatial interpolation of TA.
+# TA = istantaneous air temperature (sampled with hourly frequency)
 # Spatial Consistency Test (SCT) is included.
-# input: TAMRR from KDVH
 #
 # Outputs: look for "@@@@@@@@@" in the code and you'll get the ouput formats
 #
 # History:
-# 02.12.2014 - Cristian Lussana. Original code.
-# 25.02.2015 - Cristian Lussana. version 1.1.
+# 26.02.2015 - Cristian Lussana. original code from Bspat_TAMRR_v1_0.R
 #  change log: 
 #  - allow for the use of observations outside Norway
 #  - revisied queries to KDVH
 #  - geographical information on seNorge2_dem_UTM33.nc
-#  - definition of TEMP1d
+#  - definition of TEMP1h
 #  - definition of a new directory tree
 # ==~==========================================================================
 rm(list=ls())
 # Libraries
 library(raster)
 library(rgdal)
-library(colorspace)
 library(ncdf)
-# paths
-#[DEVELOPMENT]
 # paths
 #[DEVELOPMENT]
 main.path<-"/disk1/projects/seNorge2"
 main.path.output<-"/disk1"
 #
-main.path.prog<-paste(main.path,"/Bspat_TEMP1d",sep="")
+main.path.prog<-paste(main.path,"/Bspat_TEMP1h",sep="")
 main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
 # common libs and etcetera
 path2lib.com<-paste(main.path,"/lib",sep="")
 path2etc.com<-paste(main.path,"/etc",sep="")
 #
-path2output.main<-paste(main.path.output,"/seNorge2/TEMP1d",sep="")
+path2output.main<-paste(main.path.output,"/seNorge2/TEMP1h",sep="")
 path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
 path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1d",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1h",sep="")
 path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 # External Functions
 source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
@@ -51,7 +47,7 @@ proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellp
 proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
 #
 max.Km.stnINdomain<-50
-#-----------------------------------------------------------------------------
+#-------------------------------------------------------------------
 # [] Setup OI parameters
 sig2o<-3.0
 eps2<-0.5
@@ -74,10 +70,10 @@ Lsubsample.DHmax<-200
 Lsubsample.vec<-vector()
 # netcdf fixed parameters
 grid.type <- "utm33"
-source.nc<-"daily mean air temperature from station data (06-06 UTC)"
+source.nc<-"air temperature from station data"
 var.version.xa <- "1.0"
 prod.date <- substr(Sys.time(),1,10)
-pname.xa<-"TEMP1d"
+pname.xa<-"TEMP1h"
 for (p in 1:length(ncout.spec.list)) {
   if (ncout.spec.list[[p]]$pname==pname.xa) break
 }
@@ -93,32 +89,46 @@ if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=pname.xa) ) {
   times.ref.xa <-ncout.spec.list[[p]]$opts$t.ref
   reference.xa <- ncout.spec.list[[p]]$opts$reference
 }
-# vector full of 1 -> useful in IDI computations
 # MAIN ========================================================================
 # Read command line arguments
 arguments <- commandArgs()
 arguments
 date.string<-arguments[3]
-#1234567890
-#yyyy.mm.dd
+#1234567890123
+#yyyy.mm.dd.hh
 yyyy<-substr(date.string,1,4)
 mm<-substr(date.string,6,7)
 dd<-substr(date.string,9,10)
+hh<-substr(date.string,12,13)
+# useful only if nmt=1 in database query
+#if (as.numeric(hh)==0) {
+#  print(paste("Warning! Timestamp will be modified: from ",yyyy,".",mm,".",dd," ",hh,sep=""))
+#  aux.date <- strptime(paste(yyyy,mm,dd,hh,sep="."),"%Y.%m.%d.%H","UTC")
+#  date.minus.1h<-as.POSIXlt(seq(as.POSIXlt(aux.date),length.out=2,by="-1 hour"),"UTC")
+#  aux.date<-date.minus.1h[2]
+#  yyyy<-aux.date$year+1900
+#  mm<-formatC(aux.date$mon+1,width=2,flag="0")
+#  dd<-formatC(aux.date$mday,width=2,flag="0")
+#  hh<-24
+#  print(paste("to ",yyyy,".",mm,".",dd," ",hh," (UTC+1)",sep=""))
+#}
 date.dot<-paste(dd,".",mm,".",yyyy,sep="")
 yyyymm<-paste(yyyy,mm,sep="")
 yyyymmdd<-paste(yyyymm,dd,sep="")
+yyyymmddhh<-paste(yyyymmdd,hh,sep="")
+h<-as.numeric(hh)
 #
 dir.create(paste(path2output.main.stn,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
 out.file.stn<- paste(path2output.main.stn,"/",yyyymm,
-                "/seNorge_v2_0_TEMP1d_station_",yyyymmdd,".txt",sep="")
+                "/seNorge_v2_0_TEMP1h_station_",yyyymmddhh,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1h_grid_",yyyymmddhh,".nc",sep="")
 out.file.grd.bck<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_background_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1h_grid_background_",yyyymmddhh,".nc",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_idi_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1h_grid_idi_",yyyymmddhh,".nc",sep="")
 #
 print("Output files:")
 print("analysis on the grid (netcdf)")
@@ -132,8 +142,6 @@ print(out.file.stn)
 #------------------------------------------------------------------------------
 # Grid - it is defined by the DEM file
 # CRS Coordinate Reference System
-test<-F
-if (!test) {
 stackGeoGrid<-raster(filenamedem)
 nx<-ncol(stackGeoGrid)
 ny<-nrow(stackGeoGrid)
@@ -151,7 +159,7 @@ Xnodesw<-xmn
 Ynodesw<-ymn
 Xnode<-Xnodesw+(0:nx-1)*dx
 Ynode<-Ynodesw+(0:ny-1)*dy
-# Extract orography on unmasked gridpoints only
+# Extract orography and urban-weight on unmasked gridpoints only
 orog<-stackGeoGrid
 # extract all the cell values: cells[1] contains the orog[1,1] value
 # Raster: cell numbers start at 1 in the upper left corner,
@@ -171,7 +179,6 @@ colgrid<-rc[ccgrid,2]
 Lgrid<-length(xgrid)
 print(Lgrid)
 rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
-}
 #------------------------------------------------------------------------------
 # Read Station Information 
 myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
@@ -200,6 +207,8 @@ if (o.cont>10) {
   print(stataux)
   q(status=1)
 }
+#if (is.null(stations)) {
+#}
 # stataux column names
 # DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
 # Select stations having the geographical information needed
@@ -207,6 +216,7 @@ if (o.cont>10) {
 lat_dec<-as.numeric(stataux$LAT_DEC)
 lon_dec<-as.numeric(stataux$LON_DEC)
 z<-as.numeric(stataux$AMSL)
+#indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) & lat_dec>40 & lat_dec<85 & lon_dec>0 & lon_dec<60 )
 indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) )
 # second step: the location must be in Norway or on the border (lee than max.Km.stnINdomain)
 #  intermediate step: transformation in Km-coordinates ETRS_LAEA, which has a transformation 
@@ -317,20 +327,19 @@ D.b[row(D.b)==col(D.b)]<-D.b[row(D.b)==col(D.b)]+eps2.b
 #------------------------------------------------------------------------------
 # Elaborations
 # define header for the station data output file
-cat(paste("year","month","day","stid","x","y","z","yo",
+cat(paste("year","month","day","hour","stid","x","y","z","yo",
           "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
-    file=out.file.stn,append=F)
+          file=out.file.stn,append=F)
 # xx is the raster structure used for map production
 xx <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
 xx[]<-NA
-# get data from KDVH
-date<-paste(dd,".",mm,".",yyyy,sep="")
-print(paste("+ ",yyyymmdd," -~-----------------",sep=""))
+#
+print(paste("+ ",yyyymmddhh," -~-----------------",sep=""))
 ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
-             "metno?re=14&p=TAMRR&fd=",date,"&td=",date,
+             "metno?re=17&p=TA&fd=",date.dot,"&td=",date.dot,"&h=",h,
              "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
-             "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
+             "&ct=text/plain&split=1&nod=-999",sep="")
 #print(ulric)
 o.cont<-1
 while (o.cont<=10) {
@@ -338,13 +347,14 @@ while (o.cont<=10) {
   try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
           stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	          encoding = "UTF-8", quote = "",na.string=-999))
-# names(o) -->  Stnr;Year;Month;Day;TAMRR
+# names(o) -->  stnr;Year;Month;Day;TA
 #    print(o)
 #    print(length(o))
-  value<-as.numeric(o$TAMRR)
+  value<-as.numeric(o$TA)
   stnr<-as.numeric(o$Stnr)
+  hour.seq<-as.integer(o$Time.UTC.)
   value[value==-999]<-NA
-  indx<-which( !is.na(value) & (stnr %in% stations$stnr) )
+  indx<-which( !is.na(value) & (stnr %in% stations$stnr) & (hour.seq==h) )
   LOBSt<-length(indx)
   if (LOBSt<10) {
     print("exit with error in command:")
@@ -363,15 +373,16 @@ if (o.cont>10) {
 }
 # note: LOBSt always greater than 10
 print(paste("  Total number of observations [not NA] =",LOBSt))
-# OBS: "d"-day observations not NAs 
+# OBS: "d"-day observations without NAs
 OBS<-data.frame(matrix(nrow=LOBSt,ncol=7))
-names(OBS)<-c("stnr","year","month","day","value","DQC")
+names(OBS)<-c("stnr","year","month","day","hour","value","DQC")
 OBS$stnr<-stnr[indx]
 OBS$year<-o$Year[indx]
 OBS$month<-o$Month[indx]
 OBS$day<-o$Day[indx]
+OBS$hour<-hour.seq[indx]
 OBS$value<-value[indx]
-rm(stnr,o,indx,value)
+rm(stnr,o,indx,value,hour.seq)
 # DQC flag: -1 missing, 0 good obs, 1 erroneous obs
 OBS$DQC<-rep(-1,LOBSt)
 #  write.table(file="o.txt",o)
@@ -561,17 +572,6 @@ for (b in yo.h.pos) {
     back2.flag<-F
     J2<-J0+1
   }
-# DEBUG start      
-#      png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
-#      plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,
-#           xlim=c(min(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b]),na.rm=T),
-#                  max(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b]),na.rm=T)))
-#      points(yb.set0[close2b],VecZ[close2b],col="gray",cex=1.8)
-#      points(yb.set1[close2b],VecZ[close2b],pch=19,col="blue",cex=1.8)
-#      points(yb.set2[close2b],VecZ[close2b],pch=19,col="red",cex=1.8)
-##      mtext(,side=3,cex=1.6)
-#      dev.off()
-# DEBUG stop      
 # Best background
   aux<-order(c(J0,J1,J2))
   best<-aux[1]-1
@@ -625,22 +625,6 @@ for (b in yo.h.pos) {
 } # end cycle LOBSt
 LBAKh<-b.inc
 print(paste("# stations used in background elaborations=",LBAKh))
-#if (mode.flag!=0) {
-#  png(file=paste(dir.outmap.yb_used,"/",yyyymm,"/",
-#                 "SpInt_TEMP_background_blending_daily_v01_",yyyymmdd,".png",sep=""),height=1200,width=1200)
-#  plot(VecX,VecY,col="lightgray",pch=19,cex=0.2)
-#  points(VecX[yo.h.pos],VecY[yo.h.pos],col="gray",cex=1.5,pch=19)
-#  col.bak<-c("pink","gray","cyan","blue","green","gold")
-#  idx.col<-0
-#  for (b.inc in 1:LBAKh) {
-#    points(VecX[VecS.set.pos[yb.h.pos[b.inc],]],
-#           VecY[VecS.set.pos[yb.h.pos[b.inc],]],
-#           cex=2,col=col.bak[(b.inc%%6)+1],pch=19)
-#  }
-#  points(VecX[yb.h.pos],VecY[yb.h.pos],cex=2,col="red",pch=19)
-#  text(VecX[yb.h.pos],VecY[yb.h.pos],labels=VecS[yb.h.pos],cex=2)
-#  dev.off()
-#}
 # At this point I've this 5 outputs
 # 1. yb.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
 # 2. ybweights.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
@@ -794,15 +778,6 @@ while (TRUE) {
           back2.flag<-F
           J2<-J0+1
         }
-# DEBUG start
-#            png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
-#            plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,xlim=c(min(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b])),
-#                                                               max(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b])))
-#            points(yb.set0[close2b],VecZ[close2b],col="gray",cex=1.8)
-#            points(yb.set1[close2b],VecZ[close2b],pch=19,col="blue",cex=1.8)
-#            points(yb.set2[close2b],VecZ[close2b],pch=19,col="red",cex=1.8)
-#            dev.off()
-# DEBUG stop
 # Best background
         aux<-order(c(J0,J1,J2))
         best<-aux[1]-1
@@ -908,7 +883,7 @@ while (TRUE) {
 } # End of Station Analysis cycle (with SCT!)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Station Points - Write output on file 
-cat(paste(yyyy,mm,dd,
+cat(paste(yyyy,mm,dd,h,
           round(VecS,0),round(VecX,0),round(VecY,0),round(VecZ,0),
           round(yo,1),round(yb,2),round(ya,2),round(yav,2),
           round(yidi,3),round(yidiv,3),round(ydqc.flag,2),
@@ -1030,35 +1005,11 @@ for (b in yb.h.pos) {
 #      rm(G.b,K.b)
 }
 xbweights.norm<-xbweights.set/rowSums(xbweights.set)
-# DEBUG start
-#    for (b in 1:length(yb.h.pos)) {
-#      b.pos<-yb.h.pos[b]
-#      xindx<-which( (xgrid-min(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))>(-3*Dh.b*1000) & 
-#                    (xgrid-max(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))<(3*Dh.b*1000) &
-#                    (ygrid-min(VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))>(-3*Dh.b*1000) & 
-#                    (ygrid-max(VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))<(3*Dh.b*1000) )
-#      xx[ccgrid]<-NA
-#      xx[ccgrid[xindx]]<-xbweights.norm[xindx,b]
-#      png(file=paste("xb_norm_",VecS[b.pos],".png",sep=""),width=1400,height=1400)
-#      image(xx,breaks=seq(0,1,by=0.01),col=rainbow(100))
-#      points(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],pch=19,col="black")
-#      points(VecX[b.pos],VecY[b.pos],pch=19,col="black",cex=2)
-#      legend(x="bottomright",legend=seq(0,1,by=0.01),fill=rainbow(100),cex=0.9)
-#      dev.off()
-#      xx[ccgrid[xindx]]<-xbweights.set[xindx,b]
-#      png(file=paste("xb_set_",VecS[b.pos],".png",sep=""),width=1400,height=1400)
-#      image(xx,breaks=seq(0,1,by=0.01),col=rainbow(100))
-#      points(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],pch=19,col="black")
-#      points(VecX[b.pos],VecY[b.pos],pch=19,col="black",cex=2)
-#      legend(x="bottomright",legend=seq(0,1,by=0.01),fill=rainbow(100),cex=0.9)
-#      dev.off()
-#    }
-# DEBUG end
-#    print(paste(round(rowSums(ybweights.set),9),"\n"))
 for (i in 1:Lgrid) {
   xb[i]<-xbweights.norm[i,] %*% xb.set[i,]
 }
 rm(xb.set,xbweights.norm,xbweights.set,xindx,xindx1)
+#------------------------------------------------------------------------------
 # Gridded Analysis/IDI    
 xa<-vector(mode="numeric",length=Lgrid)
 xidi<-vector(mode="numeric",length=Lgrid)
@@ -1103,15 +1054,14 @@ xx[]<-NA
 # 
 xx[ccgrid]<-round(xa,1)
 nogrid.ncout(grid=t(as.matrix(xx)),
-             x=x.G,y=y.G,
-             grid.type=grid.type,
+             x=x.G,y=y.G,grid.type=grid.type,
              file.name=out.file.grd.ana,
              var.name=var.name.xa,
              var.longname=var.longname.xa,
              var.unit=var.unit.xa,
              var.mv=var.mv.xa,
              var.version=var.version.xa,
-             times=c(paste(yyyymmdd,"0000",sep="")),times.unit=times.unit.xa,
+             times=c(paste(yyyymmddhh,"00",sep="")),times.unit=times.unit.xa,
              times.ref=times.ref.xa,
              prod.date=prod.date,
              reference=reference.xa,
@@ -1128,7 +1078,7 @@ nogrid.ncout(grid=t(as.matrix(xx)),
              var.unit=var.unit.xa,
              var.mv=var.mv.xa,
              var.version=var.version.xa,
-             times=c(paste(yyyymmdd,"0000",sep="")),times.unit=times.unit.xa,
+             times=c(paste(yyyymmddhh,"00",sep="")),times.unit=times.unit.xa,
              times.ref=times.ref.xa,
              prod.date=prod.date,
              reference=reference.xa,
@@ -1137,7 +1087,7 @@ nogrid.ncout(grid=t(as.matrix(xx)),
 # output - IDI
 xx[]<-NA
 xx[ccgrid]<-round(xidi,3)
-rnc<-writeRaster(xx,filename=out.file.grd.idi,format="CDF", overwrite=TRUE)
+rnc <- writeRaster(xx, filename=out.file.grd.idi,format="CDF",overwrite=TRUE)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Exit - Success
 q(status=0)

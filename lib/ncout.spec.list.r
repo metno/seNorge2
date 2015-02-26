@@ -83,8 +83,36 @@ ncout.spec.list <- alist(
 #                       reference = paste("",sep=""))
                        reference = "")
         ),
+
+    list( pname="TEMP1h",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "H",
+                       var.name = "temperature",
+                       var.longname = "air temperature",
+                       var.unit = "Celsius degrees",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
     
     list( pname="TAM",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "D",
+                       var.name = "mean_temperature",
+                       var.longname = "daily mean temperature",
+                       var.unit = "Celsius degrees",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
+
+    list( pname="TEMP1d",  
           opts =  alist(
                        fname.nc = "AUTO",
                        t.ref = "190001010000",
