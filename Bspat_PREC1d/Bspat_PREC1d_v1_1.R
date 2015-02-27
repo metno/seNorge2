@@ -571,144 +571,70 @@ yo[]<-NA
 # set DQC flag to 0 for every station/observation
 ydqc.flag[]<-0
 # cycle over days to get data from KDVH
-for (d in 1:nday) {
-  yyyy<-dayseq$year[d]+1900
-  mm<-dayseq$mon[d]+1
-  dd<-dayseq$mday[d]
-  date<-paste(dd,".",mm,".",yyyy,sep="")
-  dd<-getStationData(var="RR", from.date=date, to.date=date, qa=NULL, statlist=stations, outside.Norway=T)
-q()
-  ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
-               "metno?re=14&p=RR&fd=",date,"&td=",date,
-               "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
-               "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
-  print(ulric)
-  o.cont<-1
-  while (o.cont<=10) {
-    o<-NULL
-    try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
-            stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
- 	            encoding = "UTF-8", quote = "",na.strings="-999"))
-    print(o)
-    value<-as.numeric(o$RR)
-    stnr<-as.numeric(o$Stnr)
-    value[value==-999]<-NA
-    indx<-which( !is.na(value) & (stnr %in% stations$stnr) )
-    L.y.fromKDVH<-length(indx)
-    if (L.y.fromKDVH<10) {
-      print("exit with error in command:")
-      print(ulric)
-      o.cont<-o.cont+1
-      Sys.sleep(5)
-#      q(status=1)
-    } else {
-      break
-    }
-  }
-  if (o.cont>10) {
-    print("Fatal Error in command:")
-    print(ulric)
-    q(status=1)
-  }
-  if (exists("OBS")) rm(OBS)
-  OBS<-data.frame(matrix(nrow=L.y.fromKDVH,ncol=7))
-  names(OBS)<-c("stnr","year","month","day","value","datetime")
-  OBS$stnr<-stnr[indx]
-  OBS$year<-o$Year[indx]
-  OBS$month<-o$Month[indx]
-  OBS$day<-o$Day[indx]
-  OBS$value<-value[indx]
-  rm(stnr,o,indx,value)
-  OBS$datetime<-as.POSIXlt(strptime(paste(OBS$year,
-                                    formatC(OBS$month,width=2,flag="0"),
-                                    formatC(OBS$day,width=2,flag="0"),
-                                    sep=""),"%Y%m%d"),"UTC")
-  #
-  obs.match.stn<-match(OBS$stnr,stations$stnr)
-  value.tmp<-as.numeric(as.vector(OBS$value))
-  obs.match.stn.unique<-unique(obs.match.stn)
-  n.obs.match.stn.unique<-length(obs.match.stn.unique)
-  for (i in 1:n.obs.match.stn.unique) {
-    indx<-which(obs.match.stn==obs.match.stn.unique[i])
-    n.indx<-length(indx)
-    if (n.indx==0) next 
-    if (!any(!is.na(value.tmp[indx]))) next
-    # DQC check: plausibility check
-    if (any(value.tmp[indx]<yo.dqc.plausible.min) | any(value.tmp[indx]>yo.dqc.plausible.max)) {
-      flag.aux<-sapply(ydqc.flag[obs.match.stn.unique[i]],function(x){ as.integer(intToBits(x))})
-      if (flag.aux[3,1]==0) ydqc.flag[obs.match.stn.unique[i]]<-ydqc.flag[obs.match.stn.unique[i]]+2**2
-    }
-    # DQC External
-    stnr.cur<-stations$stnr[obs.match.stn.unique[i]]
-    if ( stnr.cur %in% err.stnr ) {
-      aux<-which(errobs$stnr==stnr.cur)
-      err.timeseq<-as.POSIXlt(strptime(paste(errobs$Year[aux],
-                              formatC(errobs$Month[aux],width=2,flag="0"),
-                              formatC(errobs$Day[aux],width=2,flag="0"),
-                              formatC(errobs$Hour[aux],width=2,flag="0"),sep=""),"%Y%m%d%H"),"UTC")
-      indx.1<-which(OBS$stnr==stnr.cur)
-      if (any(OBS$datetime[indx.1] %in% err.timeseq)) {
-        flag.aux<-sapply(ydqc.flag[obs.match.stn.unique[i]],function(x){ as.integer(intToBits(x))})
-        if (flag.aux[5,1]==0) ydqc.flag[obs.match.stn.unique[i]]<-ydqc.flag[obs.match.stn.unique[i]]+2**4
-      }
-    }
-    #
-    if (is.na(n.yo[obs.match.stn.unique[i]])) {
-      n.yo[obs.match.stn.unique[i]]<-length(indx)
-      yo[obs.match.stn.unique[i]]<-sum(value.tmp[indx])
-    } else {
-      n.yo[obs.match.stn.unique[i]]<-n.yo[obs.match.stn.unique[i]]+length(indx)
-      yo[obs.match.stn.unique[i]]<-yo[obs.match.stn.unique[i]]+sum(value.tmp[indx])
-    }
-  }
-} # cycle over days to get data from KDVH 
-#
+if (nday==1) {
+  data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+                       to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+                       qa=NULL, statlist=stations, outside.Norway=T,
+                       err.file=file_errobs, blist.perm=file_blacklist_never,
+                       blist.curr=file_blacklist_current, verbose=T,
+                       val.min.allowed=yo.dqc.plausible.min,
+                       val.max.allowed=yo.dqc.plausible.max)
+} else {
+  data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+                       to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+                       qa=NULL, statlist=stations, outside.Norway=T,
+                       err.file=file_errobs, blist.perm=file_blacklist_never, 
+                       blist.curr=file_blacklist_current, verbose=T,
+                       val.min.allowed=yo.dqc.plausible.min, 
+                       val.max.allowed=yo.dqc.plausible.max,fun="sum")
+}
+print(data)
+n.data<-length(data$stnr)
+#data.names<-c("stnr","year","month","day","hour","ntime",
+#              "value","nvalue","DQC",
+#              "KDVHflag",
+#              "plausible","err.ext",
+#              "blist.perm","blist.curr")
+yo<-data$value
 y.notNA<-which(!is.na(yo))
 L.y.notNA<-length(y.notNA)
+#
+data$DQC[]<-NA
+for (i in 1:n.data) {
+  if (is.na(data$value[i])) next
+  data$DQC[i]<--1
+  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]>2) data$DQC[i]<-100
+  if (data$ntime[i]!=data$nvalue[i] |
+      !data$plausible[i] |
+      data$err.ext[i] |
+      data$blist.perm[i] |
+      data$blist.curr[i]) data$DQC[i]<-100
+}
+print(data)
+q()
 # DQC
-aux<-which(n.yo[y.notNA]!=nday)
-if (length(aux>0)) ydqc.flag[y.notNA][aux]<-ydqc.flag[y.notNA][aux]+2**3
-# DQC blacklists
-if (exists("blacklist_current")) {
-  aux<-which(VecS %in% blacklist_current$stnr)
-  if (length(aux)>0) {
-#    print("blacklist (current):")
-#    print(cbind(VecS[aux],yo[aux]))
-#    yo[aux]<-NA
-    ydqc.flag[aux]<-ydqc.flag[aux]+2**6
-  }
-}
-if (exists("blacklist_never")) {
-  aux<-which(VecS %in% blacklist_never$stnr)
-  if (length(aux)>0) {
-#    print("blacklist (never):")
-#    print(cbind(VecS[aux],yo[aux]))
-#    yo[aux]<-NA
-    ydqc.flag[aux]<-ydqc.flag[aux]+2**7
-  }
-}
 # mask observations that are outside the grid
 # ydqc.flag=100 masked
-for (b in 1:L.y.notNA) {
-  r.b<-1+as.integer(abs(VecY[y.notNA[b]]-ymx.CG)/dy.CG)
-  c.b<-1+as.integer((VecX[y.notNA[b]]-xmn.CG)/dx.CG)
-  flag<-F
-  for (ii in -1:1) {
-    for (jj in -1:1) {
-      r.ii<-r.b+ii
-      c.jj<-c.b+jj
-      if (r.ii<1 | r.ii>ny.CG | c.jj<1 | c.jj>nx.CG) {
-        next
-      }
-      if (!is.na(mat2vec.CG[r.ii,c.jj])) flag<-T 
-    }
-  }
-  if (!flag) ydqc.flag[y.notNA[b]]<-ydqc.flag[y.notNA[b]]+2**5
-}
+# "####" comments
+####for (b in 1:L.y.notNA) {
+####  r.b<-1+as.integer(abs(VecY[y.notNA[b]]-ymx.CG)/dy.CG)
+####  c.b<-1+as.integer((VecX[y.notNA[b]]-xmn.CG)/dx.CG)
+####  flag<-F
+####  for (ii in -1:1) {
+####    for (jj in -1:1) {
+####      r.ii<-r.b+ii
+####      c.jj<-c.b+jj
+####      if (r.ii<1 | r.ii>ny.CG | c.jj<1 | c.jj>nx.CG) {
+####        next
+####      }
+####      if (!is.na(mat2vec.CG[r.ii,c.jj])) flag<-T 
+####    }
+####  }
+####  if (!flag) ydqc.flag[y.notNA[b]]<-ydqc.flag[y.notNA[b]]+2**5
+####}
 # DQC flag set to missing
 ydqc.flag[y.notNA][ydqc.flag[y.notNA]==0]<-2**0
 #
-flag.aux<-sapply(ydqc.flag,function(x){ as.integer(intToBits(x))})
 print(paste("number of station having at least one available observation =",L.y.notNA,"(tot=",L.y.tot,")"))
 print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(flag.aux[3,]==1))))
 print(paste("  # station having at least one erroneous observation       (external DQC) =",length(which(flag.aux[5,]==1))))

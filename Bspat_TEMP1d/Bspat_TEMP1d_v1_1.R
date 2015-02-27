@@ -43,6 +43,7 @@ path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
 source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
 source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+source(paste(path2lib.com,"/getStationData.R",sep=""))
 # Read Geographical Information
 filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
 # CRS strings
@@ -174,95 +175,10 @@ rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
 }
 #------------------------------------------------------------------------------
 # Read Station Information 
-myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
-               "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
-               "&fy=",yyyy,"&ty=",yyyy,sep="")
-#print(myurl)
-o.cont<-1
-while (o.cont<=10) {
-  stataux<-NULL
-  try(stataux <-read.table(myurl, header = TRUE,  sep = ";",
-                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-                         encoding = "UTF-8", quote = "",na.string=-999))
-  if (length(stataux)<10) {
-    print("exit with error in command:")
-        print(myurl)
-        o.cont<-o.cont+1
-        Sys.sleep(5)
-#      q(status=1)
-  } else {
-    break
-  }
-}
-if (o.cont>10) {
-  print("Fatal Error in command:")
-  print(myurl)
-  print(stataux)
-  q(status=1)
-}
-# stataux column names
-# DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
-# Select stations having the geographical information needed
-# first step: lat, lon and elevation must be present
-lat_dec<-as.numeric(stataux$LAT_DEC)
-lon_dec<-as.numeric(stataux$LON_DEC)
-z<-as.numeric(stataux$AMSL)
-indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) )
-# second step: the location must be in Norway or on the border (lee than max.Km.stnINdomain)
-#  intermediate step: transformation in Km-coordinates ETRS_LAEA, which has a transformation 
-#    less problematic than UTM33
-coord<-SpatialPoints(cbind(lon_dec[indx],lat_dec[indx]), proj4string=CRS(proj4.wgs84))
-coord.new<-spTransform(coord, CRS(proj4.ETRS_LAEA))
-xy.RR<-coordinates(coord.new)
-x<-round(xy.RR[,1],0)
-y<-round(xy.RR[,2],0)
-stations.tmp<-data.frame(matrix(nrow=length(indx),ncol=7))
-names(stations.tmp)<-c("stnr","dept_no","lat_dec","lon_dec","z","x","y")
-stations.tmp$stnr<-as.numeric(stataux$STNR[indx])
-stations.tmp$dept_no<-as.numeric(stataux$DEPT_NO[indx])
-stations.tmp$z<-z[indx]
-stations.tmp$y<-y
-stations.tmp$x<-x
-stations.tmp$lat_dec<-lat_dec[indx]
-stations.tmp$lon_dec<-lon_dec[indx]
-n.stn<-length(stations.tmp$stnr)
-indx.no<-which(stations.tmp$dept_no>=1 & stations.tmp$dept_no<=20)
-Disth<-matrix(ncol=n.stn,nrow=n.stn,data=0.)
-Disth<-(outer(stations.tmp$y,stations.tmp$y,FUN="-")**2.+outer(stations.tmp$x,stations.tmp$x,FUN="-")**2.)**0.5/1000.
-aux.in<-vector(length=n.stn)
-aux.in[1:n.stn]<-F
-for (s in indx.no) {
-  aux.in[which(Disth[s,]<max.Km.stnINdomain)]<-T 
-}
-indx.in<-which(aux.in)
-# final step: create the structure stations containing the selected stations in utm33 coordinates
-# note: for each of the selected we will obtain an analysis value
-LOBS<-length(indx.in)
-stations<-data.frame(matrix(nrow=LOBS,ncol=4))
-names(stations)<-c("stnr","z","x","y")
-lat_dec<-stations.tmp$lat_dec[indx.in]
-lon_dec<-stations.tmp$lon_dec[indx.in]
-coord<-SpatialPoints(cbind(lon_dec,lat_dec), proj4string=CRS(proj4.wgs84))
-coord.new<-spTransform(coord, CRS(proj4.utm33))
-xy.RR<-coordinates(coord.new)
-stations$x<-round(xy.RR[,1],0)
-stations$y<-round(xy.RR[,2],0)
-stations$z<-stations.tmp$z[indx.in]
-stations$stnr<-stations.tmp$stnr[indx.in]
-rm(lat_dec,lon_dec,z,indx,coord,coord.new,xy.RR,x,y)
-rm(stations.tmp,n.stn,indx.no,Disth,aux.in,indx.in)
-# OLD code
-# Find stations in Norway (Mainland).
-#indx<-which( (as.numeric(stataux$STNR)<99710)  & 
-#             (as.numeric(stataux$STNR)!=76900) &
-#             (as.numeric(stataux$STNR)!=76933) &
-#             (as.numeric(stataux$STNR)!=76930) &
-#             (as.numeric(stataux$STNR)!=76928) &
-#             (as.numeric(stataux$UTM_E)>=-65000) &
-#             (as.numeric(stataux$UTM_N)<=8000000) &
-#             !is.na(as.numeric(stataux$UTM_E)) & 
-#             !is.na(as.numeric(stataux$UTM_N)) & 
-#             !is.na(as.numeric(stataux$AMSL)) )
+# [] Read Station Information 
+stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
+                             max.Km=max.Km.stnINdomain)
+LOBS<-length(stations$stnr)
 print(LOBS)
 # define Vectors and Matrices
 VecX<-vector(mode="numeric",length=LOBS)
@@ -325,62 +241,68 @@ xx <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
 xx[]<-NA
 # get data from KDVH
-date<-paste(dd,".",mm,".",yyyy,sep="")
-print(paste("+ ",yyyymmdd," -~-----------------",sep=""))
-ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
-             "metno?re=14&p=TAMRR&fd=",date,"&td=",date,
-             "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
-             "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
-#print(ulric)
-o.cont<-1
-while (o.cont<=10) {
-  o<-NULL
-  try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
-          stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
- 	          encoding = "UTF-8", quote = "",na.string=-999))
-# names(o) -->  Stnr;Year;Month;Day;TAMRR
-#    print(o)
-#    print(length(o))
-  value<-as.numeric(o$TAMRR)
-  stnr<-as.numeric(o$Stnr)
-  value[value==-999]<-NA
-  indx<-which( !is.na(value) & (stnr %in% stations$stnr) )
-  LOBSt<-length(indx)
-  if (LOBSt<10) {
-    print("exit with error in command:")
-    print(ulric)
-    o.cont<-o.cont+1
-    Sys.sleep(5)
-#      q(status=1)
-  } else {
-    break
-  }
-}
-if (o.cont>10) {
-  print("Fatal Error in command:")
-  print(ulric)
-  q(status=1)
-}
-# note: LOBSt always greater than 10
-print(paste("  Total number of observations [not NA] =",LOBSt))
-# OBS: "d"-day observations not NAs 
-OBS<-data.frame(matrix(nrow=LOBSt,ncol=7))
-names(OBS)<-c("stnr","year","month","day","value","DQC")
-OBS$stnr<-stnr[indx]
-OBS$year<-o$Year[indx]
-OBS$month<-o$Month[indx]
-OBS$day<-o$Day[indx]
-OBS$value<-value[indx]
-rm(stnr,o,indx,value)
-# DQC flag: -1 missing, 0 good obs, 1 erroneous obs
-OBS$DQC<-rep(-1,LOBSt)
-#  write.table(file="o.txt",o)
-stn.match.obs<-match(stations$stnr,OBS$stnr)
-obs.match.stn<-match(OBS$stnr,stations$stnr)
-yo[]<-NA
-yo[obs.match.stn]<-as.numeric(as.vector(OBS$value))
+data<-getStationData(var="TAMRR", from.yyyy=yyyy, from.mm=mm, from.dd=dd,
+                     to.yyyy=yyyy, to.mm=mm, to.dd=dd,
+                     qa=NULL, statlist=stations, outside.Norway=T,
+                     verbose=T)
+yo<-as.numeric(data$value)
 yo.h.pos<-which(!is.na(yo))
-rm(OBS)
+####date<-paste(dd,".",mm,".",yyyy,sep="")
+####print(paste("+ ",yyyymmdd," -~-----------------",sep=""))
+####ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
+####             "metno?re=14&p=TAMRR&fd=",date,"&td=",date,
+####             "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
+####             "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
+#####print(ulric)
+####o.cont<-1
+####while (o.cont<=10) {
+####  o<-NULL
+####  try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
+####          stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
+#### 	          encoding = "UTF-8", quote = "",na.string=-999))
+##### names(o) -->  Stnr;Year;Month;Day;TAMRR
+#####    print(o)
+#####    print(length(o))
+####  value<-as.numeric(o$TAMRR)
+####  stnr<-as.numeric(o$Stnr)
+####  value[value==-999]<-NA
+####  indx<-which( !is.na(value) & (stnr %in% stations$stnr) )
+####  LOBSt<-length(indx)
+####  if (LOBSt<10) {
+####    print("exit with error in command:")
+####    print(ulric)
+####    o.cont<-o.cont+1
+####    Sys.sleep(5)
+#####      q(status=1)
+####  } else {
+####    break
+####  }
+####}
+####if (o.cont>10) {
+####  print("Fatal Error in command:")
+####  print(ulric)
+####  q(status=1)
+####}
+##### note: LOBSt always greater than 10
+####print(paste("  Total number of observations [not NA] =",LOBSt))
+##### OBS: "d"-day observations not NAs 
+####OBS<-data.frame(matrix(nrow=LOBSt,ncol=7))
+####names(OBS)<-c("stnr","year","month","day","value","DQC")
+####OBS$stnr<-stnr[indx]
+####OBS$year<-o$Year[indx]
+####OBS$month<-o$Month[indx]
+####OBS$day<-o$Day[indx]
+####OBS$value<-value[indx]
+####rm(stnr,o,indx,value)
+##### DQC flag: -1 missing, 0 good obs, 1 erroneous obs
+####OBS$DQC<-rep(-1,LOBSt)
+#####  write.table(file="o.txt",o)
+####stn.match.obs<-match(stations$stnr,OBS$stnr)
+####obs.match.stn<-match(OBS$stnr,stations$stnr)
+####yo[]<-NA
+####yo[obs.match.stn]<-as.numeric(as.vector(OBS$value))
+####yo.h.pos<-which(!is.na(yo))
+####rm(OBS)
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
 # the Lsubsample (closest) surrounding stations.

@@ -70,7 +70,7 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   aux.in<-vector(length=n.stn)
   aux.in[1:n.stn]<-F
   for (s in indx.no) {
-    aux.in[which(Disth[s,]<max.Km)]<-T 
+    aux.in[which(Disth[s,]<=max.Km)]<-T 
   }
   indx.in<-which(aux.in)
 # final step: create the structure stations containing the selected stations in utm33 coordinates
@@ -94,9 +94,94 @@ getStationMetadata<-function(from.year,to.year,max.Km)
 }
 
 # get station data from KDVH.
-getStationData<-function(var=NULL, from.date, to.date, h=NULL, qa=NULL, statlist=NULL, outside.Norway=F)
+getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
+                         to.dd, to.mm, to.yyyy, to.hh,
+                         h=NULL, qa=NULL, statlist=NULL, outside.Norway=F,
+                         err.file=NULL, blist.perm=NULL, blist.curr=NULL, 
+                         fun=NULL, verbose=F, 
+                         val.min.allowed=NULL, val.max.allowed=NULL)
 # from.date/to.date -> dd.mm.yyyy
+# output (follows the statlist order for stations):
+#  stnr: station number
+#  year month day: date
+#  hour: hour ("NA" in case of daily variables)
+#     note: if fun="sum" then the date is the date of the first step (the older)
+#  ntime: number of timestamp requested
+#  value: observed value
+#  nvalue: number of observed values (used in fun)
+#  DQC: empty, set to NA (used after the call at this function to create a definitive DQC flag)
+#  KDVHflag: DQC flag from KDVH. in fun="sum" then KDVHflag is set to 100 if at least one of the flags is >2
+#  plausible: plausibility-check result (T=plausible, F=not plausible)
+#  err.ext: DQC flag from external files (T=err, F=good)
+#  blist.perm: T if station is permanently blacklisted
+#  blist.curr: T if station is temporary blacklisted
+#    note: if fun="sum" then 
+#     plausible=F if at least one of the observation has plausible=F
+#     err.ext,blist.perm,blist.curr=T if at least one of the observation has err.ext,blist.perm,blist.curr=T
+#================================================================================
 {
+  max.try<-10
+  sleep.int<-5
+  data.names<-c("stnr","year","month","day","hour","ntime",
+                "value","nvalue","DQC",
+                "KDVHflag",
+                "plausible","err.ext",
+                "blist.perm","blist.curr")
+  data.names.col<-length(data.names)
+# check input information
+  from.date<-paste(from.dd,".",from.mm,".",from.yyyy,sep="")
+  to.date<-paste(to.dd,".",to.mm,".",to.yyyy,sep="")
+#
+  valid.var<-c("TAMRR","TAM","TA","RR","RR_1")
+  if (!var %in% valid.var) {
+    data<-data.frame(matrix(nrow=1,ncol=data.names.col))
+    names(data)<-data.names
+    data$stnr[1]<--100
+    return(data)
+  }
+  if (is.null(statlist)) {
+    yyyy<-format(Sys.time(), "%Y")
+    statlist<-getStationMetadata(from.year=yyyy,to.year=yyyy,max.Km=0)
+  }
+  err.file.ok<-F
+  if (!is.null(err.file)) {
+    if (file.exists(err.file)) {
+      errobs<-read.table(file=err.file,header=T,sep=";")
+      names(errobs)<-c("stnr","year","month","day","hour","value")
+      err.timeseq<-as.POSIXlt(strptime(paste(errobs$year,
+                              formatC(errobs$month,width=2,flag="0"),
+                              formatC(errobs$day,width=2,flag="0"),
+                              formatC(errobs$hour,width=2,flag="0"),sep=""),"%Y%m%d%H"),"UTC")
+      err.stnr<-unique(errobs$stnr)
+      err.file.ok<-T
+    } else {
+      print("Warning: file not found")
+      print(file_errobs)
+    }
+  }
+  blist.perm.file.ok<-F
+  if (!is.null(blist.perm)) {
+    if (file.exists(blist.perm)) {
+      blacklist_permanent<-read.table(file=blist.perm,header=T,sep=";")
+      names(blacklist_permanent)<-c("stnr")
+      blist.perm.file.ok<-T
+    } else {
+      print("Warning: file not found")
+      print(blist.perm)
+    }
+  }
+  blist.curr.file.ok<-F
+  if (!is.null(blist.curr)) {
+    if (file.exists(blist.curr)) {
+      blacklist_current<-read.table(file=blist.curr,header=T,sep=";")
+      names(blacklist_current)<-c("stnr")
+      blist.curr.file.ok<-T
+    } else {
+      print("Warning: file not found")
+      print(blist.curr)
+    }
+  }
+#
   str.var<-""
   str.qa<-""
   str.out<-""
@@ -133,12 +218,14 @@ getStationData<-function(var=NULL, from.date, to.date, h=NULL, qa=NULL, statlist
                           "&ct=text/plain&split=1&nod=-999&flag=10",
                           str.out,sep="")
   }
-  print(ulric.data)
-  print(ulric.flag)
-  print(ulric.data.out)
-  print(ulric.flag.out)
+  if (verbose) {
+    print(ulric.data)
+    print(ulric.flag)
+    print(ulric.data.out)
+    print(ulric.flag.out)
+  }
   o.cont<-1
-  while (o.cont<=10) {
+  while (o.cont<=max.try) {
     o<-NULL
     q<-NULL
     o.out<-NULL
@@ -146,6 +233,15 @@ getStationData<-function(var=NULL, from.date, to.date, h=NULL, qa=NULL, statlist
     try(o <- read.table(ulric.data, header = TRUE,  sep = ";",
                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                    encoding = "UTF-8", quote = "",na.string=-999))
+    if (length(o$Stnr==0)) {
+      if (verbose) {
+        print("getStationData: exit with error in command:")
+        print(ulric.data)
+      }
+      o.cont<-o.cont+1
+      Sys.sleep(sleep.int)
+      next
+    }
     try(q <- read.table(ulric.flag, header = TRUE,  sep = ";",
                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                    encoding = "UTF-8", quote = "",na.string=-999))
@@ -157,36 +253,43 @@ getStationData<-function(var=NULL, from.date, to.date, h=NULL, qa=NULL, statlist
                               stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                          encoding = "UTF-8", quote = "",na.string=-999))
     }
-    if (var=="TAMRR") value<-suppressWarnings(as.numeric(o$TAMRR))
-    if (var=="TAM") value<-suppressWarnings(as.numeric(o$TAM))
-    if (var=="RR") value<-suppressWarnings(as.numeric(o$RR))
-    if (var=="TA") value<-suppressWarnings(as.numeric(o$TA))
-    if (var=="RR_1") value<-suppressWarnings(as.numeric(o$RR_1))
-    stnr.o<-suppressWarnings(as.numeric(o$Stnr))
+    names(o)<-c("stnr","year","month","day","Hour","value")
+    names(q)<-c("stnr","year","month","day","Hour","flag")
+    names(o.out)<-c("stnr","year","month","day","Hour","value")
+    names(q.out)<-c("stnr","year","month","day","Hour","flag")
+    value<-suppressWarnings(as.numeric(o$value))
+    stnr.o<-suppressWarnings(as.numeric(o$stnr))
     value[value==-999]<-NA
     indx<-which( !is.na(value) & (stnr.o %in% stations$stnr) )
     n.o<-length(indx)
-    if (n.o<10) {
-      print("getStationData: exit with error in command:")
-      print(ulric.data)
+    if (n.o<max.try) {
+      if (verbose) {
+        print("getStationData: exit with error in command:")
+        print(ulric.data)
+      }
       o.cont<-o.cont+1
-      Sys.sleep(5)
+      Sys.sleep(sleep.int)
     } else {
       break
     }
   }
-  if (o.cont>10) {
-    print("getStationData: Fatal Error in command:")
-    print(ulric.data)
-    q(status=1)
+  if (o.cont>max.try) {
+    if (verbose) {
+      print("getStationData: Fatal Error in command:")
+      print(ulric.data)
+    }
+    data<-data.frame(matrix(nrow=1,ncol=data.names.col))
+    names(data)<-data.names
+    data$stnr[1]<--200
+    return(data)
   }
   if (outside.Norway) {
-    if (length(o.out$Stnr)>0) {
+    if (length(o.out$stnr)>0) {
       o.tot<-merge(o,o.out,all=T)
     } else {
       o.tot<-o
     }
-    if (length(q.out$Stnr)>0) {
+    if (length(q.out$stnr)>0) {
       q.tot<-merge(q,q.out,all=T)
     } else {
       q.tot<-q
@@ -195,89 +298,143 @@ getStationData<-function(var=NULL, from.date, to.date, h=NULL, qa=NULL, statlist
     o.tot<-o
     q.tot<-q
   }
-  print("oooooooooooooooo")
-  print(o)
-  print("oooooooooooooooo.out")
-  print(o.out)
-  print("oooooooooooooooo.tot")
-  print(o.tot)
-  print("qqqqqqqqqqqqqqqq.tot")
-  print(q.tot)
-  if (var=="TAMRR") value<-suppressWarnings(as.numeric(o.tot$TAMRR))
-  if (var=="TAM") value<-suppressWarnings(as.numeric(o.tot$TAM))
-  if (var=="RR") value<-suppressWarnings(as.numeric(o.tot$RR))
-  if (var=="TA") value<-suppressWarnings(as.numeric(o.tot$TA))
-  if (var=="RR_1") value<-suppressWarnings(as.numeric(o.tot$RR_1))
-  if (var=="TAMRR") flag<-suppressWarnings(as.numeric(q.tot$TAMRR))
-  if (var=="TAM") flag<-suppressWarnings(as.numeric(q.tot$TAM))
-  if (var=="RR") flag<-suppressWarnings(as.numeric(q.tot$RR))
-  if (var=="TA") flag<-suppressWarnings(as.numeric(q.tot$TA))
-  if (var=="RR_1") flag<-suppressWarnings(as.numeric(q.tot$RR_1))
-  stnr.o<-suppressWarnings(as.numeric(o.tot$Stnr))
-  stnr.q<-suppressWarnings(as.numeric(q.tot$Stnr))
+  names(o.tot)<-c("stnr","year","month","day","hour","value")
+  names(q.tot)<-c("stnr","year","month","day","hour","flag")
+  value<-suppressWarnings(as.numeric(o.tot$value))
+  flag<-suppressWarnings(as.numeric(q.tot$flag))
+  stnr.o<-suppressWarnings(as.numeric(o.tot$stnr))
+  stnr.o.unique<-unique(stnr.o)
+  indx.stn<-which(statlist$stnr %in% stnr.o)
+  stnr.q<-suppressWarnings(as.numeric(q.tot$stnr))
   value[value==-999]<-NA
   indx.o<-which( !is.na(value) & (stnr.o %in% stations$stnr) )
   n.o<-length(indx.o)
-  print(paste("  Total number of observations [not NA] =",n.o))
+  if (verbose) print(paste("  Total number of observations [not NA] =",n.o))
   # OBS: "d"-day observations without NAs
   if (daily) {
-    datetime.o<-as.POSIXlt(strptime(paste(o.tot$Year,
-                           formatC(o.tot$Month,width=2,flag="0"),
-                           formatC(o.tot$Day,width=2,flag="0"),
+    datetime.o<-as.POSIXlt(strptime(paste(o.tot$year,
+                           formatC(o.tot$month,width=2,flag="0"),
+                           formatC(o.tot$day,width=2,flag="0"),
                            sep=""),"%Y%m%d"),"UTC")
-    datetime.q<-as.POSIXlt(strptime(paste(q.tot$Year,
-                           formatC(q.tot$Month,width=2,flag="0"),
-                           formatC(q.tot$Day,width=2,flag="0"),
+    datetime.q<-as.POSIXlt(strptime(paste(q.tot$year,
+                           formatC(q.tot$month,width=2,flag="0"),
+                           formatC(q.tot$day,width=2,flag="0"),
                            sep=""),"%Y%m%d"),"UTC")
   } else {
-    datetime.o<-as.POSIXlt(strptime(paste(o.tot$Year,
-                           formatC(o.tot$Month,width=2,flag="0"),
-                           formatC(o.tot$Day,width=2,flag="0"),
-                           formatC(o.tot$Hour,width=2,flag="0"),
+    datetime.o<-as.POSIXlt(strptime(paste(o.tot$year,
+                           formatC(o.tot$month,width=2,flag="0"),
+                           formatC(o.tot$day,width=2,flag="0"),
+                           formatC(o.tot$hour,width=2,flag="0"),
                            sep=""),"%Y%m%d%H"),"UTC")
-    datetime.q<-as.POSIXlt(strptime(paste(q.tot$Year,
-                           formatC(q.tot$Month,width=2,flag="0"),
-                           formatC(q.tot$Day,width=2,flag="0"),
-                           formatC(q.tot$Hour,width=2,flag="0"),
+    datetime.q<-as.POSIXlt(strptime(paste(q.tot$year,
+                           formatC(q.tot$month,width=2,flag="0"),
+                           formatC(q.tot$day,width=2,flag="0"),
+                           formatC(q.tot$hour,width=2,flag="0"),
                            sep=""),"%Y%m%d%H"),"UTC")
   }
-  print(datetime.o)
-  print(datetime.q)
+#  print("datetime.o")
+#  print(datetime.o)
+#  print("datetime.q")
+#  print(datetime.q)
   datetime.seq<-as.POSIXlt(unique(datetime.o))
+#  print("datetime.seq")
+#  print(datetime.seq)
   n.t<-length(datetime.seq)
   n.stat<-length(statlist$stnr)
   n.data<-n.stat*n.t
-  data<-data.frame(matrix(nrow=n.data,ncol=8))
-  names(data)<-c("stnr","year","month","day","hour","value","DQC","KDVHflag")
+  data<-data.frame(matrix(nrow=n.data,ncol=data.names.col))
+  names(data)<-data.names
+  data$stnr[1:n.data]<-NA
+  data$year[1:n.data]<-NA
+  data$month[1:n.data]<-NA
+  data$day[1:n.data]<-NA
   data$hour[1:n.data]<-NA
+  if (is.null(fun)) data$ntime[1:n.data]<-1
+  if (!is.null(fun)) data$ntime[1:n.data]<-NA
+  data$nvalue[1:n.data]<-NA
   data$value[1:n.data]<-NA
   data$DQC[1:n.data]<-NA
   data$KDVHflag[1:n.data]<-NA
-  i<-0
+  data$plausible[1:n.data]<-T
+  data$err.ext[1:n.data]<-F
+  data$blist.perm[1:n.data]<-F
+  data$blist.curr[1:n.data]<-F
   options(warn=1)
   for (t in 1:n.t) {
     yyyy.t<-datetime.seq$year[t]+1900
     mm.t<-datetime.seq$mon[t]+1
-    dd.t<-datetime.seq$mday
-    for (s in 1:n.stat) {
-      i<-i+1
-      data$stnr[i]<-statlist$stnr[s]
-      data$year[i]<-yyyy.t
-      data$month[i]<-mm.t
-      data$day[i]<-dd.t
-      indx.o<-which(stnr.o==data$stnr[i] & datetime.o==datetime.seq[t])
-      if (length(indx.o)>0) data$value[i]<-value[indx.o]  
-      indx.q<-which(stnr.q==data$stnr[i] & datetime.q==datetime.seq[t])
-      if (length(indx.q)>0) {
-        if (length(indx.q)>1) {
-          print(paste("cazzo:",data$stnr[i]))
+    dd.t<-datetime.seq$mday[t]
+    if (!daily) hh.t<-datetime.seq$hour[t]
+    aux.d.o<-datetime.o==datetime.seq[t]
+    aux.d.q<-datetime.q==datetime.seq[t]
+    if (err.file.ok) aux.d.e<-err.timeseq==datetime.seq[t]
+    t.b<-(t-1)*n.stat+1
+    t.e<-t*n.stat
+    data$stnr[t.b:t.e]<-statlist$stnr
+    data$year[t.b:t.e]<-yyyy.t
+    data$month[t.b:t.e]<-mm.t
+    data$day[t.b:t.e]<-dd.t
+    if (!daily) data$hour[t.b:t.e]<-hh.t
+    for (s in indx.stn) {
+      s.t<-s+t.b-1
+      indx.o<-which(stnr.o==data$stnr[s.t] & aux.d.o)
+      data$nvalue[s.t]<-length(indx.o)
+      if (data$nvalue[s.t]>0) { 
+        if (data$nvalue[s.t]==1) {
+          data$value[s.t]<-value[indx.o]
         } else {
-          data$KDVHflag[i]<-flag[indx.q]
+          if (verbose) print(paste("anomaly in retrieving ",data$stnr[s.t]))
         }
       }
+      indx.q<-which(stnr.q==data$stnr[s.t] & aux.d.q)
+      if (length(indx.q)>0) {
+        if (length(indx.q)==1) {
+          data$KDVHflag[s.t]<-flag[indx.q]
+        } else {
+          if (verbose) print(paste("anomaly in retrieving ",data$KDVHflag[s.t]))
+        }
+      }
+      if (err.file.ok) if (any(errobs$stnr==data$stnr[s.t] & aux.d.e)) data$err.ext[s.t]<-T
+      if (blist.perm.file.ok) if (any(blacklist_permanent$stnr==data$stnr[s.t])) data$blist.perm[s.t]<-T
+      if (blist.curr.file.ok) if (any(blacklist_current$stnr==data$stnr[s.t])) data$blist.curr[s.t]<-T
     }
   }
-  print(data)
-  q()
-  return(data)
+  if (!is.null(val.min.allowed)) data$plausible[data$value<val.min.allowed]<-F
+  if (!is.null(val.max.allowed)) data$plausible[data$value>val.max.allowed]<-F
+  if (!is.null(fun)) {
+    if (fun=="sum") {
+      data.fun<-data.frame(matrix(nrow=n.stat,ncol=data.names.col))
+      names(data.fun)<-data.names
+      data.fun$stnr[1:n.stat]<-NA
+      data.fun$year[1:n.stat]<-from.yyyy
+      data.fun$month[1:n.stat]<-from.mm
+      data.fun$day[1:n.stat]<-from.dd
+      if (!daily & !is.null(from.hh)) data.fun$hour[1:n.stat]<-from.hh
+      if (!daily & is.null(from.hh)) data.fun$hour[1:n.stat]<-NA
+      if (daily)  data.fun$hour[1:n.stat]<-NA
+      data.fun$ntime[1:n.stat]<-n.t
+      data.fun$nvalue[1:n.stat]<-NA
+      data.fun$value[1:n.stat]<-NA
+      data.fun$DQC[1:n.stat]<-NA
+      data.fun$KDVHflag[1:n.stat]<-NA
+      data.fun$plausible[1:n.stat]<-T
+      data.fun$err.ext[1:n.stat]<-F
+      data.fun$blist.perm[1:n.stat]<-F
+      data.fun$blist.curr[1:n.stat]<-F
+      for (s in 1:n.stat) {
+        data.fun$stnr[s]<-statlist$stnr[s]
+        indx.o<-which(data$stnr==data.fun$stnr[s])
+        data.fun$nvalue[s]<-length(which(!is.na(data$value[indx.o])))
+        if (data.fun$nvalue[s]>0)  data.fun$value[s]<-sum(data$value[indx.o],na.rm=T)
+        if (any(data$KDVHflag[indx.o]>2,na.rm=T)) data.fun$KDVHflag[s]<-100
+        if (any(data$err.ext[indx.o],na.rm=T)) data.fun$err.ext[s]<-T
+        if (any(data$blist.perm[indx.o],na.rm=T)) data.fun$blist.perm[s]<-T
+        if (any(data$blist.curr[indx.o],na.rm=T)) data.fun$blist.curr[s]<-T
+        if (any(!data$plausible[indx.o],na.rm=T)) data.fun$plausible[s]<-F
+      }
+    }
+    return(data.fun)
+  } else {
+    return(data)
+  }
 }
