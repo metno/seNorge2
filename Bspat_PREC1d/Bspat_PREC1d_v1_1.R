@@ -518,10 +518,11 @@ VecX<-as.numeric(as.vector(stations$x))
 VecY<-as.numeric(as.vector(stations$y))
 VecZ<-as.numeric(as.vector(stations$z))
 VecS<-as.numeric(as.vector(stations$stnr))
-png(file="prov0.png",width=1200,height=1200)
-plot(orog.FG)
-points(VecX,VecY)
-dev.off()
+#
+z.CG<-extract(orog.CG,cbind(VecX,VecY),na.rm=T)
+stn.out.CG<-vector(length=L.y.tot)
+stn.out.CG[1:L.y.tot]<-F
+stn.out.CG[which(is.na(z.CG))]<-T
 # [] Read blacklists/errobs
 if (file.exists(file_errobs)) {
   errobs<-read.table(file=file_errobs,header=T,sep=";")
@@ -589,7 +590,6 @@ if (nday==1) {
                        val.max.allowed=yo.dqc.plausible.max,fun="sum")
 }
 print(data)
-n.data<-length(data$stnr)
 #data.names<-c("stnr","year","month","day","hour","ntime",
 #              "value","nvalue","DQC",
 #              "KDVHflag",
@@ -600,10 +600,11 @@ y.notNA<-which(!is.na(yo))
 L.y.notNA<-length(y.notNA)
 #
 data$DQC[]<-NA
-for (i in 1:n.data) {
+for (i in 1:L.y.tot) {
   if (is.na(data$value[i])) next
   data$DQC[i]<--1
   if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]>2) data$DQC[i]<-100
+  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]==0 | data$KDVHflag[i]==1 | data$KDVHflag[i]==2) data$DQC[i]<-0
   if (data$ntime[i]!=data$nvalue[i] |
       !data$plausible[i] |
       data$err.ext[i] |
@@ -611,60 +612,42 @@ for (i in 1:n.data) {
       data$blist.curr[i]) data$DQC[i]<-100
 }
 print(data)
-q()
-# DQC
-# mask observations that are outside the grid
-# ydqc.flag=100 masked
-# "####" comments
-####for (b in 1:L.y.notNA) {
-####  r.b<-1+as.integer(abs(VecY[y.notNA[b]]-ymx.CG)/dy.CG)
-####  c.b<-1+as.integer((VecX[y.notNA[b]]-xmn.CG)/dx.CG)
-####  flag<-F
-####  for (ii in -1:1) {
-####    for (jj in -1:1) {
-####      r.ii<-r.b+ii
-####      c.jj<-c.b+jj
-####      if (r.ii<1 | r.ii>ny.CG | c.jj<1 | c.jj>nx.CG) {
-####        next
-####      }
-####      if (!is.na(mat2vec.CG[r.ii,c.jj])) flag<-T 
-####    }
-####  }
-####  if (!flag) ydqc.flag[y.notNA[b]]<-ydqc.flag[y.notNA[b]]+2**5
-####}
-# DQC flag set to missing
-ydqc.flag[y.notNA][ydqc.flag[y.notNA]==0]<-2**0
-#
+#data.names<-c("stnr","year","month","day","hour","ntime",
+#              "value","nvalue","DQC",
+#              "KDVHflag",
+#              "plausible","err.ext",
+#              "blist.perm","blist.curr")
 print(paste("number of station having at least one available observation =",L.y.notNA,"(tot=",L.y.tot,")"))
-print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(flag.aux[3,]==1))))
-print(paste("  # station having at least one erroneous observation       (external DQC) =",length(which(flag.aux[5,]==1))))
-print(paste("  # station blacklisted for the time period considered =",length(which(flag.aux[7,]==1))))
-print(paste("  # station blacklisted (permanently) =",length(which(flag.aux[8,]==1))))
-print(paste("  # station in masked areas =",length(which(flag.aux[6,]==1))))
+print(paste("number of station having good observation           (so far)=",length(which(data$DQC<=0 & !is.na(yo)))))
+print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(!data$plausible & !is.na(yo)))))
+print(paste("  # station having at least one erroneous observation           (KDVH DQC) =",length(which(data$KDVHflag>2 & !is.na(yo)))))
+print(paste("  # station having at least one erroneous observation       (external DQC) =",length(which(data$err.ext & !is.na(yo)))))
+print(paste("  # station blacklisted for the time period considered =",length(which(data$blist.curr & !is.na(yo)))))
+print(paste("  # station blacklisted (permanently) =",length(which(data$blist.perm & !is.na(yo)))))
+print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)))))
+png(file="prov0.png",width=1200,height=1200)
+plot(orog.FG)
+points(VecX,VecY)
+points(VecX[which(stn.out.CG & !is.na(yo))],VecY[which(stn.out.CG & !is.na(yo))],pch=19,col="green")
+dev.off()
 # define Vectors and Matrices
 xidi.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
 xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
 # loop for DQC
-while (TRUE) {
-  flag.aux<-sapply(ydqc.flag,function(x){ as.integer(intToBits(x))})
+yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
+L.yo.ok<-length(yo.ok.pos)
+while (L.yo.ok>0) {
 # vector with the positions (pointers to VecS) of: not NAs, not-in-masked-areas, valid observations 
 # daily observations [L.yo.ok]
-  yo.ok.pos<-which(flag.aux[1,]==1 | flag.aux[2,]==1)
+  yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
   L.yo.ok<-length(yo.ok.pos)
 # vectors with the positions (pointers to VecS) of valid (i.e. not NAs & DQC-ok)
 # daily observations and "wet" or "dry" [L.yo.ok.wet,L.yo.ok.dry]
-  yo.ok.pos.wet<-which((flag.aux[1,]==1 | flag.aux[2,]==1) & yo>=rr.inf)
-  yo.ok.pos.dry<-which((flag.aux[1,]==1 | flag.aux[2,]==1) & yo<rr.inf)
-png(file="prov1.png",width=1200,height=1200)
-plot(orog.FG)
-points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue")
-points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red")
-dev.off()
-q()
+  yo.ok.pos.wet<-which(data$DQC<=0 & !is.na(yo) & yo>=rr.inf)
+  yo.ok.pos.dry<-which(data$DQC<=0 & !is.na(yo) & yo<rr.inf)
   L.yo.ok.wet<-length(yo.ok.pos.wet)
   L.yo.ok.dry<-length(yo.ok.pos.dry)
-  print(paste("observation not NAs, not-in-masked-areas, presumably good =",
+  print(paste("observation not NAs, presumably good =",
               L.yo.ok,"(wet=",L.yo.ok.wet,"dry=",L.yo.ok.dry,")"))
 #  print(cbind(VecS[yo.ok.pos.wet],yo[yo.ok.pos.wet]))
 # case of no-rain over the whole domain
@@ -706,28 +689,166 @@ q()
     quit()
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   } # end case of no-rain over the whole domain
+
+  # [] Contiguous NO-Rain Area: First Guess
+  Lsubsample.vec[]<-NA
+  # vectors used in the identification of NO-Rain (nor) - first guess
+  # ...aux-> temporary vectors
+  # ...vec-> final vectors
+  # nnor.1st.vec-> number of nor.1st
+  # nor.1st.vec-> list of stations (i.e. pointers to VecS) inside nor.1st
+  #           matrix(i,j) i=1,nnor.1st.vec j=1,Lnor.1st.vec[i]
+  #   note: an nor.1st could contain both wet and dry stations
+  # Lnor.1st.vec-> vector(i) (i=1,..,nnor.1st.vec) number of stations inside i-th nor.1st 
+  nor.1st.vec<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
+  Lnor.1st.vec<-vector(mode="numeric",length=L.yo.ok)
+  Lnor.1st.vec[]<-NA
+  nnor.1st.vec<-0
+  nor.1st.aux<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
+  Lnor.1st.aux<-vector(mode="numeric",length=L.yo.ok)
+  Lnor.1st.aux[]<-NA
+  nnor.1st.aux<-0
+  # [] Contiguous NO-Rain Area: First Guess. Step I
+  for (b in yo.ok.pos.dry) {  # START: Cycle over dry stations 
+    # a. identify the closest stations to the b-th dry station
+    #  outputs: -close2b-> position (i.e. pointer to VecS) of the closest stations.
+    #            constraints: distance must be less than Lsubsample.DHmax 
+    #                         max number of stations allowed is Lsubsample.max
+    #           -Lsubsample.vec[b]-> actual number of stations used
+    close2b.aux<-order(Disth[b,],decreasing=F)
+    close2b.au1<-close2b.aux[which(close2b.aux%in%yo.ok.pos)][1:Lsubsample.max]
+    Lsubsample.vec[b]<-Lsubsample.max
+    if (Disth[b,close2b.au1[Lsubsample.max]]>Lsubsample.DHmax) {
+      if (any(Disth[b,close2b.au1]<=Lsubsample.DHmax)) {
+        Lsubsample.vec[b]<-max(which(Disth[b,close2b.au1]<=Lsubsample.DHmax))
+      } else {
+        Lsubsample.vec[b]<-0
+      }
+    }
+    if (Lsubsample.vec[b]<3) Lsubsample.vec[b]<-Lsubsample.max
+    close2b<-close2b.au1[1:Lsubsample.vec[b]]
+    # b. setup vectors 
+    VecX.b<-vector(mode="numeric",length=Lsubsample.vec[b])
+    VecY.b<-vector(mode="numeric",length=Lsubsample.vec[b])
+    VecZ.b<-vector(mode="numeric",length=Lsubsample.vec[b])
+    yo.b<-vector(mode="numeric",length=Lsubsample.vec[b])
+    VecX.b<-VecX[close2b]
+    VecY.b<-VecY[close2b]
+    VecZ.b<-VecZ[close2b]
+    wet.b.aux<-close2b %in% yo.ok.pos.wet
+    dry.b.aux<-close2b %in% yo.ok.pos.dry
+    wet.b<-close2b[wet.b.aux]
+    dry.b<-close2b[dry.b.aux]
+    nwet<-length(wet.b)
+    ndry<-length(dry.b)
+    # c. Establish (local-) triangulation (Delauney)
+    #    note: all stations are used (wet and dry)
+    tri.rr<-tri.mesh(VecX.b,VecY.b)
+    # d. identify all the stations (wheter wet or dry) which belongs
+    #    to adjacent nodes (respect to the b-th dry station node)
+    #  procedure: tri.find-> returns the three vertex indexes of triangle
+    #   containing the specified point. To find all the neighbouring 
+    #   triangles just span the area surrounding the b-th dry station
+    #   (circle of radius=1Km)
+    #  output: nodes-> station position respect to VecS
+    nodes<-vector(mode="numeric")
+    tri.loc<-tri.find(tri.rr,VecX[b],VecY[b])
+    # note: due to the fact that (VecX[b],VecY[b]) belongs to the mesh
+    # used to establish the triangulation, ...i1,i2,i3 must be >0
+    nodes<-close2b[c(tri.loc$i1,tri.loc$i2,tri.loc$i3)]
+    for (cont.clock in 1:n.sector) {
+      x.aux<-VecX[b]+sin(sector.angle*(cont.clock-1)*pi/180.)*1000
+      y.aux<-VecY[b]+cos(sector.angle*(cont.clock-1)*pi/180.)*1000
+      tri.loc<-tri.find(tri.rr,x.aux,y.aux)
+      nodes.aux<-close2b[c(tri.loc$i1,tri.loc$i2,tri.loc$i3)]
+      nodes<-c(nodes,nodes.aux[which( (!(nodes.aux %in% nodes)) & (nodes.aux>0) )])
+    }
+    lnodes<-length(nodes)
+    # DEBUG END
+    # e. update the temporary structure used to identify nor 
+    #    merge in a (new) nor all the (old) temporary nor (if any) 
+    #    which contain at least one station present in nodes (avoiding
+    #    repetition); erase (i.e. set to NAs) the (old) temporary nor merged
+    aux<-vector()
+    if (nnor.1st.aux>0) {
+      for (nor.1st in 1:nnor.1st.aux) {
+        if (Lnor.1st.aux[nor.1st]==0) next
+        if ( any(nodes %in% nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]]) ) {
+          aux<-c(aux[which(!(aux %in% nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]]))],nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]])
+          nor.1st.aux[nor.1st,]<-NA
+          Lnor.1st.aux[nor.1st]<-0
+        }
+      }
+    }
+    nnor.1st.aux<-nnor.1st.aux+1
+    Lnor.1st.aux[nnor.1st.aux]<-length(c(aux,nodes[which(!(nodes%in%aux))]))
+    nor.1st.aux[nnor.1st.aux,1:Lnor.1st.aux[nnor.1st.aux]]<-c(aux,nodes[which(!(nodes%in%aux))])
+    #DEBUG START
+#    print("new dry-station group identified")
+#    print(nor.1st.aux[nnor.1st.aux,1:Lnor.1st.aux[nnor.1st.aux]])
+    #DEBUG END      
+  } # END: Cycle over the dry stations
+# Contiguous Rain Area: First Guess. Step II
+# reorganise nor labels
+  nnor.1st.vec<-0
+  for (nor.1st in 1:nnor.1st.aux) {
+    if (Lnor.1st.aux[nor.1st]==0) next
+    nnor.1st.vec<-nnor.1st.vec+1
+    Lnor.1st.vec[nnor.1st.vec]<-Lnor.1st.aux[nor.1st]
+    nor.1st.vec[nnor.1st.vec,1:Lnor.1st.vec[nnor.1st.vec]]<-nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]]
+  }
+# DQC DQC DQC
+# dry-stations surrounded only by wet-stations (close enough)
+  flag.dry.dqc<-F
+  for (j in 1:nnor.1st.vec) {
+    nor.1st.j<-nor.1st.vec[j,1:Lnor.1st.vec[j]]
+    indx.dry.stns<-which(nor.1st.j %in% yo.ok.pos.dry)
+    n.dry<-length(indx.dry.stns)
+    if (n.dry>1) next
+    nor.1st.j.dry<-nor.1st.j[indx.dry.stns]
+    aux.dist<-Disth[nor.1st.j.dry,nor.1st.j]
+    min.dist.from.dry.stn<-min(aux.dist[aux.dist>0])
+#    if (min.dist.from.dry.stn<min.dist.allowed) {
+    if (min.dist.from.dry.stn<=20) {
+      flag.dry.dqc<-T
+      data$DQC[nor.1st.j.dry]<-200
+    }
+  }
+  if (flag.dry.dqc) next
+# debug
+png(file="prov2.png",width=1200,height=1200)
+plot(orog.FG)
+points(VecX[yo.ok.pos],VecY[yo.ok.pos])
+points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
+#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=2)
+for (i in 1:nnor.1st.vec) {
+  print(i)
+  if (i%%2==0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="black")
+  if (i%%2!=0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="gray")
+}
+points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="red",cex=3)
+dev.off()
+# DQC DQC end
   # [] Contiguous Rain Area: First Guess
   Lsubsample.vec[]<-NA
   # vectors used in the identification of eve - first guess
   # ...aux-> temporary vectors
   # ...vec-> final vectors
-  # neve.firstguess.vec-> number of eve.firstguess
-  # eve.firstguess.vec-> list of stations (i.e. pointers to VecS) inside eve.firstguess
-  #           matrix(i,j) i=1,neve.firstguess.vec j=1,Leve.firstguess.vec[i]
-  #   note: an eve.firstguess could contain both wet and dry stations
-  # Leve.firstguess.vec-> vector(i) (i=1,..,neve.firstguess.vec) number of stations inside i-th eve.firstguess 
-  eve.firstguess.vec<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
-  Leve.firstguess.vec<-vector(mode="numeric",length=L.yo.ok)
-  Leve.firstguess.vec[]<-NA
-  neve.firstguess.vec<-0
-  eve.firstguess.aux<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
-  Leve.firstguess.aux<-vector(mode="numeric",length=L.yo.ok)
-  Leve.firstguess.aux[]<-NA
-  neve.firstguess.aux<-0
+  # neve.1st.vec-> number of eve.1st
+  # eve.1st.vec-> list of stations (i.e. pointers to VecS) inside eve.1st
+  #           matrix(i,j) i=1,neve.1st.vec j=1,Leve.1st.vec[i]
+  #   note: an eve.1st could contain both wet and dry stations
+  # Leve.1st.vec-> vector(i) (i=1,..,neve.1st.vec) number of stations inside i-th eve.1st 
+  eve.1st.vec<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
+  Leve.1st.vec<-vector(mode="numeric",length=L.yo.ok)
+  Leve.1st.vec[]<-NA
+  neve.1st.vec<-0
+  eve.1st.aux<-matrix(data=NA,ncol=L.yo.ok,nrow=L.yo.ok)
+  Leve.1st.aux<-vector(mode="numeric",length=L.yo.ok)
+  Leve.1st.aux[]<-NA
+  neve.1st.aux<-0
   # [] Contiguous Rain Area: First Guess. Step I
-  b.inc<-0
   for (b in yo.ok.pos.wet) {  # START: Cycle over wet stations 
-    b.inc<-b.inc+1
     # a. identify the closest stations to the b-th wet station
     #  outputs: -close2b-> position (i.e. pointer to VecS) of the closest stations.
     #            constraints: distance must be less than Lsubsample.DHmax 
@@ -788,40 +909,226 @@ q()
     #    which contain at least one station present in nodes (avoiding
     #    repetition); erase (i.e. set to NAs) the (old) temporary eve merged
     aux<-vector()
-    if (neve.firstguess.aux>0) {
-      for (eve.firstguess in 1:neve.firstguess.aux) {
-        if (Leve.firstguess.aux[eve.firstguess]==0) next
-        if ( any(nodes %in% eve.firstguess.aux[eve.firstguess,1:Leve.firstguess.aux[eve.firstguess]]) ) {
-          aux<-c(aux[which(!(aux %in% eve.firstguess.aux[eve.firstguess,1:Leve.firstguess.aux[eve.firstguess]]))],eve.firstguess.aux[eve.firstguess,1:Leve.firstguess.aux[eve.firstguess]])
-          eve.firstguess.aux[eve.firstguess,]<-NA
-          Leve.firstguess.aux[eve.firstguess]<-0
+    if (neve.1st.aux>0) {
+      for (eve.1st in 1:neve.1st.aux) {
+        if (Leve.1st.aux[eve.1st]==0) next
+        if ( any(nodes %in% eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]]) ) {
+          aux<-c(aux[which(!(aux %in% eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]]))],eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]])
+          eve.1st.aux[eve.1st,]<-NA
+          Leve.1st.aux[eve.1st]<-0
         }
       }
     }
-    neve.firstguess.aux<-neve.firstguess.aux+1
-    Leve.firstguess.aux[neve.firstguess.aux]<-length(c(aux,nodes[which(!(nodes%in%aux))]))
-    eve.firstguess.aux[neve.firstguess.aux,1:Leve.firstguess.aux[neve.firstguess.aux]]<-c(aux,nodes[which(!(nodes%in%aux))])
+    neve.1st.aux<-neve.1st.aux+1
+    Leve.1st.aux[neve.1st.aux]<-length(c(aux,nodes[which(!(nodes%in%aux))]))
+    eve.1st.aux[neve.1st.aux,1:Leve.1st.aux[neve.1st.aux]]<-c(aux,nodes[which(!(nodes%in%aux))])
     #DEBUG START
 #    print("new wet-station group identified")
-#    print(eve.firstguess.aux[neve.firstguess.aux,1:Leve.firstguess.aux[neve.firstguess.aux]])
+#    print(eve.1st.aux[neve.1st.aux,1:Leve.1st.aux[neve.1st.aux]])
     #DEBUG END      
   } # END: Cycle over the wet stations
 # Contiguous Rain Area: First Guess. Step II
 # reorganise eve labels
-  neve.firstguess.vec<-0
-  for (eve.firstguess in 1:neve.firstguess.aux) {
-    if (Leve.firstguess.aux[eve.firstguess]==0) next
-    neve.firstguess.vec<-neve.firstguess.vec+1
-    Leve.firstguess.vec[neve.firstguess.vec]<-Leve.firstguess.aux[eve.firstguess]
-    eve.firstguess.vec[neve.firstguess.vec,1:Leve.firstguess.vec[neve.firstguess.vec]]<-eve.firstguess.aux[eve.firstguess,1:Leve.firstguess.aux[eve.firstguess]]
+  neve.1st.vec<-0
+  for (eve.1st in 1:neve.1st.aux) {
+    if (Leve.1st.aux[eve.1st]==0) next
+    neve.1st.vec<-neve.1st.vec+1
+    Leve.1st.vec[neve.1st.vec]<-Leve.1st.aux[eve.1st]
+    eve.1st.vec[neve.1st.vec,1:Leve.1st.vec[neve.1st.vec]]<-eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]]
   }
+# DQC DQC DQC
+# wet-stations surrounded only by dry-stations (close enough)
+  flag.wet.dqc<-F
+  for (j in 1:neve.1st.vec) {
+    eve.1st.j<-eve.1st.vec[j,1:Leve.1st.vec[j]]
+    indx.wet.stns<-which(eve.1st.j %in% yo.ok.pos.wet)
+    n.wet<-length(indx.wet.stns)
+    if (n.wet>1) next
+    eve.1st.j.wet<-eve.1st.j[indx.wet.stns]
+    aux.dist<-Disth[eve.1st.j.wet,eve.1st.j]
+    min.dist.from.wet.stn<-min(aux.dist[aux.dist>0])
+#    if (min.dist.from.wet.stn<min.dist.allowed) {
+    if (min.dist.from.wet.stn<=20) {
+      flag.wet.dqc<-T
+      data$DQC[eve.1st.j.wet]<-300
+    }
+  }
+  if (flag.wet.dqc) next
+png(file="prov3.png",width=1200,height=1200)
+plot(orog.FG)
+points(VecX[yo.ok.pos],VecY[yo.ok.pos])
+points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
+#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=2)
+for (i in 1:neve.1st.vec) {
+  print(i)
+  if (i%%2==0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="black")
+  if (i%%2!=0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="gray")
+}
+points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="darkred",cex=3)
+points(VecX[which(data$DQC==300)],VecY[which(data$DQC==300)],pch=19,col="cyan",cex=3)
+dev.off()
+# [] Contiguous NO-Rain Area: First Guess on the grid.CG
+  print("++ define nor.1st on the grid.CG")
+  lab.nor.CG.1st<-vector(mode="numeric",length=Lgrid.CG)
+  close2i<-vector(mode="numeric",length=Lgrid.CG)
+  close2i.dry<-vector(mode="numeric",length=Lgrid.CG)
+  Disth2i.min.dry<-vector(mode="numeric",length=Lgrid.CG)
+  lab.nor.CG.1st[]<-NA
+#  tri.rr<-tri.mesh(VecX[yo.ok.pos],VecY[yo.ok.pos])
+  for (i in 1:Lgrid.CG) {
+    Disth.i<-( (ygrid.CG[i]-VecY[yo.ok.pos])**2+(xgrid.CG[i]-VecX[yo.ok.pos])**2 )**0.5 / 1000.
+    close2i[i]<-yo.ok.pos[which.min(Disth.i)]
+    Disth.i.dry<-( (ygrid.CG[i]-VecY[yo.ok.pos.dry])**2+(xgrid.CG[i]-VecX[yo.ok.pos.dry])**2 )**0.5 / 1000.
+    close2i.dry[i]<-yo.ok.pos.dry[which.min(Disth.i.dry)]
+    Disth2i.min.dry[i]<-min(Disth.i.dry)
+    for (nor.1st in 1:nnor.1st.vec) {
+      if (close2i[i] %in% nor.1st.vec[nor.1st,1:Lnor.1st.vec[nor.1st]]) {
+        lab.nor.CG.1st[i]<-nor.1st
+        break
+      }
+    }
+    if (is.na(lab.nor.CG.1st[i])) lab.nor.CG.1st[i]<-0
+  }
+  rm(Disth.i,Disth.i.dry)
+# [] Refine identification (Identify Wet and Dry Areas within the nor first guess)
+  print("++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)")
+  xa.Dh.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
+  xa.Dz.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
+  x.CG.nor.wet<-vector(mode="numeric",length=Lgrid.CG)
+  x.CG.nor.dry<-vector(mode="numeric",length=Lgrid.CG)
+  lab.nor.CG<-vector(mode="numeric",length=Lgrid.CG)
+  n.nor<-0
+# x.CG.nor.@@@ -> =0 gridpoint not classified as @@@; =1 grid-point classified as @@@
+# lab.nor.CG -> =0 gridpoint "dry"; =-1 gridpoint "wet", waiting to labelled;
+#             n>0 gridpoint "wet" belonging to nor n (only for isolated wet station)
+  x.CG.nor.wet[]<-0
+  x.CG.nor.dry[]<-0
+  lab.nor.CG[]<-0
+  for (nor.1st in 1:nnor.1st.vec) { # START: cycle over nor.1st
+#    print(paste(nor.1st,"nor.1st +++++++++++++++++++++++++++++++++"))
+    # define vectors / variables / indexes 
+    Lnor.1st<-Lnor.1st.vec[nor.1st]
+    VecX.nor.1st<-vector(mode="numeric",length=Lnor.1st)
+    VecY.nor.1st<-vector(mode="numeric",length=Lnor.1st)
+    VecZ.nor.1st<-vector(mode="numeric",length=Lnor.1st)
+    VecS.nor.1st<-vector(mode="numeric",length=Lnor.1st)
+    yo.nor.1st<-vector(mode="numeric",length=Lnor.1st)
+    VecX.nor.1st<-VecX[nor.1st.vec[nor.1st,1:Lnor.1st]]
+    VecY.nor.1st<-VecY[nor.1st.vec[nor.1st,1:Lnor.1st]]
+    VecZ.nor.1st<-VecZ[nor.1st.vec[nor.1st,1:Lnor.1st]]
+    VecS.nor.1st<-VecS[nor.1st.vec[nor.1st,1:Lnor.1st]]
+    yo.nor.1st<-yo[nor.1st.vec[nor.1st,1:Lnor.1st]]
+    yoindx.nor.1st.wet<-which(yo.nor.1st>=rr.inf)
+    yoindx.nor.1st.dry<-which(yo.nor.1st<rr.inf)
+    yoindx.wet<-nor.1st.vec[nor.1st,yoindx.nor.1st.wet]
+    yoindx.dry<-nor.1st.vec[nor.1st,yoindx.nor.1st.dry]
+    n.nor.1st.wet<-length(yoindx.nor.1st.wet)
+    n.nor.1st.dry<-length(yoindx.nor.1st.dry)
+    xindx.nor.CG<-which(lab.nor.CG.1st==nor.1st)
+    Lgrid.nor.1st<-length(xindx.nor.CG)
+    # isolated wet-station
+    if (n.nor.1st.wet==1) n.nor<-n.nor+1
+    # more than one single wet-station
+    # define Dz for the current nor (min allowed value is 500 m)
+    xa.Dz.nor.1st[xindx.nor.CG]<-max(500,max(zgrid.CG[xindx.nor.CG]))
+    for (i in xindx.nor.CG) {    #START: cycle over xindx.nor.CG
+      Disth.nor.1st<-( (ygrid.CG[i]-VecY.nor.1st)**2+(xgrid.CG[i]-VecX.nor.1st)**2 )**0.5 / 1000.
+      Distz.nor.1st<-abs(zgrid.CG[i]-VecZ.nor.1st)
+      close2i.ord<-order(Disth.nor.1st,decreasing=F)
+#      xa.Dh.nor.1st[i] <- max(20,Disth.nor.1st[close2i.ord[1]])
+      xa.Dh.nor.1st[i] <- Disth.nor.1st[close2i.ord[1]]
+      notsofar.wet.i<-which(Disth.nor.1st[yoindx.nor.1st.wet]<(5*xa.Dh.nor.1st[i]))
+      notsofar.dry.i<-which(Disth.nor.1st[yoindx.nor.1st.dry]<(5*xa.Dh.nor.1st[i]))
+      if (length(notsofar.wet.i)==0) {
+        x.CG.nor.dry[i]<-1
+      } else if (length(notsofar.dry.i)==0) {
+        x.CG.nor.wet[i]<-1
+        if (n.nor.1st.wet==1) {
+          lab.nor.CG[i]<-n.nor
+        } else {
+          lab.nor.CG[i]<--1
+        }
+      } else {
+        G.wet<-exp(-0.5*(Disth.nor.1st[yoindx.nor.1st.wet[notsofar.wet.i]]/xa.Dh.nor.1st[i])**2.
+                   -0.5*(Distz.nor.1st[yoindx.nor.1st.wet[notsofar.wet.i]]/xa.Dz.nor.1st[i])**2.)
+        D.wet<-as.matrix(exp(-0.5*(Disth[yoindx.wet[notsofar.wet.i],
+                                         yoindx.wet[notsofar.wet.i]]/xa.Dh.nor.1st[i])**2.
+                             -0.5*(Distz[yoindx.wet[notsofar.wet.i],
+                                         yoindx.wet[notsofar.wet.i]]/xa.Dz.nor.1st[i])**2. ))
+        D.wet[row(D.wet)==col(D.wet)]<-D.wet[row(D.wet)==col(D.wet)]+eps2
+        if (n.nor.1st.wet>1) {
+          InvD.wet<-solve(D.wet)
+          K.wet<-G.wet%*%InvD.wet
+          rm(InvD.wet)
+        } else {
+          K.wet<-G.wet/(1+eps2)
+        }
+        xidi.CG.wet[i]<-sum(K.wet)
+        # dry
+        G.dry<-exp(-0.5*(Disth.nor.1st[yoindx.nor.1st.dry[notsofar.dry.i]]/xa.Dh.nor.1st[i])**2.-
+                    0.5*(Distz.nor.1st[yoindx.nor.1st.dry[notsofar.dry.i]]/xa.Dz.nor.1st[i])**2.)
+        D.dry<-as.matrix(exp(-0.5*(Disth[yoindx.dry[notsofar.dry.i],
+                                         yoindx.dry[notsofar.dry.i]]/xa.Dh.nor.1st[i])**2.+
+                             -0.5*(Distz[yoindx.dry[notsofar.dry.i],
+                                         yoindx.dry[notsofar.dry.i]]/xa.Dz.nor.1st[i])**2. ))
+        D.dry[row(D.dry)==col(D.dry)]<-D.dry[row(D.dry)==col(D.dry)]+eps2
+        InvD.dry<-solve(D.dry)
+        K.dry<-G.dry%*%InvD.dry
+        rm(InvD.dry)
+        xidi.CG.dry[i]<-sum(K.dry)
+        if (xidi.CG.wet[i]>xidi.CG.dry[i]) {
+          x.CG.nor.wet[i]<-1
+          if (n.nor.1st.wet==1) {
+            lab.nor.CG[i]<-n.nor
+          } else {
+            lab.nor.CG[i]<--1
+          }
+        } else {
+          x.CG.nor.dry[i]<-1
+        }
+      }
+    } # END: cycle over xindx.nor.CG
+  } # END: cycle over nor.1st
+# DQC DQC DQC
+# to revise: if a wet observation is not included in an event and it is inside Norway then
+# flag it as presumably bad observation and repeat everything
+  r.CG.nor.wet <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                        ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.CG.nor.dry <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                        ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.CG.nor.wet[]<-NA
+  r.CG.nor.dry[]<-NA
+  r.CG.nor.wet[gridmask.notNAs.CG]<-round(x.CG.nor.wet,0)
+  r.CG.nor.dry[gridmask.notNAs.CG]<-round(x.CG.nor.dry,0)
+  stn.nor.wet<-extract(r.CG.nor.wet,cbind(VecX,VecY),na.rm=T)
+  stn.nor.dry<-extract(r.CG.nor.dry,cbind(VecX,VecY),na.rm=T)
+  yo.ok.dry.fail<-!(yo.ok.pos.dry %in% which(stn.nor.dry==1 | is.na(stn.nor.dry)))
+  if (any(yo.ok.dry.fail)) {
+    data$DQC[yo.ok.pos.dry[which(yo.ok.dry.fail)]]<-400
+    next
+  }
+#  print(paste(yo,stn.nor.dry,stn.nor.dry,data$DQC,"\n"))
+  png(file="norwet.png",width=1200,height=1200)
+  plot(r.CG.nor.wet)
+  points(VecX[which(stn.nor.wet==1)],VecY[which(stn.nor.wet==1)])
+  points(VecX[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],VecY[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],pch=19,col="red")
+  points(VecX[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gray")
+  dev.off()
+  png(file="nordry.png",width=1200,height=1200)
+  plot(r.CG.nor.dry)
+  points(VecX[which(stn.nor.dry==1)],VecY[which(stn.nor.dry==1)])
+  points(VecX[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],VecY[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],pch=19,col="red")
+  points(VecX[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gray")
+  points(VecX[which(data$DQC==400)],VecY[which(data$DQC==400)],col="black",pch=19,cex=3)
+  dev.off()
+# --------------------- da qui riprende il vecchio ................
 # [] Contiguous Rain Area: First Guess on the grid.CG
-  print("++ define eve.firstguess on the grid.CG")
-  lab.eve.CG.firstguess<-vector(mode="numeric",length=Lgrid.CG)
+  print("++ define eve.1st on the grid.CG")
+  lab.eve.CG.1st<-vector(mode="numeric",length=Lgrid.CG)
   close2i<-vector(mode="numeric",length=Lgrid.CG)
   close2i.wet<-vector(mode="numeric",length=Lgrid.CG)
   Disth2i.min.wet<-vector(mode="numeric",length=Lgrid.CG)
-  lab.eve.CG.firstguess[]<-NA
+  lab.eve.CG.1st[]<-NA
 #  tri.rr<-tri.mesh(VecX[yo.ok.pos],VecY[yo.ok.pos])
   for (i in 1:Lgrid.CG) {
     Disth.i<-( (ygrid.CG[i]-VecY[yo.ok.pos])**2+(xgrid.CG[i]-VecX[yo.ok.pos])**2 )**0.5 / 1000.
@@ -829,19 +1136,19 @@ q()
     Disth.i.wet<-( (ygrid.CG[i]-VecY[yo.ok.pos.wet])**2+(xgrid.CG[i]-VecX[yo.ok.pos.wet])**2 )**0.5 / 1000.
     close2i.wet[i]<-yo.ok.pos.wet[which.min(Disth.i.wet)]
     Disth2i.min.wet[i]<-min(Disth.i.wet)
-    for (eve.firstguess in 1:neve.firstguess.vec) {
-      if (close2i[i] %in% eve.firstguess.vec[eve.firstguess,1:Leve.firstguess.vec[eve.firstguess]]) {
-        lab.eve.CG.firstguess[i]<-eve.firstguess
+    for (eve.1st in 1:neve.1st.vec) {
+      if (close2i[i] %in% eve.1st.vec[eve.1st,1:Leve.1st.vec[eve.1st]]) {
+        lab.eve.CG.1st[i]<-eve.1st
         break
       }
     }
-    if (is.na(lab.eve.CG.firstguess[i])) lab.eve.CG.firstguess[i]<-0
+    if (is.na(lab.eve.CG.1st[i])) lab.eve.CG.1st[i]<-0
   }
   rm(Disth.i,Disth.i.wet)
 # [] Refine eve identification (Identify Wet and Dry Areas within the eve first guess)
   print("++ Refine eve identification (Identify Wet and Dry Areas within the eve first guess)")
-  xa.Dh.eve.firstguess<-vector(mode="numeric",length=Lgrid.CG)
-  xa.Dz.eve.firstguess<-vector(mode="numeric",length=Lgrid.CG)
+  xa.Dh.eve.1st<-vector(mode="numeric",length=Lgrid.CG)
+  xa.Dz.eve.1st<-vector(mode="numeric",length=Lgrid.CG)
   x.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
   x.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
   lab.eve.CG<-vector(mode="numeric",length=Lgrid.CG)
@@ -852,59 +1159,59 @@ q()
   x.CG.wet[]<-0
   x.CG.dry[]<-0
   lab.eve.CG[]<-0
-  for (eve.firstguess in 1:neve.firstguess.vec) { # START: cycle over eve.firstguess
-#    print(paste(eve.firstguess,"eve.firstguess +++++++++++++++++++++++++++++++++"))
+  for (eve.1st in 1:neve.1st.vec) { # START: cycle over eve.1st
+#    print(paste(eve.1st,"eve.1st +++++++++++++++++++++++++++++++++"))
     # define vectors / variables / indexes 
-    Leve.firstguess<-Leve.firstguess.vec[eve.firstguess]
-    VecX.eve.firstguess<-vector(mode="numeric",length=Leve.firstguess)
-    VecY.eve.firstguess<-vector(mode="numeric",length=Leve.firstguess)
-    VecZ.eve.firstguess<-vector(mode="numeric",length=Leve.firstguess)
-    VecS.eve.firstguess<-vector(mode="numeric",length=Leve.firstguess)
-    yo.eve.firstguess<-vector(mode="numeric",length=Leve.firstguess)
-    VecX.eve.firstguess<-VecX[eve.firstguess.vec[eve.firstguess,1:Leve.firstguess]]
-    VecY.eve.firstguess<-VecY[eve.firstguess.vec[eve.firstguess,1:Leve.firstguess]]
-    VecZ.eve.firstguess<-VecZ[eve.firstguess.vec[eve.firstguess,1:Leve.firstguess]]
-    VecS.eve.firstguess<-VecS[eve.firstguess.vec[eve.firstguess,1:Leve.firstguess]]
-    yo.eve.firstguess<-yo[eve.firstguess.vec[eve.firstguess,1:Leve.firstguess]]
-    yoindx.eve.firstguess.wet<-which(yo.eve.firstguess>=rr.inf)
-    yoindx.eve.firstguess.dry<-which(yo.eve.firstguess<rr.inf)
-    yoindx.wet<-eve.firstguess.vec[eve.firstguess,yoindx.eve.firstguess.wet]
-    yoindx.dry<-eve.firstguess.vec[eve.firstguess,yoindx.eve.firstguess.dry]
-    n.eve.firstguess.wet<-length(yoindx.eve.firstguess.wet)
-    n.eve.firstguess.dry<-length(yoindx.eve.firstguess.dry)
-    xindx.eve.CG<-which(lab.eve.CG.firstguess==eve.firstguess)
-    Lgrid.eve.firstguess<-length(xindx.eve.CG)
+    Leve.1st<-Leve.1st.vec[eve.1st]
+    VecX.eve.1st<-vector(mode="numeric",length=Leve.1st)
+    VecY.eve.1st<-vector(mode="numeric",length=Leve.1st)
+    VecZ.eve.1st<-vector(mode="numeric",length=Leve.1st)
+    VecS.eve.1st<-vector(mode="numeric",length=Leve.1st)
+    yo.eve.1st<-vector(mode="numeric",length=Leve.1st)
+    VecX.eve.1st<-VecX[eve.1st.vec[eve.1st,1:Leve.1st]]
+    VecY.eve.1st<-VecY[eve.1st.vec[eve.1st,1:Leve.1st]]
+    VecZ.eve.1st<-VecZ[eve.1st.vec[eve.1st,1:Leve.1st]]
+    VecS.eve.1st<-VecS[eve.1st.vec[eve.1st,1:Leve.1st]]
+    yo.eve.1st<-yo[eve.1st.vec[eve.1st,1:Leve.1st]]
+    yoindx.eve.1st.wet<-which(yo.eve.1st>=rr.inf)
+    yoindx.eve.1st.dry<-which(yo.eve.1st<rr.inf)
+    yoindx.wet<-eve.1st.vec[eve.1st,yoindx.eve.1st.wet]
+    yoindx.dry<-eve.1st.vec[eve.1st,yoindx.eve.1st.dry]
+    n.eve.1st.wet<-length(yoindx.eve.1st.wet)
+    n.eve.1st.dry<-length(yoindx.eve.1st.dry)
+    xindx.eve.CG<-which(lab.eve.CG.1st==eve.1st)
+    Lgrid.eve.1st<-length(xindx.eve.CG)
     # isolated wet-station
-    if (n.eve.firstguess.wet==1) n.eve<-n.eve+1
+    if (n.eve.1st.wet==1) n.eve<-n.eve+1
     # more than one single wet-station
     # define Dz for the current eve (min allowed value is 500 m)
-    xa.Dz.eve.firstguess[xindx.eve.CG]<-max(500,max(zgrid.CG[xindx.eve.CG]))
+    xa.Dz.eve.1st[xindx.eve.CG]<-max(500,max(zgrid.CG[xindx.eve.CG]))
     for (i in xindx.eve.CG) {    #START: cycle over xindx.eve.CG
-      Disth.eve.firstguess<-( (ygrid.CG[i]-VecY.eve.firstguess)**2+(xgrid.CG[i]-VecX.eve.firstguess)**2 )**0.5 / 1000.
-      Distz.eve.firstguess<-abs(zgrid.CG[i]-VecZ.eve.firstguess)
-      close2i.ord<-order(Disth.eve.firstguess,decreasing=F)
-#      xa.Dh.eve.firstguess[i] <- max(20,Disth.eve.firstguess[close2i.ord[1]])
-      xa.Dh.eve.firstguess[i] <- Disth.eve.firstguess[close2i.ord[1]]
-      notsofar.wet.i<-which(Disth.eve.firstguess[yoindx.eve.firstguess.wet]<(5*xa.Dh.eve.firstguess[i]))
-      notsofar.dry.i<-which(Disth.eve.firstguess[yoindx.eve.firstguess.dry]<(5*xa.Dh.eve.firstguess[i]))
+      Disth.eve.1st<-( (ygrid.CG[i]-VecY.eve.1st)**2+(xgrid.CG[i]-VecX.eve.1st)**2 )**0.5 / 1000.
+      Distz.eve.1st<-abs(zgrid.CG[i]-VecZ.eve.1st)
+      close2i.ord<-order(Disth.eve.1st,decreasing=F)
+#      xa.Dh.eve.1st[i] <- max(20,Disth.eve.1st[close2i.ord[1]])
+      xa.Dh.eve.1st[i] <- Disth.eve.1st[close2i.ord[1]]
+      notsofar.wet.i<-which(Disth.eve.1st[yoindx.eve.1st.wet]<(5*xa.Dh.eve.1st[i]))
+      notsofar.dry.i<-which(Disth.eve.1st[yoindx.eve.1st.dry]<(5*xa.Dh.eve.1st[i]))
       if (length(notsofar.wet.i)==0) {
         x.CG.dry[i]<-1
       } else if (length(notsofar.dry.i)==0) {
         x.CG.wet[i]<-1
-        if (n.eve.firstguess.wet==1) {
+        if (n.eve.1st.wet==1) {
           lab.eve.CG[i]<-n.eve
         } else {
           lab.eve.CG[i]<--1
         }
       } else {
-        G.wet<-exp(-0.5*(Disth.eve.firstguess[yoindx.eve.firstguess.wet[notsofar.wet.i]]/xa.Dh.eve.firstguess[i])**2.
-                   -0.5*(Distz.eve.firstguess[yoindx.eve.firstguess.wet[notsofar.wet.i]]/xa.Dz.eve.firstguess[i])**2.)
+        G.wet<-exp(-0.5*(Disth.eve.1st[yoindx.eve.1st.wet[notsofar.wet.i]]/xa.Dh.eve.1st[i])**2.
+                   -0.5*(Distz.eve.1st[yoindx.eve.1st.wet[notsofar.wet.i]]/xa.Dz.eve.1st[i])**2.)
         D.wet<-as.matrix(exp(-0.5*(Disth[yoindx.wet[notsofar.wet.i],
-                                         yoindx.wet[notsofar.wet.i]]/xa.Dh.eve.firstguess[i])**2.
+                                         yoindx.wet[notsofar.wet.i]]/xa.Dh.eve.1st[i])**2.
                              -0.5*(Distz[yoindx.wet[notsofar.wet.i],
-                                         yoindx.wet[notsofar.wet.i]]/xa.Dz.eve.firstguess[i])**2. ))
+                                         yoindx.wet[notsofar.wet.i]]/xa.Dz.eve.1st[i])**2. ))
         D.wet[row(D.wet)==col(D.wet)]<-D.wet[row(D.wet)==col(D.wet)]+eps2
-        if (n.eve.firstguess.wet>1) {
+        if (n.eve.1st.wet>1) {
           InvD.wet<-solve(D.wet)
           K.wet<-G.wet%*%InvD.wet
           rm(InvD.wet)
@@ -913,12 +1220,12 @@ q()
         }
         xidi.CG.wet[i]<-sum(K.wet)
         # dry
-        G.dry<-exp(-0.5*(Disth.eve.firstguess[yoindx.eve.firstguess.dry[notsofar.dry.i]]/xa.Dh.eve.firstguess[i])**2.-
-                    0.5*(Distz.eve.firstguess[yoindx.eve.firstguess.dry[notsofar.dry.i]]/xa.Dz.eve.firstguess[i])**2.)
+        G.dry<-exp(-0.5*(Disth.eve.1st[yoindx.eve.1st.dry[notsofar.dry.i]]/xa.Dh.eve.1st[i])**2.-
+                    0.5*(Distz.eve.1st[yoindx.eve.1st.dry[notsofar.dry.i]]/xa.Dz.eve.1st[i])**2.)
         D.dry<-as.matrix(exp(-0.5*(Disth[yoindx.dry[notsofar.dry.i],
-                                         yoindx.dry[notsofar.dry.i]]/xa.Dh.eve.firstguess[i])**2.+
+                                         yoindx.dry[notsofar.dry.i]]/xa.Dh.eve.1st[i])**2.+
                              -0.5*(Distz[yoindx.dry[notsofar.dry.i],
-                                         yoindx.dry[notsofar.dry.i]]/xa.Dz.eve.firstguess[i])**2. ))
+                                         yoindx.dry[notsofar.dry.i]]/xa.Dz.eve.1st[i])**2. ))
         D.dry[row(D.dry)==col(D.dry)]<-D.dry[row(D.dry)==col(D.dry)]+eps2
         InvD.dry<-solve(D.dry)
         K.dry<-G.dry%*%InvD.dry
@@ -926,7 +1233,7 @@ q()
         xidi.CG.dry[i]<-sum(K.dry)
         if (xidi.CG.wet[i]>xidi.CG.dry[i]) {
           x.CG.wet[i]<-1
-          if (n.eve.firstguess.wet==1) {
+          if (n.eve.1st.wet==1) {
             lab.eve.CG[i]<-n.eve
           } else {
             lab.eve.CG[i]<--1
@@ -936,49 +1243,41 @@ q()
         }
       }
     } # END: cycle over xindx.eve.CG
-    if (n.eve.firstguess.wet==1) {
-      aux<-which(lab.eve.CG==n.eve)
-      if (length(aux)==0) {
-        r.b<-1+as.integer(abs(VecY[yoindx.wet]-ymx.CG)/dy.CG)
-        c.b<-1+as.integer((VecX[yoindx.wet]-xmn.CG)/dx.CG)
-        i<-mat2vec.CG[r.b,c.b]
-        for (ii in -1:1) {
-          for (jj in -1:1) {
-            if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
-            if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
-            i<-mat2vec.CG[(r.b+ii),(c.b+jj)]
-            x.CG.wet[i]<-1 
-            x.CG.dry[i]<-0
-            lab.eve.CG[i]<-n.eve
-          }
-        }
-      }
-    }
-  } # END: cycle over eve.firstguess
-# be sure that a wet observation fell in a eve
-  for (b in yo.ok.pos.wet) {
-    r.b<-1+as.integer(abs(VecY[b]-ymx.CG)/dy.CG)
-    c.b<-1+as.integer((VecX[b]-xmn.CG)/dx.CG)
-    i<-mat2vec.CG[r.b,c.b]
-    flag<-F
-    if (is.na(i)) flag<-T
-    if (!flag) {
-      if (x.CG.wet[i]!=1) flag<-T
-    }
-    if (flag) {
-      for (ii in -1:1) {
-        for (jj in -1:1) {
-          if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
-          if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
-          i<-mat2vec.CG[(r.b+ii),(c.b+jj)]
-          if (is.na(i)) next
-          x.CG.wet[i]<-1 
-          x.CG.dry[i]<-0
-          lab.eve.CG[i]<--1
-        }
-      }
-    }
+  } # END: cycle over eve.1st
+# DQC DQC DQC
+# to revise: if a wet observation is not included in an event and it is inside Norway then
+# flag it as presumably bad observation and repeat everything
+  r.CG.eve.wet <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                        ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.CG.eve.dry <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                        ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.CG.eve.wet[]<-NA
+  r.CG.eve.dry[]<-NA
+  r.CG.eve.wet[gridmask.notNAs.CG]<-round(x.CG.wet,0)
+  r.CG.eve.dry[gridmask.notNAs.CG]<-round(x.CG.dry,0)
+  stn.eve.wet<-extract(r.CG.eve.wet,cbind(VecX,VecY),na.rm=T)
+  stn.eve.dry<-extract(r.CG.eve.dry,cbind(VecX,VecY),na.rm=T)
+  yo.ok.wet.fail<-!(yo.ok.pos.wet %in% which(stn.eve.wet==1 | is.na(stn.eve.wet)))
+  if (any(yo.ok.wet.fail)) {
+    data$DQC[yo.ok.pos.wet[which(yo.ok.wet.fail)]]<-500
+    next
   }
+  print(paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,"\n"))
+  png(file="evewet.png",width=1200,height=1200)
+  plot(r.CG.eve.wet)
+  points(VecX[which(stn.eve.wet==1)],VecY[which(stn.eve.wet==1)])
+  points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
+  points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="gray")
+  points(VecX[which(data$DQC==500)],VecY[which(data$DQC==500)],col="black",pch=19,cex=3)
+  dev.off()
+  png(file="evedry.png",width=1200,height=1200)
+  plot(r.CG.eve.dry)
+  points(VecX[which(stn.eve.dry==1)],VecY[which(stn.eve.dry==1)])
+  points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
+  points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="gray")
+  dev.off()
+q()
+# FINO A QUI FINO A QUI -----------------------------------------------------------------<
 # [] eve Labelling (Identify final eve on the grid)
   print("++ eve Labelling (Identify final eve on the grid)")
 #   assign neighbouring wet grid-points to the same eve

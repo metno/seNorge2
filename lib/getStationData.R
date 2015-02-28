@@ -122,6 +122,8 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
 {
   max.try<-10
   sleep.int<-5
+  names.daily<-c("stnr","year","month","day","value")
+  names.hourly<-c("stnr","year","month","day","hour","value")
   data.names<-c("stnr","year","month","day","hour","ntime",
                 "value","nvalue","DQC",
                 "KDVHflag",
@@ -233,7 +235,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
     try(o <- read.table(ulric.data, header = TRUE,  sep = ";",
                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                    encoding = "UTF-8", quote = "",na.string=-999))
-    if (length(o$Stnr==0)) {
+    if (length(o$Stnr)==0) {
       if (verbose) {
         print("getStationData: exit with error in command:")
         print(ulric.data)
@@ -253,10 +255,17 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
                               stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                          encoding = "UTF-8", quote = "",na.string=-999))
     }
-    names(o)<-c("stnr","year","month","day","Hour","value")
-    names(q)<-c("stnr","year","month","day","Hour","flag")
-    names(o.out)<-c("stnr","year","month","day","Hour","value")
-    names(q.out)<-c("stnr","year","month","day","Hour","flag")
+    if ( daily) {
+      names(o)<-names.daily
+      if (length(q$Stnr)>0) names(q)<-names.daily
+      if (length(o.out$Stnr)>0) names(o.out)<-names.daily
+      if (length(q.out$Stnr)>0) names(q.out)<-names.daily
+    } else {
+      names(o)<-names.hourly
+      if (length(q$Stnr)>0) names(q)<-names.hourly
+      if (length(o.out$Stnr)>0) names(o.out)<-names.hourly
+      if (length(q.out$Stnr)>0) names(q.out)<-names.hourly
+    }
     value<-suppressWarnings(as.numeric(o$value))
     stnr.o<-suppressWarnings(as.numeric(o$stnr))
     value[value==-999]<-NA
@@ -298,10 +307,12 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
     o.tot<-o
     q.tot<-q
   }
-  names(o.tot)<-c("stnr","year","month","day","hour","value")
-  names(q.tot)<-c("stnr","year","month","day","hour","flag")
+#  if ( daily) {
+#    names(o.tot)<-c("stnr","year","month","day","hour","value")
+#    names(q.tot)<-c("stnr","year","month","day","hour","flag")
+#  }
   value<-suppressWarnings(as.numeric(o.tot$value))
-  flag<-suppressWarnings(as.numeric(q.tot$flag))
+  flag<-suppressWarnings(as.numeric(q.tot$value))
   stnr.o<-suppressWarnings(as.numeric(o.tot$stnr))
   stnr.o.unique<-unique(stnr.o)
   indx.stn<-which(statlist$stnr %in% stnr.o)
