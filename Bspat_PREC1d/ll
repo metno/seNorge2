@@ -216,6 +216,7 @@ Type 'q()' to quit R.
 > rm(list=ls())
 > # Libraries
 > library(raster)
+> library(igraph)
 > library(rgdal)
 > library(ncdf)
 > require(tripack)
@@ -12279,7 +12280,6 @@ null device
 +     quit()
 + #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 +   } # end case of no-rain over the whole domain
-+ 
 +   # [] Contiguous NO-Rain Area: First Guess
 +   Lsubsample.vec[]<-NA
 +   # vectors used in the identification of NO-Rain (nor) - first guess
@@ -12557,6 +12557,160 @@ null device
 + points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="darkred",cex=3)
 + points(VecX[which(data$DQC==300)],VecY[which(data$DQC==300)],pch=19,col="cyan",cex=3)
 + dev.off()
++ # [] Contiguous NO-Rain Area: First Guess on the grid.CG
++   print("++ define nor.1st on the grid.CG")
++   lab.nor.CG.1st<-vector(mode="numeric",length=Lgrid.CG)
++   close2i<-vector(mode="numeric",length=Lgrid.CG)
++   close2i.dry<-vector(mode="numeric",length=Lgrid.CG)
++   Disth2i.min.dry<-vector(mode="numeric",length=Lgrid.CG)
++   lab.nor.CG.1st[]<-NA
++ #  tri.rr<-tri.mesh(VecX[yo.ok.pos],VecY[yo.ok.pos])
++   for (i in 1:Lgrid.CG) {
++     Disth.i<-( (ygrid.CG[i]-VecY[yo.ok.pos])**2+(xgrid.CG[i]-VecX[yo.ok.pos])**2 )**0.5 / 1000.
++     close2i[i]<-yo.ok.pos[which.min(Disth.i)]
++     Disth.i.dry<-( (ygrid.CG[i]-VecY[yo.ok.pos.dry])**2+(xgrid.CG[i]-VecX[yo.ok.pos.dry])**2 )**0.5 / 1000.
++     close2i.dry[i]<-yo.ok.pos.dry[which.min(Disth.i.dry)]
++     Disth2i.min.dry[i]<-min(Disth.i.dry)
++     for (nor.1st in 1:nnor.1st.vec) {
++       if (close2i[i] %in% nor.1st.vec[nor.1st,1:Lnor.1st.vec[nor.1st]]) {
++         lab.nor.CG.1st[i]<-nor.1st
++         break
++       }
++     }
++     if (is.na(lab.nor.CG.1st[i])) lab.nor.CG.1st[i]<-0
++   }
++   rm(Disth.i,Disth.i.dry)
++ # [] Refine identification (Identify Wet and Dry Areas within the nor first guess)
++   print("++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)")
++   xa.Dh.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
++   xa.Dz.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
++   x.CG.nor.wet<-vector(mode="numeric",length=Lgrid.CG)
++   x.CG.nor.dry<-vector(mode="numeric",length=Lgrid.CG)
++   lab.nor.CG<-vector(mode="numeric",length=Lgrid.CG)
++   n.nor<-0
++ # x.CG.nor.@@@ -> =0 gridpoint not classified as @@@; =1 grid-point classified as @@@
++ # lab.nor.CG -> =0 gridpoint "dry"; =-1 gridpoint "wet", waiting to labelled;
++ #             n>0 gridpoint "wet" belonging to nor n (only for isolated wet station)
++   x.CG.nor.wet[]<-0
++   x.CG.nor.dry[]<-0
++   lab.nor.CG[]<-0
++   for (nor.1st in 1:nnor.1st.vec) { # START: cycle over nor.1st
++ #    print(paste(nor.1st,"nor.1st +++++++++++++++++++++++++++++++++"))
++     # define vectors / variables / indexes 
++     Lnor.1st<-Lnor.1st.vec[nor.1st]
++     VecX.nor.1st<-vector(mode="numeric",length=Lnor.1st)
++     VecY.nor.1st<-vector(mode="numeric",length=Lnor.1st)
++     VecZ.nor.1st<-vector(mode="numeric",length=Lnor.1st)
++     VecS.nor.1st<-vector(mode="numeric",length=Lnor.1st)
++     yo.nor.1st<-vector(mode="numeric",length=Lnor.1st)
++     VecX.nor.1st<-VecX[nor.1st.vec[nor.1st,1:Lnor.1st]]
++     VecY.nor.1st<-VecY[nor.1st.vec[nor.1st,1:Lnor.1st]]
++     VecZ.nor.1st<-VecZ[nor.1st.vec[nor.1st,1:Lnor.1st]]
++     VecS.nor.1st<-VecS[nor.1st.vec[nor.1st,1:Lnor.1st]]
++     yo.nor.1st<-yo[nor.1st.vec[nor.1st,1:Lnor.1st]]
++     yoindx.nor.1st.wet<-which(yo.nor.1st>=rr.inf)
++     yoindx.nor.1st.dry<-which(yo.nor.1st<rr.inf)
++     yoindx.wet<-nor.1st.vec[nor.1st,yoindx.nor.1st.wet]
++     yoindx.dry<-nor.1st.vec[nor.1st,yoindx.nor.1st.dry]
++     n.nor.1st.wet<-length(yoindx.nor.1st.wet)
++     n.nor.1st.dry<-length(yoindx.nor.1st.dry)
++     xindx.nor.CG<-which(lab.nor.CG.1st==nor.1st)
++     Lgrid.nor.1st<-length(xindx.nor.CG)
++     # isolated wet-station
++     if (n.nor.1st.wet==1) n.nor<-n.nor+1
++     # more than one single wet-station
++     # define Dz for the current nor (min allowed value is 500 m)
++     xa.Dz.nor.1st[xindx.nor.CG]<-max(500,max(zgrid.CG[xindx.nor.CG]))
++     for (i in xindx.nor.CG) {    #START: cycle over xindx.nor.CG
++       Disth.nor.1st<-( (ygrid.CG[i]-VecY.nor.1st)**2+(xgrid.CG[i]-VecX.nor.1st)**2 )**0.5 / 1000.
++       Distz.nor.1st<-abs(zgrid.CG[i]-VecZ.nor.1st)
++       close2i.ord<-order(Disth.nor.1st,decreasing=F)
++ #      xa.Dh.nor.1st[i] <- max(20,Disth.nor.1st[close2i.ord[1]])
++       xa.Dh.nor.1st[i] <- Disth.nor.1st[close2i.ord[1]]
++       notsofar.wet.i<-which(Disth.nor.1st[yoindx.nor.1st.wet]<(5*xa.Dh.nor.1st[i]))
++       notsofar.dry.i<-which(Disth.nor.1st[yoindx.nor.1st.dry]<(5*xa.Dh.nor.1st[i]))
++       if (length(notsofar.wet.i)==0) {
++         x.CG.nor.dry[i]<-1
++       } else if (length(notsofar.dry.i)==0) {
++         x.CG.nor.wet[i]<-1
++         if (n.nor.1st.wet==1) {
++           lab.nor.CG[i]<-n.nor
++         } else {
++           lab.nor.CG[i]<--1
++         }
++       } else {
++         G.wet<-exp(-0.5*(Disth.nor.1st[yoindx.nor.1st.wet[notsofar.wet.i]]/xa.Dh.nor.1st[i])**2.
++                    -0.5*(Distz.nor.1st[yoindx.nor.1st.wet[notsofar.wet.i]]/xa.Dz.nor.1st[i])**2.)
++         D.wet<-as.matrix(exp(-0.5*(Disth[yoindx.wet[notsofar.wet.i],
++                                          yoindx.wet[notsofar.wet.i]]/xa.Dh.nor.1st[i])**2.
++                              -0.5*(Distz[yoindx.wet[notsofar.wet.i],
++                                          yoindx.wet[notsofar.wet.i]]/xa.Dz.nor.1st[i])**2. ))
++         D.wet[row(D.wet)==col(D.wet)]<-D.wet[row(D.wet)==col(D.wet)]+eps2
++         if (n.nor.1st.wet>1) {
++           InvD.wet<-solve(D.wet)
++           K.wet<-G.wet%*%InvD.wet
++           rm(InvD.wet)
++         } else {
++           K.wet<-G.wet/(1+eps2)
++         }
++         xidi.CG.wet[i]<-sum(K.wet)
++         # dry
++         G.dry<-exp(-0.5*(Disth.nor.1st[yoindx.nor.1st.dry[notsofar.dry.i]]/xa.Dh.nor.1st[i])**2.-
++                     0.5*(Distz.nor.1st[yoindx.nor.1st.dry[notsofar.dry.i]]/xa.Dz.nor.1st[i])**2.)
++         D.dry<-as.matrix(exp(-0.5*(Disth[yoindx.dry[notsofar.dry.i],
++                                          yoindx.dry[notsofar.dry.i]]/xa.Dh.nor.1st[i])**2.+
++                              -0.5*(Distz[yoindx.dry[notsofar.dry.i],
++                                          yoindx.dry[notsofar.dry.i]]/xa.Dz.nor.1st[i])**2. ))
++         D.dry[row(D.dry)==col(D.dry)]<-D.dry[row(D.dry)==col(D.dry)]+eps2
++         InvD.dry<-solve(D.dry)
++         K.dry<-G.dry%*%InvD.dry
++         rm(InvD.dry)
++         xidi.CG.dry[i]<-sum(K.dry)
++         if (xidi.CG.wet[i]>xidi.CG.dry[i]) {
++           x.CG.nor.wet[i]<-1
++           if (n.nor.1st.wet==1) {
++             lab.nor.CG[i]<-n.nor
++           } else {
++             lab.nor.CG[i]<--1
++           }
++         } else {
++           x.CG.nor.dry[i]<-1
++         }
++       }
++     } # END: cycle over xindx.nor.CG
++   } # END: cycle over nor.1st
++ # DQC DQC DQC
++ # to revise: if a wet observation is not included in an event and it is inside Norway then
++ # flag it as presumably bad observation and repeat everything
++   r.CG.nor.wet <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
++                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
++   r.CG.nor.dry <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
++                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
++   r.CG.nor.wet[]<-NA
++   r.CG.nor.dry[]<-NA
++   r.CG.nor.wet[gridmask.notNAs.CG]<-round(x.CG.nor.wet,0)
++   r.CG.nor.dry[gridmask.notNAs.CG]<-round(x.CG.nor.dry,0)
++   stn.nor.wet<-extract(r.CG.nor.wet,cbind(VecX,VecY),na.rm=T)
++   stn.nor.dry<-extract(r.CG.nor.dry,cbind(VecX,VecY),na.rm=T)
++   yo.ok.dry.fail<-!(yo.ok.pos.dry %in% which(stn.nor.dry==1 | is.na(stn.nor.dry)))
++   if (any(yo.ok.dry.fail)) {
++     data$DQC[yo.ok.pos.dry[which(yo.ok.dry.fail)]]<-400
++     next
++   }
++ #  print(paste(yo,stn.nor.dry,stn.nor.dry,data$DQC,"\n"))
++   png(file="norwet.png",width=1200,height=1200)
++   plot(r.CG.nor.wet)
++   points(VecX[which(stn.nor.wet==1)],VecY[which(stn.nor.wet==1)])
++   points(VecX[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],VecY[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],pch=19,col="red")
++   points(VecX[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gray")
++   dev.off()
++   png(file="nordry.png",width=1200,height=1200)
++   plot(r.CG.nor.dry)
++   points(VecX[which(stn.nor.dry==1)],VecY[which(stn.nor.dry==1)])
++   points(VecX[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],VecY[which(stn.nor.wet==0 & stn.nor.dry==0 & !is.na(yo))],pch=19,col="red")
++   points(VecX[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.wet) & is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gray")
++   points(VecX[which(data$DQC==400)],VecY[which(data$DQC==400)],col="black",pch=19,cex=3)
++   dev.off()
 + # [] Contiguous Rain Area: First Guess on the grid.CG
 +   print("++ define eve.1st on the grid.CG")
 +   lab.eve.CG.1st<-vector(mode="numeric",length=Lgrid.CG)
@@ -12616,8 +12770,6 @@ null device
 +     n.eve.1st.dry<-length(yoindx.eve.1st.dry)
 +     xindx.eve.CG<-which(lab.eve.CG.1st==eve.1st)
 +     Lgrid.eve.1st<-length(xindx.eve.CG)
-+     # isolated wet-station
-+     if (n.eve.1st.wet==1) n.eve<-n.eve+1
 +     # more than one single wet-station
 +     # define Dz for the current eve (min allowed value is 500 m)
 +     xa.Dz.eve.1st[xindx.eve.CG]<-max(500,max(zgrid.CG[xindx.eve.CG]))
@@ -12633,11 +12785,6 @@ null device
 +         x.CG.dry[i]<-1
 +       } else if (length(notsofar.dry.i)==0) {
 +         x.CG.wet[i]<-1
-+         if (n.eve.1st.wet==1) {
-+           lab.eve.CG[i]<-n.eve
-+         } else {
-+           lab.eve.CG[i]<--1
-+         }
 +       } else {
 +         G.wet<-exp(-0.5*(Disth.eve.1st[yoindx.eve.1st.wet[notsofar.wet.i]]/xa.Dh.eve.1st[i])**2.
 +                    -0.5*(Distz.eve.1st[yoindx.eve.1st.wet[notsofar.wet.i]]/xa.Dz.eve.1st[i])**2.)
@@ -12668,35 +12815,11 @@ null device
 +         xidi.CG.dry[i]<-sum(K.dry)
 +         if (xidi.CG.wet[i]>xidi.CG.dry[i]) {
 +           x.CG.wet[i]<-1
-+           if (n.eve.1st.wet==1) {
-+             lab.eve.CG[i]<-n.eve
-+           } else {
-+             lab.eve.CG[i]<--1
-+           }
 +         } else {
 +           x.CG.dry[i]<-1
 +         }
 +       }
 +     } # END: cycle over xindx.eve.CG
-+ #    # isolated wet-station
-+ #    if (n.eve.1st.wet==1) {
-+ #      aux<-which(lab.eve.CG==n.eve)
-+ #      if (length(aux)==0) {
-+ #        r.b<-1+as.integer(abs(VecY[yoindx.wet]-ymx.CG)/dy.CG)
-+ #        c.b<-1+as.integer((VecX[yoindx.wet]-xmn.CG)/dx.CG)
-+ #        i<-mat2vec.CG[r.b,c.b]
-+ #        for (ii in -1:1) {
-+ #          for (jj in -1:1) {
-+ #            if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
-+ #            if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
-+ #            i<-mat2vec.CG[(r.b+ii),(c.b+jj)]
-+ #            x.CG.wet[i]<-1 
-+ #            x.CG.dry[i]<-0
-+ #            lab.eve.CG[i]<-n.eve
-+ #          }
-+ #        }
-+ #      }
-+ #    }
 +   } # END: cycle over eve.1st
 + # DQC DQC DQC
 + # to revise: if a wet observation is not included in an event and it is inside Norway then
@@ -12711,130 +12834,122 @@ null device
 +   r.CG.eve.dry[gridmask.notNAs.CG]<-round(x.CG.dry,0)
 +   stn.eve.wet<-extract(r.CG.eve.wet,cbind(VecX,VecY),na.rm=T)
 +   stn.eve.dry<-extract(r.CG.eve.dry,cbind(VecX,VecY),na.rm=T)
-+   print(paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,"\n"))
++   yo.ok.wet.fail<-!(yo.ok.pos.wet %in% which(stn.eve.wet==1 | is.na(stn.eve.wet)))
++   if (any(yo.ok.wet.fail)) {
++     data$DQC[yo.ok.pos.wet[which(yo.ok.wet.fail)]]<-500
++     next
++   }
 +   png(file="evewet.png",width=1200,height=1200)
 +   plot(r.CG.eve.wet)
 +   points(VecX[which(stn.eve.wet==1)],VecY[which(stn.eve.wet==1)])
 +   points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
-+   points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="green")
++   points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="gray")
++   points(VecX[which(data$DQC==500)],VecY[which(data$DQC==500)],col="black",pch=19,cex=3)
 +   dev.off()
 +   png(file="evedry.png",width=1200,height=1200)
 +   plot(r.CG.eve.dry)
 +   points(VecX[which(stn.eve.dry==1)],VecY[which(stn.eve.dry==1)])
 +   points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
-+   points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="green")
++   points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="gray")
 +   dev.off()
-+   q()
-+   for (b in yo.ok.pos.wet) {
-+     if (stn.out.CG[b]) next
-+ 
-+   }
-+ # be sure that a wet observation fell in a eve
-+ png(file="prov3.png",width=1200,height=1200)
-+ plot(orog.FG)
-+ points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-+ points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
-+ #points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=2)
-+ for (i in 1:neve.1st.vec) {
-+   if (i%%2==0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="black")
-+   if (i%%2!=0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="gray")
-+ }
-+   for (b in yo.ok.pos.wet) {
-+     if (stn.out[b]) {
-+       print(paste("out",b))
-+       points(VecX[b],VecY[b],col="darkgreen",pch=19,cex=2.5)
-+       next
-+     }
-+     r.b<-1+as.integer(abs(VecY[b]-ymx.CG)/dy.CG)
-+     c.b<-1+as.integer((VecX[b]-xmn.CG)/dx.CG)
-+     i<-mat2vec.CG[r.b,c.b]
-+     flag<-F
-+     if (is.na(i)) flag<-T
-+     if (!flag) {
-+       if (x.CG.wet[i]!=1) {
-+         print(paste("in",b))
-+         flag<-T
-+         points(VecX[b],VecY[b],col="green",pch=19,cex=2.5)
-+       }
-+     }
-+ # CL 2015.02 begin
-+ #    if (flag) {
-+ #      for (ii in -1:1) {
-+ #        for (jj in -1:1) {
-+ #          if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
-+ #          if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
-+ #          i<-mat2vec.CG[(r.b+ii),(c.b+jj)]
-+ #          if (is.na(i)) next
-+ #          x.CG.wet[i]<-1 
-+ #          x.CG.dry[i]<-0
-+ #          lab.eve.CG[i]<--1
-+ #        }
-+ #      }
-+ #    }
-+ # CL 2015.02 end
-+   }
-+ dev.off()
-+ q()
 + # FINO A QUI FINO A QUI -----------------------------------------------------------------<
 + # [] eve Labelling (Identify final eve on the grid)
-+   print("++ eve Labelling (Identify final eve on the grid)")
-+ #   assign neighbouring wet grid-points to the same eve
-+   # ...pre = preliminary
-+   n.eve.pre<-n.eve
-+   for (i in which(x.CG.wet==1)) {
-+     # cycle over un-labelled wet gridpoints
-+     if (lab.eve.CG[i]!=-1) next
-+     aux<-vector()
-+     n.aux<-0
-+     for (j in which(x.CG.wet==1)) {
-+       if (abs(rowgrid.CG[i]-rowgrid.CG[j])<=1 & abs(colgrid.CG[i]-colgrid.CG[j])<=1 ) {
-+         n.aux<-n.aux+1
-+         aux[n.aux]<-j
-+       }
-+     }
-+     n.eve.pre<-n.eve.pre+1
-+     for (j in 1:n.aux) {
-+       if (lab.eve.CG[aux[j]]>0) lab.eve.CG[which(lab.eve.CG==lab.eve.CG[aux[j]])]<-n.eve.pre
-+       if (lab.eve.CG[aux[j]]==-1) lab.eve.CG[aux[j]]<-n.eve.pre
-+     }
-+   }
-+ # reorganise eve labels
-+   if (n.eve.pre>n.eve) {
-+     for (n in (n.eve+1):n.eve.pre) {
-+       aux<-which(lab.eve.CG==n)
-+       if (length(aux)>0) {
-+         n.eve<-n.eve+1
-+         lab.eve.CG[aux]<-n.eve
-+       }
-+     }
-+   }
++ # lab.eve.CG -> =0 gridpoint "dry"; =-1 gridpoint "wet", waiting to labelled;
++ #             n>0 gridpoint "wet" belonging to eve n (only for isolated wet station)
++   r.lab.eve.CG<-clump(r.CG.eve.wet,directions=8)
++   f.lab<-freq(r.lab.eve.CG)
++   f.lab.val<-f.lab[,1]
++   f.lab.con<-f.lab[,2]
++   print(f.lab)
++   n.eve<-length(f.lab[,1])
++ #
++ 
++ #  print("++ eve Labelling (Identify final eve on the grid)")
++ ##   assign neighbouring wet grid-points to the same event
++ #  # ...pre = preliminary
++ #  print("prima")
++ #  n.eve.pre<-n.eve
++ #  for (i in which(x.CG.wet==1)) {
++ #    # cycle over un-labelled wet gridpoints
++ #    if (lab.eve.CG[i]!=-1) next
++ #    aux<-vector()
++ #    n.aux<-0
++ #    for (j in which(x.CG.wet==1)) {
++ #      if (abs(rowgrid.CG[i]-rowgrid.CG[j])<=1 & abs(colgrid.CG[i]-colgrid.CG[j])<=1 ) {
++ #        n.aux<-n.aux+1
++ #        aux[n.aux]<-j
++ #      }
++ #    }
++ #    n.eve.pre<-n.eve.pre+1
++ #    for (j in 1:n.aux) {
++ #      if (lab.eve.CG[aux[j]]>0) lab.eve.CG[which(lab.eve.CG==lab.eve.CG[aux[j]])]<-n.eve.pre
++ #      if (lab.eve.CG[aux[j]]==-1) lab.eve.CG[aux[j]]<-n.eve.pre
++ #    }
++ #  }
++ #  print("ciao")
++ ## reorganise eve labels
++ #  if (n.eve.pre>n.eve) {
++ #    for (n in (n.eve+1):n.eve.pre) {
++ #      aux<-which(lab.eve.CG==n)
++ #      if (length(aux)>0) {
++ #        n.eve<-n.eve+1
++ #        lab.eve.CG[aux]<-n.eve
++ #      }
++ #    }
++ #  }
++ #  print(n.eve)
 + # [] assign stations at eve
 + #  remarks: 1. each eve must include at least 1 observation; 
 + #   2. it is possible to have wet-observations not included in any of the eve 
 + #      (for example, in areas where there are a lot of observations and most of them are "dry")
++   y.eve<-extract(r.lab.eve.CG,cbind(VecX,VecY),na.rm=T)
++   y.eve.ok.<-extract(r.lab.eve.CG,cbind(VecX,VecY),na.rm=T) 
++   aux<-which(!(f.lab.val %in% unique(y.eve[yo.ok.pos.wet])))
++   print("f.lab.val[aux]")
++   print(f.lab.val[aux])
++   print("paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve)")
++   print(paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve,"\n"))
++   print("unique(y.eve)")
++   print(unique(y.eve))
++   print("length(unique(y.eve))")
++   print(length(unique(y.eve)))
++   png(file="evelab.png",width=1200,height=1200)
++   cols<-c("gray",rainbow((n.eve-1)))
++   plot(r.lab.eve.CG,breaks=seq(0.5,(n.eve+0.5),by=1),col=cols)
++ #  points(VecX[which(stn.eve.wet==1)],VecY[which(stn.eve.wet==1)])
++ #  points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
++ #  points(VecX[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],VecY[which(is.na(stn.eve.wet) & is.na(stn.eve.dry) & !is.na(yo))],pch=19,col="gray")
++ #  points(VecX[which(data$DQC==500)],VecY[which(data$DQC==500)],col="black",pch=19,cex=3)
++   points(VecX,VecY)
++   for (i in 1:n.eve) {
++     aux<-which(y.eve==i)
++     points(VecX[aux],VecY[aux],col=cols[i],pch=19,cex=0.9)
++   }
++   dev.off()
++ q()
 + # eve on the grid: from vector to matrix
-+   for (i in which(x.CG.wet==1)) {
-+     mat.CG.eve[rowgrid.CG[i],colgrid.CG[i]]<-lab.eve.CG[i]
-+ #      print(paste(rowgrid.CG[i],colgrid.CG[i],mat.CG.eve[rowgrid.CG[i],colgrid.CG[i]]))
-+   }
-+ # eve at wet-station locations
-+   y.eve[]<-NA
-+   for (b in yo.ok.pos.wet) {
-+     r.b<-1+as.integer(abs(VecY[b]-ymx.CG)/dy.CG)
-+     c.b<-1+as.integer((VecX[b]-xmn.CG)/dx.CG)
-+     y.eve[b]<-mat.CG.eve[r.b,c.b]
-+     # case: wet station on the edge (but outside) of eve
-+     if (is.na(y.eve[b])) {
-+       for (ii in -1:1) {
-+         for (jj in -1:1) {
-+           if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
-+           if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
-+           if (!is.na(mat.CG.eve[r.b+ii,c.b+jj])) y.eve[b]<-mat.CG.eve[r.b+ii,c.b+jj]
-+         }
-+       }
-+     }
++ #  for (i in which(x.CG.wet==1)) {
++ #    mat.CG.eve[rowgrid.CG[i],colgrid.CG[i]]<-lab.eve.CG[i]
++ ##      print(paste(rowgrid.CG[i],colgrid.CG[i],mat.CG.eve[rowgrid.CG[i],colgrid.CG[i]]))
++ #  }
++ ## eve at wet-station locations
++ #  y.eve[]<-NA
++ #  for (b in yo.ok.pos.wet) {
++ #    r.b<-1+as.integer(abs(VecY[b]-ymx.CG)/dy.CG)
++ #    c.b<-1+as.integer((VecX[b]-xmn.CG)/dx.CG)
++ #    y.eve[b]<-mat.CG.eve[r.b,c.b]
++ #    # case: wet station on the edge (but outside) of eve
++ #    if (is.na(y.eve[b])) {
++ #      for (ii in -1:1) {
++ #        for (jj in -1:1) {
++ #          if ((r.b+ii)>ny.CG | (r.b+ii)<1) next
++ #          if ((c.b+jj)>nx.CG | (c.b+jj)<1) next
++ #          if (!is.na(mat.CG.eve[r.b+ii,c.b+jj])) y.eve[b]<-mat.CG.eve[r.b+ii,c.b+jj]
++ #        }
++ #      }
++ #    }
 + #  print(paste(xmn.CG,ymx.CG,VecS[b],yo[b],VecX[b],VecY[b],r.b,c.b,y.eve[b]))
-+   }
++ #  }
 + # search for possible eves on the grid not including any station and assign
 + # them to the "nearest" eve which includes stations.
 +   aux.y.eve<-unique(y.eve[which(!is.na(y.eve))])
@@ -13177,773 +13292,822 @@ null device
 [1] 5
 [1] 1
 [1] 2
+[1] "++ define nor.1st on the grid.CG"
+[1] "++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)"
+[1] "observation not NAs, presumably good = 546 (wet= 307 dry= 239 )"
+[1] "observation not NAs, presumably good = 545 (wet= 307 dry= 238 )"
+[1] 1
+[1] 2
+[1] 3
+[1] 4
+[1] 1
+[1] 2
+[1] "++ define nor.1st on the grid.CG"
+[1] "++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)"
 [1] "++ define eve.1st on the grid.CG"
 [1] "++ Refine eve identification (Identify Wet and Dry Areas within the eve first guess)"
-   [1] "4.4 1 0 -1 \n"    "4 NA NA -1 \n"    "10.4 NA NA -1 \n"
-   [4] "0.4 NA NA -1 \n"  "NA NA NA NA \n"   "9.4 NA NA -1 \n" 
-   [7] "0.5 NA NA -1 \n"  "NA NA NA NA \n"   "3 NA NA -1 \n"   
-  [10] "14.8 NA NA -1 \n" "NA NA NA NA \n"   "5.5 NA NA -1 \n" 
-  [13] "9.9 NA NA -1 \n"  "NA NA NA NA \n"   "10.5 NA NA -1 \n"
-  [16] "1.9 NA NA -1 \n"  "11.4 NA NA -1 \n" "0 NA NA -1 \n"   
-  [19] "NA NA NA NA \n"   "6.1 NA NA -1 \n"  "NA NA NA NA \n"  
-  [22] "10.2 NA NA -1 \n" "0 NA NA -1 \n"    "1.6 NA NA -1 \n" 
-  [25] "0 NA NA -1 \n"    "0 NA NA -1 \n"    "NA NA NA NA \n"  
-  [28] "NA NA NA NA \n"   "NA NA NA NA \n"   "0.9 NA NA -1 \n" 
-  [31] "0 NA NA -1 \n"    "0 NA NA -1 \n"    "NA NA NA NA \n"  
-  [34] "0 NA NA -1 \n"    "NA NA NA NA \n"   "0 NA NA -1 \n"   
-  [37] "NA NA NA NA \n"   "0 NA NA -1 \n"    "NA NA NA NA \n"  
-  [40] "NA NA NA NA \n"   "0 NA NA -1 \n"    "0 NA NA -1 \n"   
-  [43] "NA NA NA NA \n"   "NA NA NA NA \n"   "4 NA NA -1 \n"   
-  [46] "6 NA NA -1 \n"    "NA NA NA NA \n"   "NA NA NA NA \n"  
-  [49] "0.2 NA NA -1 \n"  "NA NA NA NA \n"   "0.3 NA NA -1 \n" 
-  [52] "0 NA NA -1 \n"    "0 NA NA -1 \n"    "NA 0 0 NA \n"    
-  [55] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-  [58] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-  [61] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA NA NA NA \n"  
-  [64] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-  [67] "0 0 0 0 \n"       "0 0 0 0 \n"       "0 0 0 0 \n"      
-  [70] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-  [73] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 NA NA 0 \n"    
-  [76] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-  [79] "NA 0 0 NA \n"     "0 0 0 0 \n"       "0 0 1 0 \n"      
-  [82] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-  [85] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 0 NA \n"    
-  [88] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-  [91] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-  [94] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-  [97] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [100] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [103] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [106] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [109] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [112] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [115] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [118] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [121] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [124] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [127] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [130] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [133] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [136] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [139] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [142] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [145] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [148] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [151] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [154] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [157] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [160] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [163] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [166] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [169] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [172] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [175] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0.1 1 0 0 \n"    
- [178] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [181] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [184] "NA 1 0 NA \n"     "0 1 0 100 \n"     "NA 1 0 NA \n"    
- [187] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [190] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [193] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [196] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [199] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [202] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 1 0 NA \n"    
- [205] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [208] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [211] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [214] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [217] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [220] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [223] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [226] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [229] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [232] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [235] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [238] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [241] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [244] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [247] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [250] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [253] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [256] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [259] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 -1 \n"     
- [262] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [265] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [268] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [271] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [274] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [277] "0 0 1 0 \n"       "NA 0 1 NA \n"     "0 0 1 100 \n"    
- [280] "NA 0 1 NA \n"     "0 0 0 0 \n"       "0 0 0 100 \n"    
- [283] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [286] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [289] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [292] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [295] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [298] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [301] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [304] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [307] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [310] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [313] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [316] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [319] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [322] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [325] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0.1 1 0 0 \n"    
- [328] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [331] "1.6 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [334] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [337] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [340] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [343] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 -1 \n"     
- [346] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [349] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [352] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [355] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.2 1 0 0 \n"    
- [358] "NA 1 0 NA \n"     "0.5 1 0 0 \n"     "NA 0 1 NA \n"    
- [361] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [364] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [367] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "3.9 1 0 0 \n"    
- [370] "NA 1 0 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [373] "0 0 1 0 \n"       "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [376] "NA 1 0 NA \n"     "3.9 1 0 0 \n"     "2.5 1 0 0 \n"    
- [379] "0.8 1 0 0 \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
- [382] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [385] "NA 1 0 NA \n"     "1.6 1 0 0 \n"     "NA 1 0 NA \n"    
- [388] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [391] "NA 1 0 NA \n"     "0.6 1 0 0 \n"     "NA 1 0 NA \n"    
- [394] "0 0 1 0 \n"       "NA 0 1 NA \n"     "2.3 1 0 0 \n"    
- [397] "NA 1 0 NA \n"     "2.2 1 0 0 \n"     "NA 1 0 NA \n"    
- [400] "1.5 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [403] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [406] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [409] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [412] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 1 NA \n"    
- [415] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [418] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [421] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [424] "0 0 1 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [427] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [430] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [433] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [436] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [439] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [442] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
- [445] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [448] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [451] "1.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [454] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [457] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [460] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [463] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [466] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [469] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [472] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 0 0 \n"      
- [475] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [478] "NA 0 0 NA \n"     "0 0 1 0 \n"       "0.4 1 0 0 \n"    
- [481] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [484] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [487] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [490] "0 0 1 100 \n"     "0 0 1 0 \n"       "NA 1 0 NA \n"    
- [493] "0.1 0 1 0 \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [496] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [499] "0.5 0 1 100 \n"   "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [502] "0 0 1 0 \n"       "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [505] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 0 NA \n"    
- [508] "0 0 0 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [511] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [514] "0 0 1 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [517] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [520] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [523] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [526] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.2 1 0 0 \n"    
- [529] "1 1 0 0 \n"       "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [532] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 0 NA \n"    
- [535] "NA 0 0 NA \n"     "NA 0 1 NA \n"     "0 0 0 0 \n"      
- [538] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 0 NA \n"    
- [541] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [544] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [547] "0 0 0 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [550] "0 0 1 0 \n"       "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [553] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [556] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [559] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [562] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [565] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [568] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [571] "0.8 0 0 300 \n"   "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [574] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [577] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [580] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [583] "0 0 0 0 \n"       "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [586] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [589] "NA 0 0 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [592] "NA 1 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [595] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 0 NA \n"    
- [598] "NA 0 0 NA \n"     "0.6 1 0 0 \n"     "NA 1 0 NA \n"    
- [601] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [604] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [607] "NA 0 0 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [610] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [613] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [616] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [619] "0 0 1 0 \n"       "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [622] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [625] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [628] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [631] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [634] "NA 1 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 -1 \n"     
- [637] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [640] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 0 NA \n"    
- [643] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [646] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [649] "0 0 0 100 \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [652] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [655] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [658] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [661] "0.2 1 0 0 \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [664] "NA 1 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [667] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [670] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [673] "NA 0 0 NA \n"     "0 0 0 -1 \n"      "NA 0 0 NA \n"    
- [676] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [679] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [682] "NA 0 0 NA \n"     "0 0 0 100 \n"     "NA 0 0 NA \n"    
- [685] "0 0 0 0 \n"       "NA NA NA NA \n"   "0 0 0 0 \n"      
- [688] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [691] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [694] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [697] "0 0 0 -1 \n"      "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [700] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [703] "0 0 0 0 \n"       "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [706] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [709] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [712] "NA 0 0 NA \n"     "NA NA NA NA \n"   "NA NA NA NA \n"  
- [715] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [718] "NA 0 0 NA \n"     "0 0 0 0 \n"       "0 0 0 0 \n"      
- [721] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [724] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [727] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [730] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [733] "0 0 0 0 \n"       "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [736] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [739] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [742] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [745] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [748] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [751] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [754] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
- [757] "0 0 0 0 \n"       "0 0 1 0 \n"       "NA 0 0 NA \n"    
- [760] "NA 0 0 NA \n"     "1.7 0 0 100 \n"   "0 0 0 0 \n"      
- [763] "NA 0 0 NA \n"     "0 0 0 0 \n"       "0 0 0 100 \n"    
- [766] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [769] "NA 0 0 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [772] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [775] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [778] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [781] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [784] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [787] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [790] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [793] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [796] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "0 0 1 0 \n"      
- [799] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [802] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [805] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [808] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [811] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [814] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "0.2 1 0 0 \n"    
- [817] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "0.1 1 0 0 \n"    
- [820] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [823] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [826] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [829] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [832] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 1 NA \n"    
- [835] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [838] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [841] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [844] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 1 NA \n"    
- [847] "NA 0 1 NA \n"     "0 NA NA 0 \n"     "NA 0 0 NA \n"    
- [850] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [853] "0 0 0 0 \n"       "0 0 0 0 \n"       "NA 0 1 NA \n"    
- [856] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
- [859] "NA NA NA NA \n"   "NA 0 0 NA \n"     "0 0 0 0 \n"      
- [862] "2.1 1 0 0 \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [865] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [868] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [871] "NA 0 1 NA \n"     "0 0 1 0 \n"       "0 0 1 0 \n"      
- [874] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [877] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [880] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [883] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [886] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [889] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [892] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.3 1 0 0 \n"    
- [895] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [898] "1.4 1 0 100 \n"   "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [901] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [904] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [907] "NA 0 1 NA \n"     "0.1 1 0 0 \n"     "NA NA NA NA \n"  
- [910] "NA 0 1 NA \n"     "0 0 0 0 \n"       "0 0 0 0 \n"      
- [913] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 1 NA \n"    
- [916] "0 0 0 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [919] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [922] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0.3 1 0 0 \n"    
- [925] "1.8 1 0 0 \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [928] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
- [931] "0.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [934] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [937] "0 0 1 0 \n"       "0.5 1 0 0 \n"     "NA 1 0 NA \n"    
- [940] "NA 1 0 NA \n"     "0.3 1 0 0 \n"     "NA 1 0 NA \n"    
- [943] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
- [946] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
- [949] "0.2 1 0 0 \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [952] "0.7 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [955] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
- [958] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [961] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [964] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
- [967] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
- [970] "0 0 1 0 \n"       "0.3 1 0 0 \n"     "NA 1 0 NA \n"    
- [973] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [976] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "3 1 0 0 \n"      
- [979] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [982] "NA 1 0 NA \n"     "1.1 1 0 0 \n"     "NA 1 0 NA \n"    
- [985] "1 1 0 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
- [988] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.9 1 0 0 \n"    
- [991] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA NA NA NA \n"  
- [994] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
- [997] "NA 0 1 NA \n"     "1.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1000] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1003] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.8 1 0 0 \n"    
-[1006] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.1 1 0 0 \n"    
-[1009] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "2.9 1 0 0 \n"    
-[1012] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1015] "0.3 1 0 0 \n"     "NA 1 0 NA \n"     "1.1 1 0 0 \n"    
-[1018] "NA 1 0 NA \n"     "0.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1021] "NA 1 0 NA \n"     "0.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1024] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.8 1 0 0 \n"    
-[1027] "0.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1030] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "1.1 1 0 0 \n"    
-[1033] "1 1 0 0 \n"       "NA 1 0 NA \n"     "0.4 1 0 0 \n"    
-[1036] "NA 1 0 NA \n"     "0.4 1 0 0 \n"     "NA 1 0 NA \n"    
-[1039] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1042] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1045] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1048] "0.5 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1051] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1054] "NA 1 0 NA \n"     "0.3 1 0 0 \n"     "3.4 1 0 0 \n"    
-[1057] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.8 1 0 0 \n"    
-[1060] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1063] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1066] "NA 1 0 NA \n"     "0 1 0 200 \n"     "NA NA NA NA \n"  
-[1069] "8.4 1 0 0 \n"     "18.4 NA NA 0 \n"  "0.2 1 0 0 \n"    
-[1072] "NA 1 0 NA \n"     "2.5 1 0 0 \n"     "3.5 1 0 0 \n"    
-[1075] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1078] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "3.6 1 0 0 \n"    
-[1081] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1084] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1087] "NA 1 0 NA \n"     "4.4 1 0 0 \n"     "NA 1 0 NA \n"    
-[1090] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1093] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1096] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1099] "NA 1 0 NA \n"     "1 1 0 0 \n"       "0 1 0 200 \n"    
-[1102] "NA 1 0 NA \n"     "1.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1105] "2.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1108] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1111] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1114] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1117] "NA 1 0 NA \n"     "2.5 1 0 0 \n"     "NA 1 0 NA \n"    
-[1120] "NA 1 0 NA \n"     "5.5 1 0 0 \n"     "11.4 1 0 0 \n"   
-[1123] "NA 1 0 NA \n"     "4.6 1 0 0 \n"     "5 1 0 0 \n"      
-[1126] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1129] "1.2 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1132] "0.6 1 0 0 \n"     "NA 1 0 NA \n"     "0.3 1 0 0 \n"    
-[1135] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1138] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1141] "NA 1 0 NA \n"     "1.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[1144] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1147] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1150] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1153] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.4 1 0 0 \n"    
-[1156] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.2 1 0 0 \n"    
-[1159] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1162] "0.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1165] "1.6 1 0 0 \n"     "NA 1 0 NA \n"     "5.6 1 0 100 \n"  
-[1168] "NA 1 0 NA \n"     "11.5 1 0 0 \n"    "NA 1 0 NA \n"    
-[1171] "NA 1 0 NA \n"     "1.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1174] "3.4 1 0 -1 \n"    "1 1 0 0 \n"       "NA 1 0 NA \n"    
-[1177] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1180] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1183] "5.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1186] "7.1 1 0 0 \n"     "1.8 1 0 0 \n"     "NA 1 0 NA \n"    
-[1189] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.1 1 0 0 \n"    
-[1192] "2.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1195] "0.6 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1198] "3.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1201] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1204] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1207] "5.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1210] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1213] "7.4 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1216] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1219] "3.8 1 0 0 \n"     "2.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1222] "NA 1 0 NA \n"     "4.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1225] "NA 1 0 NA \n"     "0.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1228] "NA 1 0 NA \n"     "4.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1231] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1234] "NA 1 0 NA \n"     "4.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1237] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "7 1 0 0 \n"      
-[1240] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1243] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA NA NA NA \n"  
-[1246] "NA 1 0 NA \n"     "0.5 1 0 0 \n"     "2.5 1 0 0 \n"    
-[1249] "NA 1 0 NA \n"     "0.5 1 0 0 \n"     "NA 1 0 NA \n"    
-[1252] "6.5 1 0 0 \n"     "7.3 1 0 0 \n"     "2 1 0 0 \n"      
-[1255] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1258] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1261] "2.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1264] "6.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1267] "0.6 1 0 0 \n"     "0.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1270] "NA 1 0 NA \n"     "0.6 1 0 0 \n"     "0 1 0 0 \n"      
-[1273] "NA 1 0 NA \n"     "0.4 1 0 0 \n"     "NA 1 0 NA \n"    
-[1276] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
-[1279] "NA 0 1 NA \n"     "1.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[1282] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1285] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1288] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.3 1 0 0 \n"    
-[1291] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1294] "NA 1 0 NA \n"     "0.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1297] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
-[1300] "NA 0 1 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1303] "NA 1 0 NA \n"     "0.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1306] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[1309] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 0 1 NA \n"    
-[1312] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1315] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1318] "0.6 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1321] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1324] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1327] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "3.9 1 0 0 \n"    
-[1330] "1.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA NA NA NA \n"  
-[1333] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1336] "1.8 1 0 0 \n"     "5.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1339] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1342] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1345] "NA 1 0 NA \n"     "0.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1348] "NA 1 0 NA \n"     "0.6 1 0 0 \n"     "NA 1 0 NA \n"    
-[1351] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1354] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "2.5 1 0 0 \n"    
-[1357] "NA 1 0 NA \n"     "5.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1360] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1363] "NA 1 0 NA \n"     "3 1 0 0 \n"       "NA 1 0 NA \n"    
-[1366] "5.9 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1369] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1372] "NA 1 0 NA \n"     "4.1 1 0 0 \n"     "4.6 1 0 0 \n"    
-[1375] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1378] "NA 1 0 NA \n"     "3.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1381] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "4 1 0 0 \n"      
-[1384] "NA 1 0 NA \n"     "1.8 1 0 0 \n"     "4.7 1 0 0 \n"    
-[1387] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "4 1 0 0 \n"      
-[1390] "NA 1 0 NA \n"     "3.5 1 0 0 \n"     "4.9 1 0 0 \n"    
-[1393] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.6 1 0 0 \n"    
-[1396] "NA 1 0 NA \n"     "1.5 1 0 0 \n"     "NA 1 0 NA \n"    
-[1399] "NA 1 0 NA \n"     "3 1 0 0 \n"       "NA 1 0 NA \n"    
-[1402] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "2.2 1 0 0 \n"    
-[1405] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1408] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1411] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1414] "NA 1 0 NA \n"     "1.6 1 0 0 \n"     "NA 1 0 NA \n"    
-[1417] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1420] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1423] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "8.2 1 0 0 \n"    
-[1426] "NA 1 0 NA \n"     "7.9 1 0 0 \n"     "NA 1 0 NA \n"    
-[1429] "3.6 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1432] "1.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1435] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1438] "NA 1 0 NA \n"     "5.5 1 0 0 \n"     "NA NA NA NA \n"  
-[1441] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1444] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1447] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1450] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "7.8 1 0 0 \n"    
-[1453] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "0.5 1 0 0 \n"    
-[1456] "NA 1 0 NA \n"     "1.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1459] "1 1 0 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1462] "NA 1 0 NA \n"     "3.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[1465] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1468] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1471] "1.8 1 0 0 \n"     "3.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1474] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1477] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1480] "2.6 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1483] "NA 1 0 NA \n"     "3.9 1 0 0 \n"     "1 1 0 0 \n"      
-[1486] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1489] "6 1 0 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1492] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.3 NA NA 0 \n"  
-[1495] "NA NA NA NA \n"   "NA NA NA NA \n"   "NA 1 0 NA \n"    
-[1498] "NA 1 0 NA \n"     "2 1 0 0 \n"       "4.5 1 0 0 \n"    
-[1501] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1504] "NA 1 0 NA \n"     "7.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1507] "NA 1 0 NA \n"     "7.9 1 0 0 \n"     "7.4 1 0 0 \n"    
-[1510] "NA 1 0 NA \n"     "0.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1513] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.4 1 0 0 \n"    
-[1516] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.8 1 0 0 \n"    
-[1519] "NA 1 0 NA \n"     "2.1 1 0 0 \n"     "NA NA NA NA \n"  
-[1522] "NA NA NA NA \n"   "0 0 1 0 \n"       "NA 1 0 NA \n"    
-[1525] "0.2 1 0 0 \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[1528] "NA 1 0 NA \n"     "0 0 0 0 \n"       "0.1 1 0 0 \n"    
-[1531] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 0 NA \n"    
-[1534] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-[1537] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[1540] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
-[1543] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[1546] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1549] "0.3 1 0 0 \n"     "0.1 1 0 0 \n"     "NA 0 1 NA \n"    
-[1552] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1555] "NA NA NA NA \n"   "NA NA NA NA \n"   "NA NA NA NA \n"  
-[1558] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[1561] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
-[1564] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 0 NA \n"    
-[1567] "0 0 1 0 \n"       "0 0 0 0 \n"       "NA 0 1 NA \n"    
-[1570] "NA 0 1 NA \n"     "0 0 1 0 \n"       "0 0 0 0 \n"      
-[1573] "NA NA NA NA \n"   "0 0 1 0 \n"       "2.9 1 0 0 \n"    
-[1576] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1579] "7 1 0 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1582] "NA 1 0 NA \n"     "4 1 0 0 \n"       "NA 1 0 NA \n"    
-[1585] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1588] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1591] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1594] "10.6 1 0 0 \n"    "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1597] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1600] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1603] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1606] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.3 1 0 0 \n"    
-[1609] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
-[1612] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1615] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.5 1 0 0 \n"    
-[1618] "0.2 1 0 0 \n"     "NA 1 0 NA \n"     "0 0 1 0 \n"      
-[1621] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[1624] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1627] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1630] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1633] "0.7 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1636] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1639] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1642] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1645] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1648] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0.6 1 0 0 \n"    
-[1651] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1654] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1657] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1660] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1663] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1666] "0.4 1 0 100 \n"   "NA 1 0 NA \n"     "0.4 1 0 0 \n"    
-[1669] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
-[1672] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[1675] "NA 1 0 NA \n"     "1 1 0 0 \n"       "NA 1 0 NA \n"    
-[1678] "NA 1 0 NA \n"     "0.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1681] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1684] "0.1 1 0 0 \n"     "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
-[1687] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1690] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1693] "0 0 1 0 \n"       "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1696] "NA 1 0 NA \n"     "0.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1699] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 0 1 NA \n"    
-[1702] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1705] "0 0 1 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1708] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[1711] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.5 1 0 0 \n"    
-[1714] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1717] "0.4 1 0 100 \n"   "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1720] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[1723] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[1726] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1729] "NA 0 1 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1732] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1735] "1.8 1 0 0 \n"     "NA 1 0 NA \n"     "1.6 1 0 0 \n"    
-[1738] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.9 1 0 0 \n"    
-[1741] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "3.6 1 0 0 \n"    
-[1744] "1.8 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1747] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "2 1 0 0 \n"      
-[1750] "2.9 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1753] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.9 1 0 0 \n"    
-[1756] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1759] "NA 1 0 NA \n"     "0.5 1 0 0 \n"     "NA 1 0 NA \n"    
-[1762] "1.6 1 0 100 \n"   "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1765] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA NA NA NA \n"  
-[1768] "3.5 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1771] "NA NA NA NA \n"   "NA 1 0 NA \n"     "0.1 1 0 0 \n"    
-[1774] "NA 0 1 NA \n"     "NA NA NA NA \n"   "NA NA NA NA \n"  
-[1777] "NA 1 0 NA \n"     "7.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1780] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1783] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1786] "10 1 0 0 \n"      "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1789] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "5.2 1 0 0 \n"    
-[1792] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1795] "NA 1 0 NA \n"     "12.4 1 0 0 \n"    "NA 1 0 NA \n"    
-[1798] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1801] "NA 1 0 NA \n"     "9.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1804] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1807] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1810] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "6.8 1 0 0 \n"    
-[1813] "8.5 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1816] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1819] "NA 1 0 NA \n"     "16.2 1 0 0 \n"    "NA 1 0 NA \n"    
-[1822] "14.7 1 0 0 \n"    "14.7 1 0 0 \n"    "NA NA NA NA \n"  
-[1825] "NA 1 0 NA \n"     "25.1 1 0 0 \n"    "NA 1 0 NA \n"    
-[1828] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "16.5 1 0 0 \n"   
-[1831] "4.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1834] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "17.3 1 0 0 \n"   
-[1837] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1840] "NA 1 0 NA \n"     "7.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1843] "NA 1 0 NA \n"     "16.6 1 0 0 \n"    "13 1 0 0 \n"     
-[1846] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1849] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "21.8 1 0 0 \n"   
-[1852] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1855] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1858] "NA 1 0 NA \n"     "6.7 1 0 0 \n"     "NA 1 0 NA \n"    
-[1861] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "14.4 1 0 0 \n"   
-[1864] "6.8 1 0 0 \n"     "7.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[1867] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "18 1 0 0 \n"     
-[1870] "NA 1 0 NA \n"     "6.2 1 0 0 \n"     "NA 1 0 NA \n"    
-[1873] "NA 1 0 NA \n"     "6.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[1876] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1879] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
-[1882] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1885] "15.8 1 0 0 \n"    "20 1 0 0 \n"      "NA 1 0 NA \n"    
-[1888] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1891] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1894] "20.4 1 0 0 \n"    "14 NA NA 0 \n"    "NA 1 0 NA \n"    
-[1897] "NA 1 0 NA \n"     "NA NA NA NA \n"   "0 NA NA 0 \n"    
-[1900] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1903] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1906] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1909] "31.6 1 0 0 \n"    "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1912] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1915] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1918] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1921] "NA 1 0 NA \n"     "11.8 1 0 0 \n"    "NA 1 0 NA \n"    
-[1924] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1927] "15.5 1 0 -1 \n"   "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1930] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "22.7 1 0 0 \n"   
-[1933] "3.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1936] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1939] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1942] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1945] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "9.7 1 0 0 \n"    
-[1948] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1951] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "16.8 1 0 0 \n"   
-[1954] "NA 1 0 NA \n"     "24.6 1 0 0 \n"    "NA 1 0 NA \n"    
-[1957] "NA 1 0 NA \n"     "11.2 1 0 0 \n"    "NA 1 0 NA \n"    
-[1960] "9.3 1 0 0 \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1963] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA NA NA NA \n"  
-[1966] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1969] "NA 1 0 NA \n"     "NA NA NA NA \n"   "NA 1 0 NA \n"    
-[1972] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1975] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1978] "12.3 1 0 0 \n"    "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1981] "NA 1 0 NA \n"     "4 1 0 0 \n"       "NA 1 0 NA \n"    
-[1984] "NA NA NA NA \n"   "NA 1 0 NA \n"     "NA NA NA NA \n"  
-[1987] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1990] "NA 1 0 NA \n"     "9.8 1 0 0 \n"     "NA 1 0 NA \n"    
-[1993] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[1996] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[1999] "11.6 0 1 100 \n"  "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2002] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2005] "NA 1 0 NA \n"     "6.4 1 0 0 \n"     "NA 1 0 NA \n"    
-[2008] "NA 1 0 NA \n"     "NA NA NA NA \n"   "NA 1 0 NA \n"    
-[2011] "6 1 0 0 \n"       "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2014] "10 1 0 0 \n"      "12.4 1 0 0 \n"    "NA 1 0 NA \n"    
-[2017] "NA 1 0 NA \n"     "11.9 1 0 0 \n"    "NA 1 0 NA \n"    
-[2020] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2023] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2026] "0 1 0 0 \n"       "NA 1 0 NA \n"     "0 1 0 0 \n"      
-[2029] "0.1 1 0 0 \n"     "0 1 0 0 \n"       "NA 0 1 NA \n"    
-[2032] "0 0 1 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[2035] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[2038] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2041] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2044] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2047] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2050] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2053] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "2.6 1 0 0 \n"    
-[2056] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2059] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2062] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2065] "NA 1 0 NA \n"     "6.6 1 0 0 \n"     "10.1 1 0 0 \n"   
-[2068] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "7.8 1 0 0 \n"    
-[2071] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2074] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[2077] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[2080] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2083] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2086] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2089] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2092] "NA 1 0 NA \n"     "0 0 1 0 \n"       "NA 1 0 NA \n"    
-[2095] "NA 1 0 NA \n"     "0.1 1 0 0 \n"     "NA 1 0 NA \n"    
-[2098] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2101] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[2104] "NA 1 0 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[2107] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2110] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2113] "NA NA NA NA \n"   "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2116] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[2119] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2122] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2125] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2128] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "0.8 1 0 0 \n"    
-[2131] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2134] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2137] "0.3 0 1 100 \n"   "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[2140] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2143] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2146] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2149] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2152] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2155] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2158] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2161] "0 0 1 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2164] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2167] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-[2170] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2173] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2176] "0 0 0 0 \n"       "NA 0 1 NA \n"     "0 0 1 0 \n"      
-[2179] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2182] "NA 1 0 NA \n"     "0.3 1 0 0 \n"     "NA 1 0 NA \n"    
-[2185] "1.4 1 0 0 \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2188] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2191] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2194] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-[2197] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2200] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2203] "0 0 0 0 \n"       "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2206] "0 0 0 0 \n"       "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2209] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA NA NA NA \n"  
-[2212] "NA 0 0 NA \n"     "NA NA NA NA \n"   "NA 0 0 NA \n"    
-[2215] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2218] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2221] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[2224] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-[2227] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
-[2230] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2233] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 1 0 NA \n"    
-[2236] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "1.7 1 0 0 \n"    
-[2239] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
-[2242] "NA 1 0 NA \n"     "NA 1 0 NA \n"     "NA 1 0 NA \n"    
-[2245] "NA 1 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[2248] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2251] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2254] "0 0 0 0 \n"       "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[2257] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2260] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2263] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[2266] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "0 0 0 0 \n"      
-[2269] "0 0 1 0 \n"       "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2272] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 1 NA \n"    
-[2275] "NA 0 0 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2278] "NA 0 1 NA \n"     "NA 0 1 NA \n"     "NA 0 1 NA \n"    
-[2281] "NA 0 1 NA \n"     "0 0 1 0 \n"       "NA 0 1 NA \n"    
-[2284] "NA 0 1 NA \n"     "NA 0 0 NA \n"     "NA 0 0 NA \n"    
-[2287] "NA 0 0 NA \n"     "0 0 0 0 \n"       "0 0 0 0 \n"      
-[2290] "NA 0 0 NA \n"     "0 0 0 0 \n"       "NA 0 0 NA \n"    
-[2293] "NA 0 0 NA \n"     "NA NA NA NA \n"   "NA NA NA NA \n"  
-[2296] "NA NA NA NA \n"   "NA NA NA NA \n"   "NA NA NA NA \n"  
-[2299] "NA NA NA NA \n"   "NA NA NA NA \n"   "NA NA NA NA \n"  
-[2302] "NA NA NA NA \n"   "NA NA NA NA \n"  
+[1] "observation not NAs, presumably good = 544 (wet= 306 dry= 238 )"
+[1] 1
+[1] 2
+[1] 3
+[1] 4
+[1] 1
+[1] 2
+[1] "++ define nor.1st on the grid.CG"
+[1] "++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)"
+[1] "++ define eve.1st on the grid.CG"
+[1] "++ Refine eve identification (Identify Wet and Dry Areas within the eve first guess)"
+      value count
+ [1,]     1  8296
+ [2,]     2     5
+ [3,]     3     1
+ [4,]     4     2
+ [5,]     5     2
+ [6,]     6     2
+ [7,]     7     2
+ [8,]     8     1
+ [9,]     9    10
+[10,]    10    16
+[11,]    11   118
+[12,]    12    10
+[13,]    13    14
+[14,]    14    65
+[15,]    15    59
+[16,]    16     1
+[17,]    17     1
+[18,]    NA 65485
+[1] "f.lab.val[aux]"
+[1]  2  3  5  6  7  8 16
+[1] "paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve)"
+   [1] "4.4 1 0 -1 1 \n"     "4 NA NA -1 NA \n"    "10.4 NA NA -1 NA \n"
+   [4] "0.4 NA NA -1 NA \n"  "NA NA NA NA NA \n"   "9.4 NA NA -1 NA \n" 
+   [7] "0.5 NA NA -1 NA \n"  "NA NA NA NA NA \n"   "3 NA NA -1 NA \n"   
+  [10] "14.8 NA NA -1 NA \n" "NA NA NA NA NA \n"   "5.5 NA NA -1 NA \n" 
+  [13] "9.9 NA NA -1 NA \n"  "NA NA NA NA NA \n"   "10.5 NA NA -1 NA \n"
+  [16] "1.9 NA NA -1 NA \n"  "11.4 NA NA -1 NA \n" "0 NA NA -1 NA \n"   
+  [19] "NA NA NA NA NA \n"   "6.1 NA NA -1 NA \n"  "NA NA NA NA NA \n"  
+  [22] "10.2 NA NA -1 NA \n" "0 NA NA -1 NA \n"    "1.6 NA NA -1 NA \n" 
+  [25] "0 NA NA -1 NA \n"    "0 NA NA -1 NA \n"    "NA NA NA NA NA \n"  
+  [28] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "0.9 NA NA -1 NA \n" 
+  [31] "0 NA NA -1 NA \n"    "0 NA NA -1 NA \n"    "NA NA NA NA NA \n"  
+  [34] "0 NA NA -1 NA \n"    "NA NA NA NA NA \n"   "0 NA NA -1 NA \n"   
+  [37] "NA NA NA NA NA \n"   "0 NA NA -1 NA \n"    "NA NA NA NA NA \n"  
+  [40] "NA NA NA NA NA \n"   "0 NA NA -1 NA \n"    "0 NA NA -1 NA \n"   
+  [43] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "4 NA NA -1 NA \n"   
+  [46] "6 NA NA -1 NA \n"    "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+  [49] "0.2 NA NA -1 NA \n"  "NA NA NA NA NA \n"   "0.3 NA NA -1 NA \n" 
+  [52] "0 NA NA -1 NA \n"    "0 NA NA -1 NA \n"    "NA 0 0 NA NA \n"    
+  [55] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+  [58] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+  [61] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA NA NA NA NA \n"  
+  [64] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+  [67] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "0 0 0 0 NA \n"      
+  [70] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+  [73] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 NA NA 0 NA \n"    
+  [76] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+  [79] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "0 0 1 0 NA \n"      
+  [82] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+  [85] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+  [88] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+  [91] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+  [94] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+  [97] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [100] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [103] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [106] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [109] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [112] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [115] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [118] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [121] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [124] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [127] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [130] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [133] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [136] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [139] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [142] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 15 \n"    
+ [145] "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"     "NA 0 1 NA NA \n"    
+ [148] "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"     "0.1 1 0 0 15 \n"    
+ [151] "NA 0 1 NA NA \n"     "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"    
+ [154] "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"     "NA 0 1 NA NA \n"    
+ [157] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [160] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [163] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [166] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [169] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [172] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [175] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0.1 1 0 0 15 \n"    
+ [178] "NA 0 1 NA NA \n"     "NA 1 0 NA 15 \n"     "NA 0 1 NA NA \n"    
+ [181] "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"     "NA 1 0 NA 15 \n"    
+ [184] "NA 1 0 NA 15 \n"     "0 1 0 100 15 \n"     "NA 1 0 NA 15 \n"    
+ [187] "NA 1 0 NA 15 \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [190] "NA 1 0 NA 15 \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [193] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [196] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [199] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [202] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 1 0 NA 15 \n"    
+ [205] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [208] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [211] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [214] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [217] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [220] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [223] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [226] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [229] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [232] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [235] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [238] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [241] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [244] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [247] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [250] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [253] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [256] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [259] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 -1 NA \n"     
+ [262] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [265] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [268] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [271] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [274] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [277] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 100 NA \n"    
+ [280] "NA 0 1 NA NA \n"     "0 0 0 0 NA \n"       "0 0 0 100 NA \n"    
+ [283] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [286] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [289] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [292] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [295] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [298] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [301] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [304] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [307] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [310] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [313] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [316] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [319] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [322] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [325] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0.1 1 0 0 11 \n"    
+ [328] "NA 1 0 NA 11 \n"     "0.1 1 0 0 11 \n"     "NA 1 0 NA 11 \n"    
+ [331] "1.6 1 0 0 11 \n"     "NA 1 0 NA 11 \n"     "NA 1 0 NA 11 \n"    
+ [334] "0.1 1 0 0 11 \n"     "NA 1 0 NA 11 \n"     "NA 1 0 NA 11 \n"    
+ [337] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [340] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [343] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 -1 NA \n"     
+ [346] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [349] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [352] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [355] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.2 1 0 0 1 \n"     
+ [358] "NA 1 0 NA 1 \n"      "0.5 1 0 0 1 \n"      "NA 0 1 NA NA \n"    
+ [361] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [364] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [367] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "3.9 1 0 0 1 \n"     
+ [370] "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [373] "0 0 1 0 NA \n"       "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+ [376] "NA 1 0 NA 1 \n"      "3.9 1 0 0 1 \n"      "2.5 1 0 0 1 \n"     
+ [379] "0.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+ [382] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [385] "NA 1 0 NA 1 \n"      "1.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [388] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+ [391] "NA 1 0 NA 1 \n"      "0.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [394] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "2.3 1 0 0 1 \n"     
+ [397] "NA 1 0 NA 1 \n"      "2.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [400] "1.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [403] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [406] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [409] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [412] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"    
+ [415] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [418] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [421] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [424] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [427] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+ [430] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [433] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [436] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [439] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+ [442] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+ [445] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [448] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [451] "1.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [454] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [457] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [460] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [463] "NA 1 0 NA 10 \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [466] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [469] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [472] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 0 0 NA \n"      
+ [475] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [478] "NA 0 0 NA NA \n"     "0 0 1 0 NA \n"       "0.4 1 0 0 10 \n"    
+ [481] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [484] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [487] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [490] "0 0 1 100 NA \n"     "0 0 1 0 NA \n"       "NA 1 0 NA 1 \n"     
+ [493] "0.1 0 1 500 NA \n"   "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [496] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [499] "0.5 0 1 100 NA \n"   "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [502] "0 0 1 0 NA \n"       "NA 1 0 NA 12 \n"     "0.1 1 0 0 12 \n"    
+ [505] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+ [508] "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [511] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [514] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [517] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [520] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [523] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [526] "NA 1 0 NA 14 \n"     "NA 1 0 NA 14 \n"     "0.2 1 0 0 14 \n"    
+ [529] "1 1 0 0 14 \n"       "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [532] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+ [535] "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 0 0 NA \n"      
+ [538] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 0 NA NA \n"    
+ [541] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [544] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [547] "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [550] "0 0 1 0 NA \n"       "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [553] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [556] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [559] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [562] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [565] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [568] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [571] "0.8 0 0 300 NA \n"   "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [574] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [577] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [580] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [583] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [586] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [589] "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 14 \n"    
+ [592] "NA 1 0 NA 14 \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [595] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+ [598] "NA 0 0 NA NA \n"     "0.6 1 0 0 14 \n"     "NA 1 0 NA 14 \n"    
+ [601] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [604] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [607] "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [610] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [613] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [616] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+ [619] "0 0 1 0 NA \n"       "0.1 1 0 0 13 \n"     "NA 1 0 NA 1 \n"     
+ [622] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [625] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [628] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [631] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [634] "NA 1 0 NA 1 \n"      "NA 0 0 NA NA \n"     "0 0 0 -1 NA \n"     
+ [637] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [640] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+ [643] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [646] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [649] "0 0 0 100 NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [652] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [655] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [658] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [661] "0.2 1 0 0 1 \n"      "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [664] "NA 1 0 NA 1 \n"      "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [667] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [670] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [673] "NA 0 0 NA NA \n"     "0 0 0 -1 NA \n"      "NA 0 0 NA NA \n"    
+ [676] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [679] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [682] "NA 0 0 NA NA \n"     "0 0 0 100 NA \n"     "NA 0 0 NA NA \n"    
+ [685] "0 0 0 0 NA \n"       "NA NA NA NA NA \n"   "0 0 0 0 NA \n"      
+ [688] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [691] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [694] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [697] "0 0 0 -1 NA \n"      "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [700] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [703] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [706] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [709] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [712] "NA 0 0 NA NA \n"     "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+ [715] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [718] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "0 0 0 0 NA \n"      
+ [721] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [724] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [727] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [730] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [733] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [736] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [739] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [742] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [745] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [748] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [751] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [754] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+ [757] "0 0 0 0 NA \n"       "0 0 1 0 NA \n"       "NA 0 0 NA NA \n"    
+ [760] "NA 0 0 NA NA \n"     "1.7 0 0 100 NA \n"   "0 0 0 0 NA \n"      
+ [763] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "0 0 0 100 NA \n"    
+ [766] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [769] "NA 0 0 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [772] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [775] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+ [778] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [781] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [784] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [787] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [790] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [793] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [796] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "0 0 1 0 NA \n"      
+ [799] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [802] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [805] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [808] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [811] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [814] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "0.2 1 0 0 1 \n"     
+ [817] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "0.1 1 0 0 1 \n"     
+ [820] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [823] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [826] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [829] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [832] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+ [835] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [838] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [841] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [844] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"    
+ [847] "NA 0 1 NA NA \n"     "0 NA NA 0 NA \n"     "NA 0 0 NA NA \n"    
+ [850] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [853] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"    
+ [856] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+ [859] "NA NA NA NA NA \n"   "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+ [862] "2.1 1 0 0 1 \n"      "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [865] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+ [868] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+ [871] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "0 0 1 0 NA \n"      
+ [874] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [877] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [880] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [883] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [886] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [889] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [892] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"     
+ [895] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [898] "1.4 1 0 100 1 \n"    "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [901] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [904] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [907] "NA 0 1 NA NA \n"     "0.1 1 0 0 1 \n"      "NA NA NA NA NA \n"  
+ [910] "NA 0 1 NA NA \n"     "0 0 0 0 NA \n"       "0 0 0 0 NA \n"      
+ [913] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"    
+ [916] "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [919] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [922] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0.3 1 0 0 1 \n"     
+ [925] "1.8 1 0 0 1 \n"      "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [928] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+ [931] "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [934] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+ [937] "0 0 1 0 NA \n"       "0.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [940] "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [943] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+ [946] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+ [949] "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+ [952] "0.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [955] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+ [958] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [961] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [964] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+ [967] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+ [970] "0 0 1 0 NA \n"       "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [973] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [976] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "3 1 0 0 1 \n"       
+ [979] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [982] "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+ [985] "1 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+ [988] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"     
+ [991] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"  
+ [994] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+ [997] "NA 0 1 NA NA \n"     "1.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1000] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1003] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.8 1 0 0 1 \n"     
+[1006] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"     
+[1009] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "2.9 1 0 0 1 \n"     
+[1012] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1015] "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"     
+[1018] "NA 1 0 NA 1 \n"      "0.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1021] "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1024] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.8 1 0 0 1 \n"     
+[1027] "0.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1030] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"     
+[1033] "1 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "0.4 1 0 0 1 \n"     
+[1036] "NA 1 0 NA 1 \n"      "0.4 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1039] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1042] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1045] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1048] "0.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1051] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1054] "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"      "3.4 1 0 0 1 \n"     
+[1057] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.8 1 0 0 17 \n"    
+[1060] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1063] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1066] "NA 1 0 NA 1 \n"      "0 1 0 200 1 \n"      "NA NA NA NA NA \n"  
+[1069] "8.4 1 0 0 1 \n"      "18.4 NA NA 0 NA \n"  "0.2 1 0 0 1 \n"     
+[1072] "NA 1 0 NA 1 \n"      "2.5 1 0 0 1 \n"      "3.5 1 0 0 1 \n"     
+[1075] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1078] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "3.6 1 0 0 1 \n"     
+[1081] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1084] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1087] "NA 1 0 NA 1 \n"      "4.4 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1090] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1093] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1096] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1099] "NA 1 0 NA 1 \n"      "1 1 0 0 1 \n"        "0 1 0 200 1 \n"     
+[1102] "NA 1 0 NA 1 \n"      "1.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1105] "2.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1108] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1111] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1114] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1117] "NA 1 0 NA 1 \n"      "2.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1120] "NA 1 0 NA 1 \n"      "5.5 1 0 0 1 \n"      "11.4 1 0 0 1 \n"    
+[1123] "NA 1 0 NA 1 \n"      "4.6 1 0 0 1 \n"      "5 1 0 0 1 \n"       
+[1126] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1129] "1.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1132] "0.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"     
+[1135] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1138] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1141] "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1144] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1147] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1150] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1153] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.4 1 0 0 1 \n"     
+[1156] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"     
+[1159] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1162] "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1165] "1.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "5.6 1 0 100 1 \n"   
+[1168] "NA 1 0 NA 1 \n"      "11.5 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1171] "NA 1 0 NA 1 \n"      "1.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1174] "3.4 1 0 -1 1 \n"     "1 1 0 0 1 \n"        "NA 1 0 NA 1 \n"     
+[1177] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1180] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1183] "5.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1186] "7.1 1 0 0 1 \n"      "1.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1189] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"     
+[1192] "2.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1195] "0.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1198] "3.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1201] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1204] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1207] "5.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1210] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1213] "7.4 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1216] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1219] "3.8 1 0 0 1 \n"      "2.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1222] "NA 1 0 NA 1 \n"      "4.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1225] "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1228] "NA 1 0 NA 1 \n"      "4.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1231] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1234] "NA 1 0 NA 1 \n"      "4.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1237] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "7 1 0 0 1 \n"       
+[1240] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1243] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"  
+[1246] "NA 1 0 NA 1 \n"      "0.5 1 0 0 1 \n"      "2.5 1 0 0 1 \n"     
+[1249] "NA 1 0 NA 1 \n"      "0.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1252] "6.5 1 0 0 1 \n"      "7.3 1 0 0 1 \n"      "2 1 0 0 1 \n"       
+[1255] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1258] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1261] "2.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1264] "6.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1267] "0.6 1 0 0 1 \n"      "0.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1270] "NA 1 0 NA 1 \n"      "0.6 1 0 0 1 \n"      "0 1 0 400 1 \n"     
+[1273] "NA 1 0 NA 1 \n"      "0.4 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1276] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0 1 0 200 1 \n"     
+[1279] "NA 1 0 NA 1 \n"      "1.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1282] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1285] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1288] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"     
+[1291] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1294] "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1297] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+[1300] "NA 0 1 NA NA \n"     "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1303] "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1306] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[1309] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 0 1 NA NA \n"    
+[1312] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1315] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1318] "0.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1321] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1324] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1327] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "3.9 1 0 0 1 \n"     
+[1330] "1.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"  
+[1333] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1336] "1.8 1 0 0 1 \n"      "5.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1339] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1342] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1345] "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1348] "NA 1 0 NA 1 \n"      "0.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1351] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1354] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "2.5 1 0 0 1 \n"     
+[1357] "NA 1 0 NA 1 \n"      "5.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1360] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1363] "NA 1 0 NA 1 \n"      "3 1 0 0 1 \n"        "NA 1 0 NA 1 \n"     
+[1366] "5.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1369] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1372] "NA 1 0 NA 1 \n"      "4.1 1 0 0 1 \n"      "4.6 1 0 0 1 \n"     
+[1375] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1378] "NA 1 0 NA 1 \n"      "3.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1381] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "4 1 0 0 1 \n"       
+[1384] "NA 1 0 NA 1 \n"      "1.8 1 0 0 1 \n"      "4.7 1 0 0 1 \n"     
+[1387] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "4 1 0 0 1 \n"       
+[1390] "NA 1 0 NA 1 \n"      "3.5 1 0 0 1 \n"      "4.9 1 0 0 1 \n"     
+[1393] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.6 1 0 0 1 \n"     
+[1396] "NA 1 0 NA 1 \n"      "1.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1399] "NA 1 0 NA 1 \n"      "3 1 0 0 1 \n"        "NA 1 0 NA 1 \n"     
+[1402] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "2.2 1 0 0 1 \n"     
+[1405] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1408] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1411] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1414] "NA 1 0 NA 1 \n"      "1.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1417] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1420] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1423] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "8.2 1 0 0 1 \n"     
+[1426] "NA 1 0 NA 1 \n"      "7.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1429] "3.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1432] "1.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1435] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1438] "NA 1 0 NA 1 \n"      "5.5 1 0 0 1 \n"      "NA NA NA NA NA \n"  
+[1441] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1444] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1447] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1450] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "7.8 1 0 0 1 \n"     
+[1453] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "0.5 1 0 0 1 \n"     
+[1456] "NA 1 0 NA 1 \n"      "1.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1459] "1 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1462] "NA 1 0 NA 1 \n"      "3.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1465] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1468] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1471] "1.8 1 0 0 1 \n"      "3.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1474] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1477] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1480] "2.6 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1483] "NA 1 0 NA 1 \n"      "3.9 1 0 0 1 \n"      "1 1 0 0 1 \n"       
+[1486] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1489] "6 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1492] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.3 NA NA 0 NA \n"  
+[1495] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "NA 1 0 NA 1 \n"     
+[1498] "NA 1 0 NA 1 \n"      "2 1 0 0 1 \n"        "4.5 1 0 0 1 \n"     
+[1501] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1504] "NA 1 0 NA 1 \n"      "7.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1507] "NA 1 0 NA 1 \n"      "7.9 1 0 0 1 \n"      "7.4 1 0 0 1 \n"     
+[1510] "NA 1 0 NA 1 \n"      "0.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1513] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.4 1 0 0 1 \n"     
+[1516] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.8 1 0 0 1 \n"     
+[1519] "NA 1 0 NA 1 \n"      "2.1 1 0 0 1 \n"      "NA NA NA NA NA \n"  
+[1522] "NA NA NA NA NA \n"   "0 0 1 0 NA \n"       "NA 1 0 NA 1 \n"     
+[1525] "0.2 1 0 0 9 \n"      "0.1 1 0 0 9 \n"      "NA 1 0 NA 9 \n"     
+[1528] "NA 1 0 NA 9 \n"      "0 0 0 0 NA \n"       "0.1 1 0 0 9 \n"     
+[1531] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+[1534] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+[1537] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 9 \n"     
+[1540] "NA 0 1 NA NA \n"     "NA 1 0 NA 9 \n"      "0 0 1 0 NA \n"      
+[1543] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[1546] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1549] "0.3 1 0 0 1 \n"      "0.1 1 0 0 1 \n"      "NA 0 1 NA NA \n"    
+[1552] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1555] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[1558] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[1561] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+[1564] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"    
+[1567] "0 0 1 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"    
+[1570] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "0 0 0 0 NA \n"      
+[1573] "NA NA NA NA NA \n"   "0 0 1 0 NA \n"       "2.9 1 0 0 1 \n"     
+[1576] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1579] "7 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1582] "NA 1 0 NA 1 \n"      "4 1 0 0 1 \n"        "NA 1 0 NA 1 \n"     
+[1585] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1588] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1591] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1594] "10.6 1 0 0 1 \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1597] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1600] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1603] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1606] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"     
+[1609] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+[1612] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1615] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.5 1 0 0 1 \n"     
+[1618] "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"      
+[1621] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[1624] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1627] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1630] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1633] "0.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1636] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1639] "NA 1 0 NA 9 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1642] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1645] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1648] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0.6 1 0 0 1 \n"     
+[1651] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1654] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1657] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1660] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1663] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1666] "0.4 1 0 100 1 \n"    "NA 1 0 NA 1 \n"      "0.4 1 0 0 1 \n"     
+[1669] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+[1672] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[1675] "NA 1 0 NA 1 \n"      "1 1 0 0 1 \n"        "NA 1 0 NA 1 \n"     
+[1678] "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1681] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1684] "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+[1687] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1690] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1693] "0 0 1 0 NA \n"       "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1696] "NA 1 0 NA 1 \n"      "0.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1699] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"    
+[1702] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1705] "0 0 1 0 NA \n"       "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1708] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[1711] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.5 1 0 0 1 \n"     
+[1714] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1717] "0.4 1 0 100 1 \n"    "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1720] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[1723] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[1726] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1729] "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1732] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1735] "1.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "1.6 1 0 0 1 \n"     
+[1738] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"     
+[1741] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "3.6 1 0 0 1 \n"     
+[1744] "1.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1747] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "2 1 0 0 1 \n"       
+[1750] "2.9 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1753] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.9 1 0 0 1 \n"     
+[1756] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1759] "NA 1 0 NA 1 \n"      "0.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1762] "1.6 1 0 100 1 \n"    "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1765] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"  
+[1768] "3.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1771] "NA NA NA NA NA \n"   "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"     
+[1774] "NA 0 1 NA NA \n"     "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[1777] "NA 1 0 NA 1 \n"      "7.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1780] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1783] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1786] "10 1 0 0 1 \n"       "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1789] "NA 1 0 NA 5 \n"      "NA 1 0 NA 5 \n"      "5.2 1 0 0 1 \n"     
+[1792] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1795] "NA 1 0 NA 1 \n"      "12.4 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1798] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1801] "NA 1 0 NA 1 \n"      "9.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1804] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1807] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1810] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "6.8 1 0 0 1 \n"     
+[1813] "8.5 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1816] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1819] "NA 1 0 NA 1 \n"      "16.2 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1822] "14.7 1 0 0 1 \n"     "14.7 1 0 0 1 \n"     "NA NA NA NA NA \n"  
+[1825] "NA 1 0 NA 1 \n"      "25.1 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1828] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "16.5 1 0 0 1 \n"    
+[1831] "4.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1834] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "17.3 1 0 0 1 \n"    
+[1837] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1840] "NA 1 0 NA 1 \n"      "7.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1843] "NA 1 0 NA 1 \n"      "16.6 1 0 0 1 \n"     "13 1 0 0 1 \n"      
+[1846] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1849] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "21.8 1 0 0 1 \n"    
+[1852] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1855] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1858] "NA 1 0 NA 1 \n"      "6.7 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1861] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "14.4 1 0 0 1 \n"    
+[1864] "6.8 1 0 0 1 \n"      "7.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1867] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "18 1 0 0 1 \n"      
+[1870] "NA 1 0 NA 1 \n"      "6.2 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1873] "NA 1 0 NA 1 \n"      "6.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1876] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1879] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+[1882] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1885] "15.8 1 0 0 1 \n"     "20 1 0 0 1 \n"       "NA 1 0 NA 1 \n"     
+[1888] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1891] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1894] "20.4 1 0 0 1 \n"     "14 NA NA 0 NA \n"    "NA 1 0 NA 7 \n"     
+[1897] "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"   "0 NA NA 0 NA \n"    
+[1900] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1903] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1906] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1909] "31.6 1 0 0 1 \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1912] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1915] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1918] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1921] "NA 1 0 NA 1 \n"      "11.8 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1924] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1927] "15.5 1 0 -1 1 \n"    "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1930] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "22.7 1 0 0 1 \n"    
+[1933] "3.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1936] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1939] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1942] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1945] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "9.7 1 0 0 1 \n"     
+[1948] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1951] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "16.8 1 0 0 1 \n"    
+[1954] "NA 1 0 NA 1 \n"      "24.6 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1957] "NA 1 0 NA 1 \n"      "11.2 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[1960] "9.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1963] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"  
+[1966] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1969] "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"   "NA 1 0 NA 1 \n"     
+[1972] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1975] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1978] "12.3 1 0 0 1 \n"     "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1981] "NA 1 0 NA 1 \n"      "4 1 0 0 4 \n"        "NA 1 0 NA 4 \n"     
+[1984] "NA NA NA NA NA \n"   "NA 1 0 NA 4 \n"      "NA NA NA NA NA \n"  
+[1987] "NA 1 0 NA 2 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1990] "NA 1 0 NA 1 \n"      "9.8 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[1993] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[1996] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[1999] "11.6 0 1 100 NA \n"  "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2002] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2005] "NA 1 0 NA 1 \n"      "6.4 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[2008] "NA 1 0 NA 1 \n"      "NA NA NA NA NA \n"   "NA 1 0 NA 1 \n"     
+[2011] "6 1 0 0 1 \n"        "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2014] "10 1 0 0 1 \n"       "12.4 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[2017] "NA 1 0 NA 1 \n"      "11.9 1 0 0 1 \n"     "NA 1 0 NA 1 \n"     
+[2020] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2023] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2026] "0 1 0 400 1 \n"      "NA 1 0 NA 1 \n"      "0 1 0 400 1 \n"     
+[2029] "0.1 1 0 0 1 \n"      "0 1 0 400 1 \n"      "NA 0 1 NA NA \n"    
+[2032] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[2035] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[2038] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2041] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2044] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2047] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2050] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2053] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "2.6 1 0 0 1 \n"     
+[2056] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2059] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2062] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2065] "NA 1 0 NA 1 \n"      "6.6 1 0 0 1 \n"      "10.1 1 0 0 1 \n"    
+[2068] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "7.8 1 0 0 1 \n"     
+[2071] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2074] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[2077] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[2080] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2083] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2086] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2089] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2092] "NA 1 0 NA 1 \n"      "0 0 1 0 NA \n"       "NA 1 0 NA 1 \n"     
+[2095] "NA 1 0 NA 1 \n"      "0.1 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[2098] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2101] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[2104] "NA 1 0 NA 1 \n"      "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[2107] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2110] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2113] "NA NA NA NA NA \n"   "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2116] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[2119] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2122] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2125] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2128] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "0.8 1 0 0 1 \n"     
+[2131] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2134] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2137] "0.3 0 1 100 NA \n"   "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[2140] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2143] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2146] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2149] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2152] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2155] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2158] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2161] "0 0 1 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2164] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2167] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+[2170] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2173] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2176] "0 0 0 0 NA \n"       "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"      
+[2179] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2182] "NA 1 0 NA 1 \n"      "0.3 1 0 0 1 \n"      "NA 1 0 NA 1 \n"     
+[2185] "1.4 1 0 0 1 \n"      "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2188] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2191] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2194] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+[2197] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2200] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2203] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2206] "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2209] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA NA NA NA NA \n"  
+[2212] "NA 0 0 NA NA \n"     "NA NA NA NA NA \n"   "NA 0 0 NA NA \n"    
+[2215] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2218] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2221] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[2224] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+[2227] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+[2230] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2233] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 1 0 NA 1 \n"     
+[2236] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "1.7 1 0 0 1 \n"     
+[2239] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+[2242] "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"      "NA 1 0 NA 1 \n"     
+[2245] "NA 1 0 NA 1 \n"      "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[2248] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2251] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2254] "0 0 0 0 NA \n"       "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[2257] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2260] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2263] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[2266] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"      
+[2269] "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2272] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 1 NA NA \n"    
+[2275] "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2278] "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"     "NA 0 1 NA NA \n"    
+[2281] "NA 0 1 NA NA \n"     "0 0 1 0 NA \n"       "NA 0 1 NA NA \n"    
+[2284] "NA 0 1 NA NA \n"     "NA 0 0 NA NA \n"     "NA 0 0 NA NA \n"    
+[2287] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "0 0 0 0 NA \n"      
+[2290] "NA 0 0 NA NA \n"     "0 0 0 0 NA \n"       "NA 0 0 NA NA \n"    
+[2293] "NA 0 0 NA NA \n"     "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[2296] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[2299] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[2302] "NA NA NA NA NA \n"   "NA NA NA NA NA \n"  
+[1] "unique(y.eve)"
+ [1]  1 NA 15 11 10 12 14 13 17  9  5  7  4  2
+[1] "length(unique(y.eve))"
+[1] 14
