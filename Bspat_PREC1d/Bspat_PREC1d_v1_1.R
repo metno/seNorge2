@@ -220,7 +220,7 @@ proj4.wgs84<-"+proj=longlat +datum=WGS84"
 proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
 proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
 #
-max.Km.stnINdomain<-250
+max.Km.stnINdomain<-300
 # Aux files
 file_CG2FG<-paste(path2etc.com,"/CG2FG.bin",sep="")
 #..............................................................................
@@ -280,7 +280,7 @@ Dh.seq.ref<-100 # Km
 #                     100,  90,  80,  70,  60,  50,  40,  30,  20,  10)
 Dh.seq.reference<-c(5000,4000,3000,2000,1000, 900, 800, 700, 600, 500,
                      400, 300, 200, 150, 100,  80,  60,  40,  20,  10)
-Dz.seq.gt50<-c(5000,2000,1000,500) # m
+Dz.seq.gt50<-c(5000,1000) # m
 Dz.seq.le50<-c(1000,500) # m
 #
 ndim.FG.iteration<-10000
@@ -402,23 +402,24 @@ cat(paste("year","month","day","nday","eve.lab","nobs",
           file=out.file.eve,append=F)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #------------------------------------------------------------------------------
-# [] Grid - same as the DEM grid 
+# [] Grid
+# 3 Grids:
+# 1. FG -> Fine Grid, which is the high-resolution output grid masked on Norwegian mainland
+# 2. CG -> Coarse Grid, which is the low-resolution grid larger than Norway
+# 3. Cm -> Coarse Grid masked on the Norwegian mainland
 # CRS Coordinate Reference System
-stackGeoGrid<-raster(filenamedem)
-nx.FG<-ncol(stackGeoGrid)
-ny.FG<-nrow(stackGeoGrid)
-dx.FG<-xres(stackGeoGrid)
-dy.FG<-yres(stackGeoGrid)
+orog.FG<-raster(filenamedem)
+nx.FG<-ncol(orog.FG)
+ny.FG<-nrow(orog.FG)
+dx.FG<-xres(orog.FG)
+dy.FG<-yres(orog.FG)
 area.1cell.FG<-dx.FG*dy.FG/(1000*1000) # Area Km**2
 # 4 borders point (SW corner (xmn,ymn); NE corner (xmx,ymx))
-xmn.FG<-xmin(stackGeoGrid)
-xmx.FG<-xmax(stackGeoGrid)
-ymn.FG<-ymin(stackGeoGrid)
-ymx.FG<-ymax(stackGeoGrid)
-# Extract orography on unmasked gridpoints only
-orog.FG<-stackGeoGrid
-# LowRes CG orography
-#orog.CG<-aggregate(orog.FG,fact=fact,fun=mean,na.rm=T)
+xmn.FG<-xmin(orog.FG)
+xmx.FG<-xmax(orog.FG)
+ymn.FG<-ymin(orog.FG)
+ymx.FG<-ymax(orog.FG)
+#
 orog.CG<-raster(filenamedem.CG)
 nx.CG<-ncol(orog.CG)
 ny.CG<-nrow(orog.CG)
@@ -437,28 +438,35 @@ x.FG<-sort(unique(xy[,1]))
 y.FG<-sort(unique(xy[,2]),decreasing=T)
 rc<-rowColFromCell(orog.FG,1:ncell(orog.FG))
 aux<-as.vector(zvalues.FG)
-gridmask.notNAs<-which(!is.na(aux))
-zgrid<-aux[gridmask.notNAs]
-xgrid<-xy[gridmask.notNAs,1]
-ygrid<-xy[gridmask.notNAs,2]
-rowgrid<-rc[gridmask.notNAs,1]
-colgrid<-rc[gridmask.notNAs,2]
-Lgrid.FG<-length(xgrid)
-#
+mask.FG<-which(!is.na(aux))
+zgrid<-aux[mask.FG]
+xgrid<-xy[mask.FG,1]
+ygrid<-xy[mask.FG,2]
+rowgrid<-rc[mask.FG,1]
+colgrid<-rc[mask.FG,2]
+Lgrid.FG<-length(mask.FG)
+# CG
 zvalues.CG<-extract(orog.CG,1:ncell(orog.CG))
 xy.CG<-xyFromCell(orog.CG,1:ncell(orog.CG))
 rc.CG<-rowColFromCell(orog.CG,1:ncell(orog.CG))
 aux.CG<-as.vector(zvalues.CG)
-gridmask.notNAs.CG<-which(!is.na(aux.CG))
-zgrid.CG<-aux.CG[gridmask.notNAs.CG]
-xgrid.CG<-xy.CG[gridmask.notNAs.CG,1]
-ygrid.CG<-xy.CG[gridmask.notNAs.CG,2]
-rowgrid.CG<-rc.CG[gridmask.notNAs.CG,1]
-colgrid.CG<-rc.CG[gridmask.notNAs.CG,2]
-Lgrid.CG<-length(xgrid.CG)
+mask.CG<-which(!is.na(aux.CG))
+zgrid.CG<-aux.CG[mask.CG]
+xgrid.CG<-xy.CG[mask.CG,1]
+ygrid.CG<-xy.CG[mask.CG,2]
+rowgrid.CG<-rc.CG[mask.CG,1]
+colgrid.CG<-rc.CG[mask.CG,2]
+Lgrid.CG<-length(mask.CG)
+# Cm
+orog.Cm<-suppressWarnings(resample(orog.FG,orog.CG))
+zaux<-extract(orog.Cm,1:ncell(orog.Cm))
+mask.Cm<-which(!is.na(zaux))
+Lgrid.Cm<-length(mask.Cm)
 # clean memory
-rm(xy,rc,aux,stackGeoGrid,rowgrid,colgrid)
+rm(zvalues.CG,zvalues.FG)
+rm(xy,rc,aux,rowgrid,colgrid)
 rm(xy.CG,rc.CG,aux.CG)
+rm(orog.Cm,zaux)
 # debug info
 print("grid parameters")
 print(paste("nx ny dx dy",as.integer(nx.FG),as.integer(ny.FG),round(dx.FG,2),round(dy.FG,2)))
@@ -470,9 +478,26 @@ print(paste("xmn.CG xmx.CG ymn.CG ymx.CG",round(xmn.CG,2),round(xmx.CG,2),round(
 print(paste("Lgrid.CG",as.integer(Lgrid.CG)))
 #------------------------------------------------------------------------------
 # [] Read Station Information 
-stations<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.b,
-                             max.Km=max.Km.stnINdomain)
-L.y.tot<-length(stations$stnr)
+# conditions:
+# 1. stations in KDVH
+# 2. stations in CG
+stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.b,
+                                 max.Km=max.Km.stnINdomain)
+# check if in CG
+n.tmp<-length(stations.tmp$stnr)
+aux<-extract(orog.CG,cbind(stations.tmp$x,stations.tmp$y),na.rm=T)
+stn.out.CG<-vector(length=n.tmp)
+stn.out.CG[1:n.tmp]<-F
+stn.out.CG[which(is.na(aux))]<-T
+# definitive station list
+L.y.tot<-length(which(!stn.out.CG))
+stations<-data.frame(matrix(nrow=L.y.tot,ncol=5))
+names(stations)<-c("stnr","z","x","y","NO")
+stations$stnr<-stations.tmp$stnr[which(!stn.out.CG)]
+stations$NO<-stations.tmp$NO[which(!stn.out.CG)]
+stations$z<-stations.tmp$z[which(!stn.out.CG)]
+stations$y<-stations.tmp$y[which(!stn.out.CG)]
+stations$x<-stations.tmp$x[which(!stn.out.CG)]
 # [] define Vectors and Matrices
 VecX<-vector(mode="numeric",length=L.y.tot)
 VecY<-vector(mode="numeric",length=L.y.tot)
@@ -593,10 +618,7 @@ for (i in 1:L.y.tot) {
 }
 print(data)
 #data.names<-c("stnr","year","month","day","hour","ntime",
-#              "value","nvalue","DQC",
-#              "KDVHflag",
-#              "plausible","err.ext",
-#              "blist.perm","blist.curr")
+# "value","nvalue","DQC","KDVHflag","plausible","err.ext","blist.perm","blist.curr")
 print(paste("number of station having at least one available observation =",L.y.notNA,"(tot=",L.y.tot,")"))
 print(paste("number of station having good observation           (so far)=",length(which(data$DQC<=0 & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(!data$plausible & !is.na(yo)))))
@@ -605,11 +627,13 @@ print(paste("  # station having at least one erroneous observation       (extern
 print(paste("  # station blacklisted for the time period considered =",length(which(data$blist.curr & !is.na(yo)))))
 print(paste("  # station blacklisted (permanently) =",length(which(data$blist.perm & !is.na(yo)))))
 print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)))))
-png(file="prov0.png",width=1200,height=1200)
-plot(orog.CG)
-points(VecX,VecY)
-points(VecX[which(stn.out.CG & !is.na(yo))],VecY[which(stn.out.CG & !is.na(yo))],pch=19,col="green")
-dev.off()
+# debug: start
+#png(file="prov0.png",width=1200,height=1200)
+#plot(orog.CG)
+#points(VecX,VecY)
+#points(VecX[which(stn.out.CG & !is.na(yo))],VecY[which(stn.out.CG & !is.na(yo))],pch=19,col="green")
+#dev.off()
+# debug: end
 # define Vectors and Matrices
 xidi.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
 xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
@@ -617,14 +641,16 @@ xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
 yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
 L.yo.ok<-length(yo.ok.pos)
 while (L.yo.ok>0) {
-# vector with the positions (pointers to VecS) of: not NAs, not-in-masked-areas, valid observations 
+# vector with the positions (pointers to VecS) of presumably good observations 
 # daily observations [L.yo.ok]
   yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
   L.yo.ok<-length(yo.ok.pos)
 # vectors with the positions (pointers to VecS) of valid (i.e. not NAs & DQC-ok)
 # daily observations and "wet" or "dry" [L.yo.ok.wet,L.yo.ok.dry]
-  yo.ok.pos.wet<-which(data$DQC<=0 & !is.na(yo) & yo>=rr.inf)
-  yo.ok.pos.dry<-which(data$DQC<=0 & !is.na(yo) & yo<rr.inf)
+  yo.ok.wet<-data$DQC<=0 & !is.na(yo) & yo>=rr.inf
+  yo.ok.dry<-data$DQC<=0 & !is.na(yo) & yo<rr.inf
+  yo.ok.pos.wet<-which(yo.ok.wet)
+  yo.ok.pos.dry<-which(yo.ok.dry)
   L.yo.ok.wet<-length(yo.ok.pos.wet)
   L.yo.ok.dry<-length(yo.ok.pos.dry)
   print(paste("observation not NAs, presumably good =",
@@ -651,7 +677,7 @@ while (L.yo.ok>0) {
     # Figures
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
-    xx[gridmask.notNAs]<-round(xa.FG,1)
+    xx[mask.FG]<-round(xa.FG,1)
     nogrid.ncout(grid=t(as.matrix(xx)),
                  x=x.FG,y=y.FG,grid.type=grid.type,
                  file.name=out.file.grd.ana,
@@ -687,7 +713,7 @@ while (L.yo.ok>0) {
   Lnor.1st.aux<-vector(mode="numeric",length=L.yo.ok)
   Lnor.1st.aux[]<-NA
   nnor.1st.aux<-0
-  # [] Contiguous NO-Rain Area: First Guess. Step I
+  # Contiguous NO-Rain Area: First Guess. Step I
   for (b in yo.ok.pos.dry) {  # START: Cycle over dry stations 
     # a. identify the closest stations to the b-th dry station
     #  outputs: -close2b-> position (i.e. pointer to VecS) of the closest stations.
@@ -798,17 +824,17 @@ while (L.yo.ok>0) {
   }
   if (flag.dry.dqc) next
 # debug
-png(file="prov2.png",width=1200,height=1200)
-plot(orog.FG)
-points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
-#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=2)
-for (i in 1:nnor.1st.vec) {
-  if (i%%2==0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="black")
-  if (i%%2!=0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="gray")
-}
-points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="red",cex=3)
-dev.off()
+#png(file="prov2.png",width=1200,height=1200)
+#plot(orog.FG)
+#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
+#points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
+#for (i in 1:nnor.1st.vec) {
+#  if (i%%2==0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="black")
+#  if (i%%2!=0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="gray")
+#}
+#points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="red",cex=3)
+#dev.off()
+# debug: end
 # DQC DQC end
   # [] Contiguous Rain Area: First Guess
   Lsubsample.vec[]<-NA
@@ -828,7 +854,7 @@ dev.off()
   Leve.1st.aux<-vector(mode="numeric",length=L.yo.ok)
   Leve.1st.aux[]<-NA
   neve.1st.aux<-0
-  # [] Contiguous Rain Area: First Guess. Step I
+  # Contiguous Rain Area: First Guess. Step I
   for (b in yo.ok.pos.wet) {  # START: Cycle over wet stations 
     # a. identify the closest stations to the b-th wet station
     #  outputs: -close2b-> position (i.e. pointer to VecS) of the closest stations.
@@ -938,19 +964,20 @@ dev.off()
     }
   }
   if (flag.wet.dqc) next
-png(file="prov3.png",width=1200,height=1200)
-plot(orog.FG)
-points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
-#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=2)
-for (i in 1:neve.1st.vec) {
-  if (i%%2==0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="black")
-  if (i%%2!=0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="gray")
-}
-points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="darkred",cex=3)
-points(VecX[which(data$DQC==300)],VecY[which(data$DQC==300)],pch=19,col="cyan",cex=3)
-dev.off()
-# GRID GRID GRID GRID
+# debug
+#png(file="prov3.png",width=1200,height=1200)
+#plot(orog.FG)
+#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
+#points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
+#for (i in 1:neve.1st.vec) {
+#  if (i%%2==0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="black")
+#  if (i%%2!=0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="gray")
+#}
+#points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="darkred",cex=3)
+#points(VecX[which(data$DQC==300)],VecY[which(data$DQC==300)],pch=19,col="cyan",cex=3)
+#dev.off()
+# debug: end
+# GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID
 # [] Contiguous NO-Rain Area: First Guess on the grid.CG
   print("++ define nor.1st on the grid.CG")
   lab.nor.CG.1st<-vector(mode="numeric",length=Lgrid.CG)
@@ -978,13 +1005,15 @@ dev.off()
   r.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
   r.CG[]<-NA
-  r.CG[gridmask.notNAs.CG]<-lab.nor.CG.1st
-png(file="prov3.png",width=1200,height=1200)
-plot(r.CG)
-points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-points(VecX[which(!is.na(y.nor.1st))],VecY[which(!is.na(y.nor.1st))],pch=19,col="blue",cex=2)
-points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
-dev.off()
+  r.CG[mask.CG]<-lab.nor.CG.1st
+# debug
+#png(file="prov3.png",width=1200,height=1200)
+#plot(r.CG)
+#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
+#points(VecX[which(!is.na(y.nor.1st))],VecY[which(!is.na(y.nor.1st))],pch=19,col="blue",cex=2)
+#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
+#dev.off()
+# debug: end
 # [] Refine identification (Identify Wet and Dry Areas within the nor first guess)
   print("++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)")
   xa.Dh.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
@@ -1084,7 +1113,7 @@ dev.off()
   r.CG.nor.dry <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
   r.CG.nor.dry[]<-NA
-  r.CG.nor.dry[gridmask.notNAs.CG]<-round(x.CG.nor.dry,0)
+  r.CG.nor.dry[mask.CG]<-round(x.CG.nor.dry,0)
   stn.nor.dry<-extract(r.CG.nor.dry,cbind(VecX,VecY),na.rm=T)
   yo.ok.dry.fail<-!(yo.ok.pos.dry %in% which(stn.nor.dry==1 | is.na(stn.nor.dry)))
   if (any(yo.ok.dry.fail)) {
@@ -1197,7 +1226,7 @@ dev.off()
   r.CG.eve.wet <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
   r.CG.eve.wet[]<-NA
-  r.CG.eve.wet[gridmask.notNAs.CG]<-round(x.CG.wet,0)
+  r.CG.eve.wet[mask.CG]<-round(x.CG.wet,0)
   stn.eve.wet<-extract(r.CG.eve.wet,cbind(VecX,VecY),na.rm=T)
   yo.ok.wet.fail<-!(yo.ok.pos.wet %in% which(stn.eve.wet==1 | is.na(stn.eve.wet)))
   if (any(yo.ok.wet.fail)) {
@@ -1237,9 +1266,9 @@ dev.off()
   print(f.lab)
   print(f.lab.val)
   print(f.lab.n)
-  aux<-extract(r.lab.eve.CG,1:ncell(r.lab.eve.CG))
-  lab.eve.CG<-as.vector(aux[gridmask.notNAs.CG])
-  rm(aux)
+  l.CG<-extract(r.lab.eve.CG,1:ncell(r.lab.eve.CG))
+  lab.eve.CG<-l.CG[mask.CG]
+  lab.eve.Cm<-l.CG[mask.Cm]
 # [] assign stations at eve
 #  remarks: 1. each eve must include at least 1 observation; 
 #   2. it is possible to have wet-observations not included in any of the eve 
@@ -1255,11 +1284,11 @@ dev.off()
                ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
     x.aux<-vector(mode="numeric",length=Lgrid.CG)
     for (i in eve.nostn.pos) {
-      aux<-which(lab.eve.CG==f.lab.val[i])
+      aux<-which(l.CG==f.lab.val[i])
       x.aux[]<-NA
-      x.aux[aux]<-lab.eve.CG[aux]
+      x.aux[aux]<-l.CG[aux]
       r[]<-NA
-      r[gridmask.notNAs.CG]<-round(x.aux,0)
+      r[mask.CG]<-round(x.aux,0)
       dist.min<-NA
       for (e in eve.labels) {
         dist<-cellStats(distanceFromPoints(r,cbind(VecX[which(y.eve==e)],VecY[which(y.eve==e)])),mean)
@@ -1274,22 +1303,53 @@ dev.off()
         }
       }
       new.lab.pos<-which(f.lab.val==new.lab)
-      lab.eve.CG[aux]<-new.lab
+      l.CG[aux]<-new.lab
       f.lab.val[i]<-NA
       f.lab.n[new.lab.pos]<-f.lab.n[new.lab.pos]+f.lab.n[i]
       f.lab.n[i]<-NA
-      r.lab.eve.CG[gridmask.notNAs.CG]<-lab.eve.CG
+      r.lab.eve.CG<-l.CG
+      lab.eve.Cm<-l.CG[mask.Cm]
+      lab.eve.CG<-l.CG[mask.Cm]
     }
     y.eve<-extract(r.lab.eve.CG,cbind(VecX,VecY),na.rm=T)
     eve.labels<-as.vector(na.omit(unique(y.eve[yo.ok.pos.wet])))
     n.eve<-length(eve.labels)
   }
-  print("paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve)")
-  print(paste(yo,stn.eve.wet,data$DQC,y.eve,"\n"))
+  print("unique(lab.eve.CG)")
+  print(unique(lab.eve.CG))
+  rm(l.CG)
+  if (exists("r")) rm(r,x.aux,aux,dist)
+# finally, we're interested only in events occurring in Norway
+  lab.eve.FG<-vector(mode="numeric",length=Lgrid.FG)
+  lab.eve.FG[]<-0
+  r.lab.eve.FG<-resample(r.lab.eve.CG,orog.FG,method="ngb")
+  aux<-extract(r.lab.eve.FG,1:ncell(r.lab.eve.FG))
+  lab.eve.FG<-as.integer(aux[mask.FG])
+  rm(aux)
+  print("unique(lab.eve.FG)")
+  print(unique(lab.eve.FG))
+  aux<-which(eve.labels %in% lab.eve.FG)
+  if (length(aux)<n.eve) {
+    eve.labels<-eve.labels[aux]
+    n.eve<-length(eve.labels)
+  }
   print("eve.labels")
   print(eve.labels)
   print("n.eve")
   print(n.eve)
+  r.lab.eve.FG[]<-NA
+  r.lab.eve.FG[mask.FG]<-lab.eve.FG
+png(file="eveFG.png",width=1200,height=1200)
+  mx<-as.integer(max(eve.labels,na.rm=T))
+  cols<-c("gray",rainbow((mx-1)))
+  plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
+dev.off()
+#  print("paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve)")
+#  print(paste(yo,stn.eve.wet,data$DQC,y.eve,"\n"))
+#  print("eve.labels")
+#  print(eve.labels)
+#  print("n.eve")
+#  print(n.eve)
   png(file="evelab.png",width=1200,height=1200)
   mx<-as.integer(max(eve.labels,na.rm=T))
   cols<-c("gray",rainbow((mx-1)))
@@ -1305,15 +1365,20 @@ dev.off()
   points(VecX[which(is.na(y.eve))],VecY[which(is.na(y.eve))],pch=19,col="gold")
   dev.off()
 # [] Analysis
-  print("++ eves Analysis")
+  print("++ events Analysis")
 # + data structures definition
+  r.xb.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                   ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.xidi.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                     ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
 # FG -> Fine Grid
   xa.FG<-vector(mode="numeric",length=Lgrid.FG)
+  xa.FG[]<-NA
   xb.FG<-vector(mode="numeric",length=Lgrid.FG)
   xidi.eve.FG<-vector(mode="numeric",length=Lgrid.FG)
-  lab.eve.FG<-vector(mode="numeric",length=Lgrid.FG)
 # CG -> Coarse Grid
   xa.CG<-vector(mode="numeric",length=Lgrid.CG)
+  xa.CG[]<-NA
   xb.CG<-vector(mode="numeric",length=Lgrid.CG)
   xidi.eve.CG<-vector(mode="numeric",length=Lgrid.CG)
 # Y vectors (station locations)
@@ -1330,7 +1395,7 @@ dev.off()
   Dh.eve.smallest<-vector(mode="numeric",length=n.eve)
   Dz.eve.smallest<-vector(mode="numeric",length=n.eve)
 #  eps2.eve.smallest<-vector(mode="numeric",length=n.eve)
-# eves descriptive vectors
+# events descriptive vectors
   n.y.eve<-vector(mode="numeric",length=n.eve)
   area.eve<-vector(mode="numeric",length=n.eve)
   volume.eve<-vector(mode="numeric",length=n.eve)
@@ -1368,14 +1433,6 @@ dev.off()
   n.q75<-vector(mode="numeric",length=n.eve)
 # + initialization
   xidi.eve.FG[]<-0
-  lab.eve.FG[]<-0
-  r.lab.eve.FG<-resample(r.lab.eve.CG,orog.FG)
-  lab.eve.FG<-extract(r.lab.eve.FG,1:ncell(r.lab.eve.FG))
-png(file="eveFG.png",width=1200,height=1200)
-  mx<-as.integer(max(eve.labels,na.rm=T))
-  cols<-c("gray",rainbow((mx-1)))
-  plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
-dev.off()
   xidi.eve.CG[]<-0
   yo.superobs[]<-NA
   yo.superobs[yo.ok.pos]<-0
@@ -1398,14 +1455,16 @@ dev.off()
   ell.smadir.eve[]<-NA
 #  eps2.eve.smallest[]<-NA
 # + Ellipsoid hulls
-# ellipsoid hulls computation could fail (i.e. small eves) and return NAs. 
+# ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
 png(file="elli.png",width=1200,height=1200)
 mx<-as.integer(max(eve.labels,na.rm=T))
 cols<-c("gray",rainbow((mx-1)))
 plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
   for (n in 1:n.eve) {
+    print(paste("n eve.labels[n]",n,eve.labels[n]))
     xindx.eve.CG<-which(lab.eve.CG==eve.labels[n])
     Lgrid.eve<-length(xindx.eve.CG)
+    print(Lgrid.eve)
     xy<-cbind(xgrid.CG[xindx.eve.CG],ygrid.CG[xindx.eve.CG])
     ell<-ellipsoidhull(xy)
 #    to plot: lines(predict(ell), col="blue")
@@ -1434,16 +1493,22 @@ points(ell.locx.eve[n],ell.locy.eve[n],pch=19,col="black",cex=1.5)
   } # end cycle: compute ellipsoid hulls
 dev.off()
   rm(xindx.eve.CG,xy,ell,eigenval,eigenvec,e)
-q()
 # FINO A QUI - FINO A QUI
-# + Analysis cycle over eves 
-  print("++ Analysis cycle over eves")
+# + Analysis cycle over events 
+  print("++ Analysis cycle over events")
   for (n in 1:n.eve) {
     xindx.eve.CG<-which(lab.eve.CG==eve.labels[n])
     xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
     Lgrid.eve.CG<-length(xindx.eve.CG)
     Lgrid.eve.FG<-length(xindx.eve.FG)
-    yindx<-which(y.eve==eve.labels[n])
+xx[]<-NA
+xx[mask.FG[xindx.eve.FG]]<-1
+png(file="pro.png")
+plot(xx)
+dev.off()
+    ya.indx<-which(y.eve==eve.labels[n])
+    n.ya.indx<-length(ya.indx)
+    yindx<-which(y.eve==eve.labels[n] & yo.ok.wet)
     n.y.eve[n]<-length(yindx)
     print(paste("+ eve lab >",eve.labels[n],
                 "(",n,"/",n.eve,")",
@@ -1457,7 +1522,7 @@ q()
       xidi.eve.FG[xindx.eve.FG]<--1
       xb.CG[xindx.eve.CG]<-NA
       xidi.eve.CG[xindx.eve.CG]<--1
-      yb[yindx]<-NA
+      yb[yindx]<-NABspat_RR_v1_0.R
       yav[yindx]<-NA
       yidi.eve[yindx]<-NA
       yidiv.eve[yindx]<-NA
@@ -1492,13 +1557,17 @@ q()
              outer(xgrid.CG[xindx.eve.CG],VecX[yindx],FUN="-")**2.)**0.5/1000.
     auxz.CG<-abs(outer(zgrid.CG[xindx.eve.CG],VecZ[yindx],FUN="-"))
     InvD<-matrix(data=0,ncol=n.y.eve[n],nrow=n.y.eve[n])
+#     + define matrices on stations 
+    ya.G.CG<-matrix(ncol=n.y.eve[n],nrow=n.ya.indx,data=0.)
+    ya.aux.CG<-Disth[ya.indx,yindx]
+    ya.auxz.CG<-Distz[ya.indx,yindx]
 #     + cycle on horizontal decorrelation length scales
     flag.firsttime<-T
     for (Dh.test in Dh.seq) {
-      print(Dh.test)
       D.test.part<-exp(-0.5*(Disth[yindx,yindx]/Dh.test)**2.)
       J<-1000000
-      if (Dh.test>50) Dz.seq<-Dz.seq.gt50
+      if (Dh.test>=300) Dz.seq<-c(10000)
+      if (Dh.test>50 & Dh.test<300) Dz.seq<-Dz.seq.gt50
       if (Dh.test<=50) Dz.seq<-Dz.seq.le50
 #     + cycle on vertical decorrelation length scales
       for (Dz.test in Dz.seq) {
@@ -1535,6 +1604,7 @@ q()
           yo.superobs[yindx]<-yo.superobs.tmp[yindx]
         }
       } # end cycle on vertical decorrelation lenght scales
+      print(paste("Dh=",Dh.test,"Km ==> Dz=",Dz.choice,"m"))
 #     + Dh>100Km then analysis is on CG; Dh<100Km analysis on FG
       if (Dh.test>Dh.seq.ref) { # analysis on CG
         G.CG<-exp(-0.5*(aux.CG/Dh.test)**2.-0.5*(auxz.CG/Dz.choice)**2.)
@@ -1542,19 +1612,59 @@ q()
         xa.CG[xindx.eve.CG]<-xb.CG[xindx.eve.CG]+K.CG%*%(yo.superobs[yindx]-yb[yindx])
         xa.CG[xindx.eve.CG][xa.CG[xindx.eve.CG]<rr.inf]<-rr.inf
         xidi.eve.CG[xindx.eve.CG]<-xidi.eve.CG[xindx.eve.CG]+rowSums(K.CG)
+        xb.CG[]<-0
         xb.CG[xindx.eve.CG]<-xa.CG[xindx.eve.CG]
+        r.xb.CG[]<-NA
+        r.xb.CG[mask.CG]<-xb.CG
+        r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
+        aux<-extract(r.xb.CGf,1:ncell(r.xb.CGf))
+        xb.CG<-aux[mask.CG]
+png(file=paste("rxbFG_",Dh.test,".png",sep=""),height=1200,width=1200)
+plot(r.xb.CGf)
+dev.off()
+        rm(aux)
       } else { # analysis on FG
         # get background from CG, if it is needed
         if (Dh.test!=Dh.seq[1] & flag.firsttime) {
-          for (i in xindx.eve.CG) {
-            aux.CG2FG<-CG2FG[i,which(!is.na(CG2FG[i,]))]
-            xb.FG[aux.CG2FG]<-xb.CG[i]
-            xidi.eve.FG[aux.CG2FG]<-xidi.eve.CG[i]
-            rm(aux.CG2FG)
-          }
+          r.xidi.CG[]<-NA
+          r.xidi.CG[mask.CG]<-xidi.eve.CG
+          r.xb.CG[]<-NA
+          r.xb.CG[mask.CG]<-xb.CG
+#          r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
+#          r.xb.FG<-resample(r.xb.CGf,orog.FG,method="bilinear")
+          r.xidi.FG<-resample(r.xidi.CG,orog.FG,method="bilinear")
+          aux<-extract(r.xidi.FG,1:ncell(r.xidi.FG))
+          xidi.eve.FG<-aux[mask.FG]
+          r.xb.FG<-resample(r.xb.CG,orog.FG,method="bilinear")
+          r.xb.FG<-focal(r.xb.FG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
+          aux<-extract(r.xb.FG,1:ncell(r.xb.FG))
+          xb.FG[]<-NA
+          xb.FG<-aux[mask.FG]
+          r.xb.FG[]<-NA
+          r.xb.FG[mask.FG]<-xb.FG
+#          xb.FG<-aux[mask.FG]
+#rnc <- writeRaster(r.xb.FG,
+#                   filename="rxbfg.nc",
+#                   format="CDF", overwrite=TRUE)
+#rnc <- writeRaster(r.xb.CG,
+#                   filename="rxbcg.nc",
+#                   format="CDF", overwrite=TRUE)
+        } else if (flag.firsttime) {
+          r.xb.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                           ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+          r.xb.FG[]<-NA
+          r.xb.FG[mask.FG]<-xb.FG
         }
+png(file=paste("rxbFG_",Dh.test,".png",sep=""),height=1200,width=1200)
+r.xb.FG[]<-NA
+r.xb.FG[mask.FG]<-xb.FG
+plot(r.xb.FG)
+dev.off()
+rnc <- writeRaster(r.xb.FG,
+                   filename=paste("rxbFG_",Dh.test,".nc",sep=""),
+                   format="CDF", overwrite=TRUE)
         flag.firsttime<-F
-        # analysis on FG is done iteratively (limit memory use)
+        # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<Lgrid.eve.FG) {
           start<-i*ndim.FG.iteration+1
@@ -1563,21 +1673,44 @@ q()
             end<-Lgrid.eve.FG
           }
           ndimaux.FG<-end-start+1
+          print(paste("start end ndimaux.FG",start,end,ndimaux.FG))
+          pos<-xindx.eve.FG[start:end]
           aux.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
           auxz.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
-          aux.FG<-(outer(ygrid[xindx.eve.FG[start:end]],VecY[yindx],FUN="-")**2. +
-                outer(xgrid[xindx.eve.FG[start:end]],VecX[yindx],FUN="-")**2.)**0.5/1000.
-          auxz.FG<-abs(outer(zgrid[xindx.eve.FG[start:end]],VecZ[yindx],FUN="-"))
+          aux.FG<-(outer(ygrid[pos],VecY[yindx],FUN="-")**2. +
+                outer(xgrid[pos],VecX[yindx],FUN="-")**2.)**0.5/1000.
+          auxz.FG<-abs(outer(zgrid[pos],VecZ[yindx],FUN="-"))
           G.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
           G.FG<-exp(-0.5*(aux.FG/Dh.test)**2.-0.5*(auxz.FG/Dz.choice)**2.)
           K.FG<-G.FG%*%InvD
-          xa.FG[xindx.eve.FG[start:end]]<-xb.FG[xindx.eve.FG[start:end]]+K.FG%*%(yo.superobs[yindx]-yb[yindx])
-          xa.FG[xindx.eve.FG[start:end]][xa.FG[xindx.eve.FG[start:end]]<rr.inf]<-rr.inf
-          xidi.eve.FG[xindx.eve.FG[start:end]]<-xidi.eve.FG[xindx.eve.FG[start:end]]+rowSums(K.FG)
+          xa.FG[pos]<-xb.FG[pos]+K.FG%*%(yo.superobs[yindx]-yb[yindx])
+          xa.FG[pos][xa.FG[pos]<rr.inf]<-rr.inf
+          xidi.eve.FG[pos]<-xidi.eve.FG[pos]+rowSums(K.FG)
           rm(aux.FG,auxz.FG,G.FG,K.FG)
           i<-i+1
         }
+png(file=paste("rxaFG_",Dh.test,".png",sep=""),height=1200,width=1200)
+r.xb.FG[]<-NA
+r.xb.FG[mask.FG]<-xa.FG
+plot(r.xb.FG)
+dev.off()
+png(file=paste("rxdiFG_",Dh.test,".png",sep=""),height=1200,width=1200)
+r.xb.FG[]<-NA
+r.xb.FG[mask.FG]<-xidi.eve.FG
+plot(r.xb.FG)
+dev.off()
+r.xb.FG[]<-NA
+r.xb.FG[mask.FG]<-xa.FG
+rnc <- writeRaster(r.xb.FG,
+                   filename=paste("rxaFG_",Dh.test,".nc",sep=""),
+                   format="CDF", overwrite=TRUE)
+r.xb.FG[]<-NA
+r.xb.FG[mask.FG]<-xidi.eve.FG
+rnc <- writeRaster(r.xb.FG,
+                   filename=paste("rxidiFG_",Dh.test,".nc",sep=""),
+                   format="CDF", overwrite=TRUE)
         # current analysis is next iteration background
+        xb.FG[]<-NA
         xb.FG[xindx.eve.FG]<-xa.FG[xindx.eve.FG]
       } # end: analysis on FG
 #     + update yidi, yidiv and ybv.mat
@@ -1602,12 +1735,13 @@ q()
     Dh.eve.smallest[n]<-max(Dh.seq[n.Dh.seq]/2,min.Disth)
     Dz.eve.smallest[n]<-Dz.choice
 #    eps2.eve.smallest[n]<-0.1
-  } # END CYCLE over eves
+q()
+  } # END CYCLE over events
   break
 } # end of DQC loop
 # Analysis on high-res grid
 print("++ Analysis on the high-resolution grid")
-# Fine Grid Analysis: cycle over eves
+# Fine Grid Analysis: cycle over events
 for (n in 1:n.eve) {
   xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
   Lgrid.eve.FG<-length(xindx.eve.FG)
@@ -1747,7 +1881,7 @@ for (n in 1:n.eve) {
     cv.made.eve.q75[n]<-NA
     meanidiv.y.eve.q75[n]<-NA
   }
-} # Fine Grid Analysis: cycle over eves
+} # Fine Grid Analysis: cycle over events
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 print("++ Output")
 # Station Points - Write output on file 
@@ -1802,12 +1936,12 @@ cat(paste(yyyy.b,mm.b,dd.b,nday,
           round(idi.norm.fac,5),
           "\n",sep=";"),file=out.file.eve,append=T)
 # Figure: eve
-xx[gridmask.notNAs]<-round(100*xidi.eve.FG,1)
+xx[mask.FG]<-round(100*xidi.eve.FG,1)
 rnc <- writeRaster(xx,
                    filename=out.file.grd.idi,
                    format="CDF", overwrite=TRUE)
 # Figure: Analysis on high-resolution grid
-xx[gridmask.notNAs]<-round(xa.FG,1)
+xx[mask.FG]<-round(xa.FG,1)
 if (flag.write.xa) {
   nogrid.ncout(grid=t(as.matrix(xx)),
                x=x.FG,y=y.FG,grid.type=grid.type,
