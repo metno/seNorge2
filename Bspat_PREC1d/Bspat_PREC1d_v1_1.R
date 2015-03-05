@@ -1,4 +1,4 @@
-# --~- Bspat_RR_v1_0.R -~--
+# --~- Bspat_PREC1d_v2_0.R -~--
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
@@ -273,7 +273,8 @@ q75.daily<-8 #mm/daily (normal/moderate-strong)
 # 
 n.Dh.seq<-10
 min.Dh.seq.allowed<-10 # Km
-Dh.seq.ref<-100 # Km
+#Dh.seq.ref<-100 # Km
+Dh.seq.ref<-50 # Km
 #Dh.seq.reference<-c(5000,4000,3000,2500,2000,1750,1500,1400,1300,1200,
 #                    1100,1000, 900, 800, 700, 650, 600, 550, 500, 450,
 #                     400, 350, 300, 260, 230, 200, 180, 160, 140, 120,
@@ -1233,7 +1234,7 @@ while (L.yo.ok>0) {
     data$DQC[yo.ok.pos.wet[which(yo.ok.wet.fail)]]<-500
     next
   }
-  png(file="nordry.png",width=1200,height=1200)
+  png(file="../../seNorge2_scratch/Bspat_PREC1d/nordry.png",width=1200,height=1200)
   plot(r.CG.nor.dry)
   points(VecX,VecY)
   points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
@@ -1244,7 +1245,7 @@ while (L.yo.ok>0) {
 #  points(VecX[which(is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gold",cex=1)
   points(VecX[which(data$DQC==400)],VecY[which(data$DQC==400)],col="pink",pch=4,cex=2,lwd=3)
   dev.off()
-  png(file="evewet.png",width=1200,height=1200)
+  png(file="../../seNorge2_scratch/Bspat_PREC1d/evewet.png",width=1200,height=1200)
   plot(r.CG.eve.wet)
   points(VecX,VecY)
   points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
@@ -1339,7 +1340,7 @@ while (L.yo.ok>0) {
   print(n.eve)
   r.lab.eve.FG[]<-NA
   r.lab.eve.FG[mask.FG]<-lab.eve.FG
-png(file="eveFG.png",width=1200,height=1200)
+png(file="../../seNorge2_scratch/Bspat_PREC1d/eveFG.png",width=1200,height=1200)
   mx<-as.integer(max(eve.labels,na.rm=T))
   cols<-c("gray",rainbow((mx-1)))
   plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
@@ -1350,7 +1351,7 @@ dev.off()
 #  print(eve.labels)
 #  print("n.eve")
 #  print(n.eve)
-  png(file="evelab.png",width=1200,height=1200)
+  png(file="../../seNorge2_scratch/Bspat_PREC1d/evelab.png",width=1200,height=1200)
   mx<-as.integer(max(eve.labels,na.rm=T))
   cols<-c("gray",rainbow((mx-1)))
   plot(r.lab.eve.CG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
@@ -1371,14 +1372,16 @@ dev.off()
                    ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
   r.xidi.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                      ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+  r.xb.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+  r.xidi.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                     ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
 # FG -> Fine Grid
   xa.FG<-vector(mode="numeric",length=Lgrid.FG)
-  xa.FG[]<-NA
   xb.FG<-vector(mode="numeric",length=Lgrid.FG)
   xidi.eve.FG<-vector(mode="numeric",length=Lgrid.FG)
 # CG -> Coarse Grid
   xa.CG<-vector(mode="numeric",length=Lgrid.CG)
-  xa.CG[]<-NA
   xb.CG<-vector(mode="numeric",length=Lgrid.CG)
   xidi.eve.CG<-vector(mode="numeric",length=Lgrid.CG)
 # Y vectors (station locations)
@@ -1432,7 +1435,11 @@ dev.off()
   n.q50<-vector(mode="numeric",length=n.eve)
   n.q75<-vector(mode="numeric",length=n.eve)
 # + initialization
+  xa.FG[]<-NA
+  xb.FG[]<-NA
   xidi.eve.FG[]<-0
+  xa.CG[]<-NA
+  xb.CG[]<-NA
   xidi.eve.CG[]<-0
   yo.superobs[]<-NA
   yo.superobs[yo.ok.pos]<-0
@@ -1456,7 +1463,7 @@ dev.off()
 #  eps2.eve.smallest[]<-NA
 # + Ellipsoid hulls
 # ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
-png(file="elli.png",width=1200,height=1200)
+png(file="../../seNorge2_scratch/Bspat_PREC1d/elli.png",width=1200,height=1200)
 mx<-as.integer(max(eve.labels,na.rm=T))
 cols<-c("gray",rainbow((mx-1)))
 plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
@@ -1497,15 +1504,11 @@ dev.off()
 # + Analysis cycle over events 
   print("++ Analysis cycle over events")
   for (n in 1:n.eve) {
+#  for (n in 2:n.eve) {
     xindx.eve.CG<-which(lab.eve.CG==eve.labels[n])
     xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
     Lgrid.eve.CG<-length(xindx.eve.CG)
     Lgrid.eve.FG<-length(xindx.eve.FG)
-xx[]<-NA
-xx[mask.FG[xindx.eve.FG]]<-1
-png(file="pro.png")
-plot(xx)
-dev.off()
     ya.indx<-which(y.eve==eve.labels[n])
     n.ya.indx<-length(ya.indx)
     yindx<-which(y.eve==eve.labels[n] & yo.ok.wet)
@@ -1522,7 +1525,7 @@ dev.off()
       xidi.eve.FG[xindx.eve.FG]<--1
       xb.CG[xindx.eve.CG]<-NA
       xidi.eve.CG[xindx.eve.CG]<--1
-      yb[yindx]<-NABspat_RR_v1_0.R
+      yb[yindx]<-NA
       yav[yindx]<-NA
       yidi.eve[yindx]<-NA
       yidiv.eve[yindx]<-NA
@@ -1605,13 +1608,20 @@ dev.off()
         }
       } # end cycle on vertical decorrelation lenght scales
       print(paste("Dh=",Dh.test,"Km ==> Dz=",Dz.choice,"m"))
-#     + Dh>100Km then analysis is on CG; Dh<100Km analysis on FG
-      if (Dh.test>Dh.seq.ref) { # analysis on CG
+#     + Dh>ref.value ->analysis on CG; Dh<ref.value ->analysis on FG
+      # Analysis on CG
+      if (Dh.test>Dh.seq.ref) { 
         G.CG<-exp(-0.5*(aux.CG/Dh.test)**2.-0.5*(auxz.CG/Dz.choice)**2.)
         K.CG<-G.CG%*%InvD
+        rm(G.CG)
+        # update analysis
         xa.CG[xindx.eve.CG]<-xb.CG[xindx.eve.CG]+K.CG%*%(yo.superobs[yindx]-yb[yindx])
         xa.CG[xindx.eve.CG][xa.CG[xindx.eve.CG]<rr.inf]<-rr.inf
+        # update IDI (which is cumulative)
         xidi.eve.CG[xindx.eve.CG]<-xidi.eve.CG[xindx.eve.CG]+rowSums(K.CG)
+        rm(K.CG)
+        # next background is the current analysis, only a little smoothed
+        # smoothing is for realistic border effects
         xb.CG[]<-0
         xb.CG[xindx.eve.CG]<-xa.CG[xindx.eve.CG]
         r.xb.CG[]<-NA
@@ -1619,12 +1629,24 @@ dev.off()
         r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
         aux<-extract(r.xb.CGf,1:ncell(r.xb.CGf))
         xb.CG<-aux[mask.CG]
-png(file=paste("rxbFG_",Dh.test,".png",sep=""),height=1200,width=1200)
-plot(r.xb.CGf)
-dev.off()
-        rm(aux)
-      } else { # analysis on FG
-        # get background from CG, if it is needed
+        # debug: start
+        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
+        plot(r.xb.CGf)
+        dev.off()
+        rnc <- writeRaster(r.xb.CGf,
+                           filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
+                           format="CDF", overwrite=TRUE)
+        xx.CG[]<-NA
+        xx.CG[mask.CG]<-xa.CG
+        rnc <- writeRaster(xx.CG,
+                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
+                   format="CDF", overwrite=TRUE)
+        # debug: end 
+        rm(aux,r.xb.CGf)
+      } else { 
+      # Analysis on FG 
+        # get background from CG, if it is needed, otherwise the background is the "mode"
+        # note: if Dh.test==Dh.seq[1] no CG background is present
         if (Dh.test!=Dh.seq[1] & flag.firsttime) {
           r.xidi.CG[]<-NA
           r.xidi.CG[mask.CG]<-xidi.eve.CG
@@ -1632,37 +1654,34 @@ dev.off()
           r.xb.CG[mask.CG]<-xb.CG
 #          r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
 #          r.xb.FG<-resample(r.xb.CGf,orog.FG,method="bilinear")
+          print("inizio")
           r.xidi.FG<-resample(r.xidi.CG,orog.FG,method="bilinear")
           aux<-extract(r.xidi.FG,1:ncell(r.xidi.FG))
           xidi.eve.FG<-aux[mask.FG]
           r.xb.FG<-resample(r.xb.CG,orog.FG,method="bilinear")
+          print("fine res")
           r.xb.FG<-focal(r.xb.FG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
+          print("fine focal")
           aux<-extract(r.xb.FG,1:ncell(r.xb.FG))
           xb.FG[]<-NA
           xb.FG<-aux[mask.FG]
           r.xb.FG[]<-NA
           r.xb.FG[mask.FG]<-xb.FG
-#          xb.FG<-aux[mask.FG]
-#rnc <- writeRaster(r.xb.FG,
-#                   filename="rxbfg.nc",
-#                   format="CDF", overwrite=TRUE)
-#rnc <- writeRaster(r.xb.CG,
-#                   filename="rxbcg.nc",
-#                   format="CDF", overwrite=TRUE)
+          rm(aux)
         } else if (flag.firsttime) {
-          r.xb.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
-                           ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
           r.xb.FG[]<-NA
           r.xb.FG[mask.FG]<-xb.FG
         }
-png(file=paste("rxbFG_",Dh.test,".png",sep=""),height=1200,width=1200)
-r.xb.FG[]<-NA
-r.xb.FG[mask.FG]<-xb.FG
-plot(r.xb.FG)
-dev.off()
-rnc <- writeRaster(r.xb.FG,
-                   filename=paste("rxbFG_",Dh.test,".nc",sep=""),
+        # debug: start
+        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
+        r.xb.FG[]<-NA
+        r.xb.FG[mask.FG]<-xb.FG
+        plot(r.xb.FG)
+        dev.off()
+        rnc <- writeRaster(r.xb.FG,
+                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
                    format="CDF", overwrite=TRUE)
+        # debug: end
         flag.firsttime<-F
         # analysis on FG is done iteratively (save memory)
         i<-0
@@ -1683,32 +1702,35 @@ rnc <- writeRaster(r.xb.FG,
           G.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
           G.FG<-exp(-0.5*(aux.FG/Dh.test)**2.-0.5*(auxz.FG/Dz.choice)**2.)
           K.FG<-G.FG%*%InvD
+          rm(G.FG)
           xa.FG[pos]<-xb.FG[pos]+K.FG%*%(yo.superobs[yindx]-yb[yindx])
           xa.FG[pos][xa.FG[pos]<rr.inf]<-rr.inf
           xidi.eve.FG[pos]<-xidi.eve.FG[pos]+rowSums(K.FG)
-          rm(aux.FG,auxz.FG,G.FG,K.FG)
+          rm(aux.FG,auxz.FG,K.FG)
           i<-i+1
         }
-png(file=paste("rxaFG_",Dh.test,".png",sep=""),height=1200,width=1200)
-r.xb.FG[]<-NA
-r.xb.FG[mask.FG]<-xa.FG
-plot(r.xb.FG)
-dev.off()
-png(file=paste("rxdiFG_",Dh.test,".png",sep=""),height=1200,width=1200)
-r.xb.FG[]<-NA
-r.xb.FG[mask.FG]<-xidi.eve.FG
-plot(r.xb.FG)
-dev.off()
-r.xb.FG[]<-NA
-r.xb.FG[mask.FG]<-xa.FG
-rnc <- writeRaster(r.xb.FG,
-                   filename=paste("rxaFG_",Dh.test,".nc",sep=""),
+        # debug: start
+        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
+        r.xb.FG[]<-NA
+        r.xb.FG[mask.FG]<-xa.FG
+        plot(r.xb.FG)
+        dev.off()
+        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxdiFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
+        r.xb.FG[]<-NA
+        r.xb.FG[mask.FG]<-xidi.eve.FG
+        plot(r.xb.FG)
+        dev.off()
+        r.xb.FG[]<-NA
+        r.xb.FG[mask.FG]<-xa.FG
+        rnc <- writeRaster(r.xb.FG,
+                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
                    format="CDF", overwrite=TRUE)
-r.xb.FG[]<-NA
-r.xb.FG[mask.FG]<-xidi.eve.FG
-rnc <- writeRaster(r.xb.FG,
-                   filename=paste("rxidiFG_",Dh.test,".nc",sep=""),
+        r.xb.FG[]<-NA
+        r.xb.FG[mask.FG]<-xidi.eve.FG
+        rnc <- writeRaster(r.xb.FG,
+                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxidiFG_",n,"_",Dh.test,".nc",sep=""),
                    format="CDF", overwrite=TRUE)
+        # debug: end
         # current analysis is next iteration background
         xb.FG[]<-NA
         xb.FG[xindx.eve.FG]<-xa.FG[xindx.eve.FG]
@@ -1726,19 +1748,20 @@ rnc <- writeRaster(r.xb.FG,
         ya.tmp[yindx]<-ybv.mat[yindx,b] + W.1 %*% (yo.superobs[yindx[-i]]-ybv.mat[yindx[-i],b])
         ybv.mat[yindx,b]<-ya.tmp[yindx]
       }
+      rm(W.1,InvD.1)
       # current analysis is next iteration background
       yb[yindx]<-ya[yindx]
     } # end cycle on horizontal decorrelation lenght scales
     rm(D.test.part,D.test,S.test,W.test,InvD.test,InvD,D,S,W)
     if (exists("K.CG")) rm(K.CG,G.CG)
-    rm(InvD.1,W.1)
     Dh.eve.smallest[n]<-max(Dh.seq[n.Dh.seq]/2,min.Disth)
     Dz.eve.smallest[n]<-Dz.choice
 #    eps2.eve.smallest[n]<-0.1
-q()
   } # END CYCLE over events
+  if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.eve.CG,xb.CG,xa.CG,xindx.eve.CG)
   break
 } # end of DQC loop
+q()
 # Analysis on high-res grid
 print("++ Analysis on the high-resolution grid")
 # Fine Grid Analysis: cycle over events

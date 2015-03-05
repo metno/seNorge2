@@ -13,7 +13,6 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
                  "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
                  "&fy=",from.year,"&ty=",to.year,sep="")
-#print(myurl)
   o.cont<-1
   while (o.cont<=10) {
     stataux<-NULL
