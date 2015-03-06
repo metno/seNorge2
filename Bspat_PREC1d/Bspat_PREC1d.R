@@ -1,4 +1,4 @@
-# --~- Bspat_PREC1d_v2_0.R -~--
+# --~- Bspat_PREC1d.R -~--
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
@@ -10,7 +10,7 @@
 #  (i.e. 2014/09/01 12 -> precipitation sum 2014/09/01 11:01 2014/09/01 12:00)
 #
 # == Grid specifications ==
-# High-Resolution (final) 1Km grid
+# High-Resolution Fine Grid 1Km grid (FG)
 #> print(orog)
 # class       : RasterLayer 
 # dimensions  : 1550, 1195, 1852250  (nrow, ncol, ncell)
@@ -21,20 +21,7 @@
 # names       : fenno_dem_u33 
 # values      : 0, 2250  (min, max)
 # 
-# intermediate 5Km (coarse) grid (grid.CG)
-# aggregate, upscale orog field with a factor of "fact"(5) (faster computations)
-# orog.CG[1,1]<-sum(orog[i,j],i=1:fact,j=1:fact)/(fact**2)
-# orog.CG[1,2]<-sum(orog[i,j],i=1:fact,j=(fact+1):(2*fact))/(fact**2)
-# orog.CG[2,1]<-sum(orog[i,j],i=(fact+1):(2*fact),j=1:fact)/(fact**2)
-# > print(orog.CG)
-# class       : RasterLayer 
-# dimensions  : 310, 239, 74090  (nrow, ncol, ncell)
-# resolution  : 5000, 5000  (x, y)
-# extent      : -75000, 1120000, 6450000, 8e+06  (xmin, xmax, ymin, ymax)
-# coord. ref. : +proj=utm +zone=33 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0 
-# data source : in memory
-# names       : fenno_dem_u33 
-# values      : 0, 1984.88  (min, max)
+# Coarse Grid (CG)
 #
 #> print(cbind(xy.CG[1:3,1],xy.CG[1:3,2]))
 #       [,1]    [,2]
@@ -157,21 +144,6 @@
 # 
 # == DQC flag ==
 # pos  value  description
-# 1    2**0   missing
-# 2    2**1   good 
-# 3    2**2   err: 1h plausibility check failed 
-# 4    2**3   not enough available observation 
-# 5    2**4   err: external DQC 
-# 6    2**5   masked station location (not enough geographical info) 
-# 7    2**6   blacklist 1 
-# 8    2**7   blacklist 2 
-#
-# Abbreviations:
-# eve-> Event (described as a contiguous Observed Area of Precipitation, OAP)
-# FG -> Higher Resolution grid (fine grid)
-# CG -> Lower Resolution grid (coarse grid)
-# q50 -> quantile(50) estimate for the daily precip in Norway (maded using 2013.09->2014.09 data)
-# q75 -> quantile(50) estimate for the daily precip in Norway (maded using 2013.09->2014.09 data)
 #
 # History:
 # 03.12.2014 - Cristian Lussana. Original code.
@@ -186,6 +158,7 @@
 rm(list=ls())
 # Libraries
 library(raster)
+rasterOptions(chunksize=2e+07,maxmemory=3e+08)
 library(igraph)
 library(rgdal)
 library(ncdf)
@@ -285,6 +258,7 @@ Dz.seq.gt50<-c(5000,1000) # m
 Dz.seq.le50<-c(1000,500) # m
 #
 ndim.FG.iteration<-10000
+#ndim.FG.iteration<-5000
 # netcdf fixed parameters
 grid.type <- "utm33"
 source.nc<-"daily precipitation from station data"
@@ -409,7 +383,7 @@ cat(paste("year","month","day","nday","eve.lab","nobs",
 # 2. CG -> Coarse Grid, which is the low-resolution grid larger than Norway
 # 3. Cm -> Coarse Grid masked on the Norwegian mainland
 # CRS Coordinate Reference System
-orog.FG<-raster(filenamedem)
+orog.FG<-trim(raster(filenamedem))
 nx.FG<-ncol(orog.FG)
 ny.FG<-nrow(orog.FG)
 dx.FG<-xres(orog.FG)
@@ -421,7 +395,7 @@ xmx.FG<-xmax(orog.FG)
 ymn.FG<-ymin(orog.FG)
 ymx.FG<-ymax(orog.FG)
 #
-orog.CG<-raster(filenamedem.CG)
+orog.CG<-trim(raster(filenamedem.CG))
 nx.CG<-ncol(orog.CG)
 ny.CG<-nrow(orog.CG)
 dx.CG<-xres(orog.CG)
@@ -1079,9 +1053,9 @@ while (L.yo.ok>0) {
                                -0.5*(Distz[yoindx.wet[notsofar.wet.i],
                                            yoindx.wet[notsofar.wet.i]]/xa.Dz.nor.1st[i])**2. ))
           D.wet[row(D.wet)==col(D.wet)]<-D.wet[row(D.wet)==col(D.wet)]+eps2
-          InvD.wet<-solve(D.wet)
-          K.wet<-G.wet%*%InvD.wet
-          rm(D.wet,InvD.wet)
+          t.InvD.wet<-t(solve(D.wet))
+          K.wet<-tcrossprod(G.wet,t.InvD.wet)
+          rm(D.wet,t.InvD.wet)
         }
         rm(G.wet)
         xidi.CG.wet[i]<-sum(K.wet)
@@ -1097,9 +1071,9 @@ while (L.yo.ok>0) {
                                -0.5*(Distz[yoindx.dry[notsofar.dry.i],
                                            yoindx.dry[notsofar.dry.i]]/xa.Dz.nor.1st[i])**2. ))
           D.dry[row(D.dry)==col(D.dry)]<-D.dry[row(D.dry)==col(D.dry)]+eps2
-          InvD.dry<-solve(D.dry)
-          K.dry<-G.dry%*%InvD.dry
-          rm(D.dry,InvD.dry)
+          t.InvD.dry<-t(solve(D.dry))
+          K.dry<-tcrossprod(G.dry,t.InvD.dry)
+          rm(D.dry,t.InvD.dry)
         }
         rm(G.dry)
         xidi.CG.dry[i]<-sum(K.dry)
@@ -1192,9 +1166,9 @@ while (L.yo.ok>0) {
                                -0.5*(Distz[yoindx.wet[notsofar.wet.i],
                                            yoindx.wet[notsofar.wet.i]]/xa.Dz.eve.1st[i])**2. ))
           D.wet[row(D.wet)==col(D.wet)]<-D.wet[row(D.wet)==col(D.wet)]+eps2
-          InvD.wet<-solve(D.wet)
-          K.wet<-G.wet%*%InvD.wet
-          rm(D.wet,InvD.wet)
+          t.InvD.wet<-solve(D.wet)
+          K.wet<-tcrossprod(G.wet,t.InvD.wet)
+          rm(D.wet,t.InvD.wet)
         }
         rm(G.wet)
         xidi.CG.wet[i]<-sum(K.wet)
@@ -1210,9 +1184,9 @@ while (L.yo.ok>0) {
                                -0.5*(Distz[yoindx.dry[notsofar.dry.i],
                                            yoindx.dry[notsofar.dry.i]]/xa.Dz.eve.1st[i])**2. ))
           D.dry[row(D.dry)==col(D.dry)]<-D.dry[row(D.dry)==col(D.dry)]+eps2
-          InvD.dry<-solve(D.dry)
-          K.dry<-G.dry%*%InvD.dry
-          rm(D.dry,InvD.dry)
+          t.InvD.dry<-solve(D.dry)
+          K.dry<-tcrossprod(G.dry,t.InvD.dry)
+          rm(D.dry,t.InvD.dry)
         }
         rm(G.dry)
         xidi.CG.dry[i]<-sum(K.dry)
@@ -1516,6 +1490,10 @@ dev.off()
     print(paste("+ eve lab >",eve.labels[n],
                 "(",n,"/",n.eve,")",
                 " #obs=",n.y.eve[n],sep=""))
+    eve.rx<-range(xgrid.CG[xindx.eve.CG])
+    eve.ry<-range(ygrid.CG[xindx.eve.CG])
+    print(paste("event range x =",eve.rx))
+    print(paste("event range y =",eve.ry))
 #   + eve from isolated station
     if (n.y.eve[n]==1) {
       xa.FG[xindx.eve.FG]<-yo[yindx]
@@ -1546,7 +1524,7 @@ dev.off()
 #   details: particular cases (i.e. semiaxis is NA, semiaxis is smaller then min distance);
     Disth.aux<-Disth[yindx,yindx]
     # minimum distance between two eve stations
-    min.Disth<-min(Disth.aux[row(Disth.aux)!=col(Disth.aux)])
+    min.Disth<-min(Disth.aux[row(Disth.aux)!=col(Disth.aux)])/3.
     min.Dh.seq<-as.integer(max(min.Dh.seq.allowed,ceiling(min.Disth)))
     max.Dh.seq<-as.integer(max(3*min.Dh.seq.allowed,ceiling(ell.smajor.eve[n])))
     aux<-which(Dh.seq.reference>=min.Dh.seq & Dh.seq.reference<=max.Dh.seq)
@@ -1585,8 +1563,11 @@ dev.off()
         S.test<-D.test
         D.test[row(D.test)==col(D.test)]<-D.test[row(D.test)==col(D.test)]+eps2
         InvD.test<-solve(D.test)
-        W.test<-S.test%*%InvD.test
-        ya.tmp[yindx]<-yb[yindx] + W.test %*% (yo.superobs.tmp[yindx]-yb[yindx])
+        W.test<-tcrossprod(S.test,t(InvD.test))
+        aux<-t(yo.superobs.tmp[yindx]-yb[yindx])
+        ya.tmp[yindx]<-tcrossprod(W.test,aux)
+        ya.tmp[yindx]<-yb[yindx] + ya.tmp[yindx]
+        rm(aux)
         yav.tmp[yindx]<-yo.superobs.tmp[yindx] +
                            1./(1.-diag(W.test)) * (ya.tmp[yindx]-yo.superobs.tmp[yindx])
         ya.tmp[yindx][ya.tmp[yindx]<rr.inf]<-rr.inf
@@ -1611,17 +1592,24 @@ dev.off()
 #     + Dh>ref.value ->analysis on CG; Dh<ref.value ->analysis on FG
       # Analysis on CG
       if (Dh.test>Dh.seq.ref) { 
+        print("update matrices")
         G.CG<-exp(-0.5*(aux.CG/Dh.test)**2.-0.5*(auxz.CG/Dz.choice)**2.)
-        K.CG<-G.CG%*%InvD
+#        K.CG<-G.CG%*%InvD
+        K.CG<-tcrossprod(G.CG,t(InvD))
         rm(G.CG)
         # update analysis
-        xa.CG[xindx.eve.CG]<-xb.CG[xindx.eve.CG]+K.CG%*%(yo.superobs[yindx]-yb[yindx])
+        print("update analysis")
+        aux<-t(yo.superobs[yindx]-yb[yindx])
+        xa.CG[xindx.eve.CG]<-tcrossprod(K.CG,aux)
+        xa.CG[xindx.eve.CG]<-xb.CG[xindx.eve.CG]+xa.CG[xindx.eve.CG]
         xa.CG[xindx.eve.CG][xa.CG[xindx.eve.CG]<rr.inf]<-rr.inf
         # update IDI (which is cumulative)
+        print("update idi")
         xidi.eve.CG[xindx.eve.CG]<-xidi.eve.CG[xindx.eve.CG]+rowSums(K.CG)
         rm(K.CG)
         # next background is the current analysis, only a little smoothed
         # smoothing is for realistic border effects
+        print("smooth xb")
         xb.CG[]<-0
         xb.CG[xindx.eve.CG]<-xa.CG[xindx.eve.CG]
         r.xb.CG[]<-NA
@@ -1629,18 +1617,19 @@ dev.off()
         r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
         aux<-extract(r.xb.CGf,1:ncell(r.xb.CGf))
         xb.CG<-aux[mask.CG]
+        print("debug")
         # debug: start
-        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
-        plot(r.xb.CGf)
-        dev.off()
-        rnc <- writeRaster(r.xb.CGf,
-                           filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
-                           format="CDF", overwrite=TRUE)
-        xx.CG[]<-NA
-        xx.CG[mask.CG]<-xa.CG
-        rnc <- writeRaster(xx.CG,
-                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
-                   format="CDF", overwrite=TRUE)
+#        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
+#        plot(r.xb.CGf)
+#        dev.off()
+#        rnc <- writeRaster(r.xb.CGf,
+#                           filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
+#                           format="CDF", overwrite=TRUE)
+#        xx.CG[]<-NA
+#        xx.CG[mask.CG]<-xa.CG
+#        rnc <- writeRaster(xx.CG,
+#                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
+#                   format="CDF", overwrite=TRUE)
         # debug: end 
         rm(aux,r.xb.CGf)
       } else { 
@@ -1655,19 +1644,37 @@ dev.off()
 #          r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
 #          r.xb.FG<-resample(r.xb.CGf,orog.FG,method="bilinear")
           print("inizio")
-          r.xidi.FG<-resample(r.xidi.CG,orog.FG,method="bilinear")
-          aux<-extract(r.xidi.FG,1:ncell(r.xidi.FG))
-          xidi.eve.FG<-aux[mask.FG]
-          r.xb.FG<-resample(r.xb.CG,orog.FG,method="bilinear")
+          print("crop idi")
+          eve.ext<-extent(eve.rx[1]-10000,eve.rx[2]+10000,eve.ry[1]-10000,eve.ry[2]+10000)
+          r.resaux<-trim(r.xidi.CG)
+          r.xb.FG[]<-NA
+          r.xb.FG[mask.FG[xindx.eve.FG]]<-rep(1,length=Lgrid.eve.FG)
+#          r.xidi.FG<-resample(r.resaux,orog.FG,method="bilinear")
+          print("resample idi")
+          r.xidi.FG<-resample(r.resaux,r.xb.FG,method="bilinear")
+          print("extract idi")
+#          aux<-extract(r.xidi.FG,1:ncell(r.xidi.FG))
+#          xidi.eve.FG<-aux[mask.FG]
+          aux<-extract(r.xidi.FG,mask.FG)
+          xidi.eve.FG<-aux
+          print("crop xb")
+#          r.resaux<-crop(r.xb.CG,eve.ext)
+          r.resaux<-trim(r.xb.CG)
+#          r.xb.FG<-resample(r.xb.CG,orog.FG,method="bilinear")
+          print("resample xb")
+          r.xb.FG<-resample(r.resaux,r.xb.FG,method="bilinear")
           print("fine res")
           r.xb.FG<-focal(r.xb.FG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
           print("fine focal")
-          aux<-extract(r.xb.FG,1:ncell(r.xb.FG))
+          print("extract xb")
+#          aux<-extract(r.xb.FG,1:ncell(r.xb.FG))
+          aux<-extract(r.xb.FG,mask.FG)
           xb.FG[]<-NA
-          xb.FG<-aux[mask.FG]
+#          xb.FG<-aux[mask.FG]
+          xb.FG<-aux
           r.xb.FG[]<-NA
           r.xb.FG[mask.FG]<-xb.FG
-          rm(aux)
+          rm(aux,r.resaux)
         } else if (flag.firsttime) {
           r.xb.FG[]<-NA
           r.xb.FG[mask.FG]<-xb.FG
@@ -1684,13 +1691,15 @@ dev.off()
         # debug: end
         flag.firsttime<-F
         # analysis on FG is done iteratively (save memory)
+        InvDt<-t(InvD)
         i<-0
         while ((i*ndim.FG.iteration)<Lgrid.eve.FG) {
           start<-i*ndim.FG.iteration+1
-          end<-(i+1)*ndim.FG.iteration
-          if (end>Lgrid.eve.FG) {
-            end<-Lgrid.eve.FG
-          }
+#          end<-(i+1)*ndim.FG.iteration
+#          if (end>Lgrid.eve.FG) {
+#            end<-Lgrid.eve.FG
+#          }
+          end<-min( (i+1)*ndim.FG.iteration, Lgrid.eve.FG)
           ndimaux.FG<-end-start+1
           print(paste("start end ndimaux.FG",start,end,ndimaux.FG))
           pos<-xindx.eve.FG[start:end]
@@ -1701,14 +1710,19 @@ dev.off()
           auxz.FG<-abs(outer(zgrid[pos],VecZ[yindx],FUN="-"))
           G.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
           G.FG<-exp(-0.5*(aux.FG/Dh.test)**2.-0.5*(auxz.FG/Dz.choice)**2.)
-          K.FG<-G.FG%*%InvD
+#          K.FG<-G.FG%*%InvD
+          K.FG<-tcrossprod(G.FG,InvDt)
           rm(G.FG)
-          xa.FG[pos]<-xb.FG[pos]+K.FG%*%(yo.superobs[yindx]-yb[yindx])
+#          xa.FG[pos]<-xb.FG[pos]+K.FG%*%(yo.superobs[yindx]-yb[yindx])
+          aux<-t(yo.superobs[yindx]-yb[yindx])
+          xa.FG[pos]<-tcrossprod(K.FG,aux)
+          xa.FG[pos]<-xb.FG[pos]+xa.FG[pos]
           xa.FG[pos][xa.FG[pos]<rr.inf]<-rr.inf
           xidi.eve.FG[pos]<-xidi.eve.FG[pos]+rowSums(K.FG)
-          rm(aux.FG,auxz.FG,K.FG)
+          rm(aux.FG,auxz.FG,K.FG,aux)
           i<-i+1
         }
+        rm(InvDt)
         # debug: start
         png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
         r.xb.FG[]<-NA
@@ -1739,16 +1753,23 @@ dev.off()
       yidi.eve[yindx]<-yidi.eve[yindx]+rowSums(W)
       yidiv.eve[yindx]<-yidiv.eve[yindx]+
                          rep(1,n.y.eve[n])+ 1./(1.-diag(W)) * (rowSums(W)-rep(1,n.y.eve[n]))
+      print("cvscore")
       i<-0
       for (b in yindx) {
         i<-i+1
 #        InvD.1<-solve(D[-i,-i])
         InvD.1<-InvD[-i,-i]-1/InvD[i,i]*outer(InvD[-i,i],InvD[i,-i])
-        W.1<-S[,-i]%*%InvD.1
-        ya.tmp[yindx]<-ybv.mat[yindx,b] + W.1 %*% (yo.superobs[yindx[-i]]-ybv.mat[yindx[-i],b])
+#        W.1<-S[,-i]%*%InvD.1
+#        ya.tmp[yindx]<-ybv.mat[yindx,b] + W.1 %*% (yo.superobs[yindx[-i]]-ybv.mat[yindx[-i],b])
+        W.1<-tcrossprod(S[,-i],t(InvD.1))
+        aux<-t(yo.superobs[yindx[-i]]-ybv.mat[yindx[-i],b])
+        ya.tmp[yindx]<-tcrossprod(W.1, aux )
+        ya.tmp[yindx]<-ybv.mat[yindx,b] + ya.tmp[yindx]
         ybv.mat[yindx,b]<-ya.tmp[yindx]
+        rm(aux)
       }
       rm(W.1,InvD.1)
+      print("cvscore end")
       # current analysis is next iteration background
       yb[yindx]<-ya[yindx]
     } # end cycle on horizontal decorrelation lenght scales
@@ -1769,7 +1790,10 @@ for (n in 1:n.eve) {
   xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
   Lgrid.eve.FG<-length(xindx.eve.FG)
   area.eve[n]<-Lgrid.eve.FG*area.1cell.FG # Area Km**2
-  yindx<-which(y.eve==eve.labels[n])
+#  yindx<-which(y.eve==eve.labels[n])
+  ya.indx<-which(y.eve==eve.labels[n])
+  n.ya.indx<-length(ya.indx)
+  yindx<-which(y.eve==eve.labels[n] & yo.ok.wet)
   if (n.y.eve[n]==1) {
     volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
     meanidi.x.eve[n]<-NA
