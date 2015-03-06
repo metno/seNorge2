@@ -1,12 +1,19 @@
-# --~- Bspat_TAMRR_v1_0.R  -~--
-# Bayesian spatial interpolation of TAMRR.
-# TAMRR = daily mean air temperature (06-06 UTC)
+# --~- Bspat_TEMP1d_v1_1.R  -~--
+# Bayesian spatial interpolation of daily mean air temperature (06-06 UTC)
 # Spatial Consistency Test (SCT) is included.
+# input: TAMRR from KDVH
 #
 # Outputs: look for "@@@@@@@@@" in the code and you'll get the ouput formats
 #
 # History:
 # 02.12.2014 - Cristian Lussana. Original code.
+# 25.02.2015 - Cristian Lussana. version 1.1.
+#  change log: 
+#  - allow for the use of observations outside Norway
+#  - revisied queries to KDVH
+#  - geographical information on seNorge2_dem_UTM33.nc
+#  - definition of TEMP1d
+#  - definition of a new directory tree
 # ==~==========================================================================
 rm(list=ls())
 # Libraries
@@ -16,28 +23,35 @@ library(colorspace)
 library(ncdf)
 # paths
 #[DEVELOPMENT]
-main.path.prog<-"/home/cristianl/projects/Bspat"
-main.path.output<-"/home/cristianl"
-main.path.geoinfo<-"/home/cristianl/geoinfo"
-# common libs and etcetera
-path2lib.com<-paste(main.path.prog,"/lib",sep="")
-path2etc.com<-paste(main.path.prog,"/etc",sep="")
-# libs and etcetera
-path2lib.loc<-paste(main.path.prog, "/Bspat_TAMRR/lib",sep="")
-path2etc.loc<-paste(main.path.prog, "/Bspat_TAMRR/etc",sep="")
+# paths
+#[DEVELOPMENT]
+main.path<-"/disk1/projects/seNorge2"
+main.path.output<-"/disk1"
 #
-path2output.main<-paste(main.path.output,"/seNorge2/TEMP_daily",sep="")
+main.path.prog<-paste(main.path,"/Bspat_TEMP1d",sep="")
+main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
+# common libs and etcetera
+path2lib.com<-paste(main.path,"/lib",sep="")
+path2etc.com<-paste(main.path,"/etc",sep="")
+#
+path2output.main<-paste(main.path.output,"/seNorge2/TEMP1d",sep="")
 path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
 path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP_daily",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1d",sep="")
 path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 # External Functions
 source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
 source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
 source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+source(paste(path2lib.com,"/getStationData.R",sep=""))
 # Read Geographical Information
-filenamedem<-paste(main.path.geoinfo,"/fenno_dem_u33.asc",sep="")
-filenamemask<-paste(main.path.geoinfo,"/maskgrid.bil",sep="")
+filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+# CRS strings
+proj4.wgs84<-"+proj=longlat +datum=WGS84"
+proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
+proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+#
+max.Km.stnINdomain<-50
 #-----------------------------------------------------------------------------
 # [] Setup OI parameters
 sig2o<-3.0
@@ -64,7 +78,7 @@ grid.type <- "utm33"
 source.nc<-"daily mean air temperature from station data (06-06 UTC)"
 var.version.xa <- "1.0"
 prod.date <- substr(Sys.time(),1,10)
-pname.xa<-"TAMRR"
+pname.xa<-"TEMP1d"
 for (p in 1:length(ncout.spec.list)) {
   if (ncout.spec.list[[p]]$pname==pname.xa) break
 }
@@ -99,13 +113,13 @@ dir.create(paste(path2output.main.stn,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
 out.file.stn<- paste(path2output.main.stn,"/",yyyymm,
-                "/seNorge_v2test_TEMP_station_",yyyymmdd,".txt",sep="")
+                "/seNorge_v2_0_TEMP1d_station_",yyyymmdd,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm,
-                   "/seNorge_v2test_TEMP_grid_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d_grid_",yyyymmdd,".nc",sep="")
 out.file.grd.bck<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2test_TEMP_grid_background_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d_grid_background_",yyyymmdd,".nc",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2test_TEMP_grid_idi_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d_grid_idi_",yyyymmdd,".nc",sep="")
 #
 print("Output files:")
 print("analysis on the grid (netcdf)")
@@ -119,11 +133,9 @@ print(out.file.stn)
 #------------------------------------------------------------------------------
 # Grid - it is defined by the DEM file
 # CRS Coordinate Reference System
-projstr<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+test<-F
+if (!test) {
 stackGeoGrid<-raster(filenamedem)
-mask<-raster(filenamemask)
-projection(stackGeoGrid)<-projstr
-projection(mask)<-projstr
 nx<-ncol(stackGeoGrid)
 ny<-nrow(stackGeoGrid)
 dx<-xres(stackGeoGrid)
@@ -140,9 +152,8 @@ Xnodesw<-xmn
 Ynodesw<-ymn
 Xnode<-Xnodesw+(0:nx-1)*dx
 Ynode<-Ynodesw+(0:ny-1)*dy
-# Extract orography and urban-weight on unmasked gridpoints only
-# orog has the same dimensions of stackGeoGrid but it is masked (NAs) outside Norway 
-orog<-mask(stackGeoGrid,mask,maskvalue=0)
+# Extract orography on unmasked gridpoints only
+orog<-stackGeoGrid
 # extract all the cell values: cells[1] contains the orog[1,1] value
 # Raster: cell numbers start at 1 in the upper left corner,
 # and increase from left to right, and then from top to bottom
@@ -160,57 +171,14 @@ rowgrid<-rc[ccgrid,1]
 colgrid<-rc[ccgrid,2]
 Lgrid<-length(xgrid)
 print(Lgrid)
-rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid,mask)
+rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
+}
 #------------------------------------------------------------------------------
 # Read Station Information 
-myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
-               "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
-               "&fy=",yyyymmdd,"&ty=",yyyymmdd,sep="")
-#print(myurl)
-o.cont<-1
-while (o.cont<=10) {
-  stataux<-NULL
-  try(stataux <-read.table(myurl, header = TRUE,  sep = ";",
-                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-                         encoding = "UTF-8", quote = "",na.string=-999))
-  if (length(stataux)<10) {
-    print("exit with error in command:")
-        print(myurl)
-        o.cont<-o.cont+1
-        Sys.sleep(5)
-#      q(status=1)
-  } else {
-    break
-  }
-}
-if (o.cont>10) {
-  print("Fatal Error in command:")
-  print(myurl)
-  print(stataux)
-  q(status=1)
-}
-# stataux column names
-# DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
-# Select stations having the geographical information needed
-
-# Find stations in Norway (Mainland).
-indx<-which( (as.numeric(stataux$STNR)<99710)  & 
-             (as.numeric(stataux$STNR)!=76900) &
-             (as.numeric(stataux$STNR)!=76933) &
-             (as.numeric(stataux$STNR)!=76930) &
-             (as.numeric(stataux$STNR)!=76928) &
-             (as.numeric(stataux$UTM_E)>=-65000) &
-             (as.numeric(stataux$UTM_N)<=8000000) &
-             !is.na(as.numeric(stataux$UTM_E)) & 
-             !is.na(as.numeric(stataux$UTM_N)) & 
-             !is.na(as.numeric(stataux$AMSL)) )
-stations<-data.frame(matrix(nrow=length(indx),ncol=4))
-names(stations)<-c("Stnr","z","x","y")
-stations$Stnr<-as.numeric(stataux$STNR[indx])
-stations$z<-stataux$AMSL[indx]
-stations$x<-stataux$UTM_E[indx]
-stations$y<-stataux$UTM_N[indx]
-LOBS<-length(stations$Stnr)
+# [] Read Station Information 
+stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
+                             max.Km=max.Km.stnINdomain)
+LOBS<-length(stations$stnr)
 print(LOBS)
 # define Vectors and Matrices
 VecX<-vector(mode="numeric",length=LOBS)
@@ -232,7 +200,7 @@ S<-matrix(ncol=LOBS,nrow=LOBS,data=0.)
 VecX<-as.numeric(as.vector(stations$x))
 VecY<-as.numeric(as.vector(stations$y))
 VecZ<-as.numeric(as.vector(stations$z))
-VecS<-as.numeric(as.vector(stations$Stnr))
+VecS<-as.numeric(as.vector(stations$stnr))
 # compute S and D=S+R matrices (R is assumed to be diagonal = sigma_obs**2*I)
 # Disth and Distz are the (symmetric) matrices where 
 #      Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
@@ -259,7 +227,7 @@ D.b[row(D.b)==col(D.b)]<-D.b[row(D.b)==col(D.b)]+eps2.b
 #print(stations[1,])
 #stations<-read.table("stations.txt",header=TRUE)
 #print(stations[1,])
-#  Stnr z      x       y fennomean fenno_min4 fenno_long fenno_lat
+#  stnr z      x       y fennomean fenno_min4 fenno_long fenno_lat
 # number of days
 #print(ndays)
 #------------------------------------------------------------------------------
@@ -270,75 +238,71 @@ cat(paste("year","month","day","stid","x","y","z","yo",
     file=out.file.stn,append=F)
 # xx is the raster structure used for map production
 xx <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
-            crs=projstr)
+            crs=proj4.utm33)
 xx[]<-NA
-#
-date<-paste(dd,".",mm,".",yyyy,sep="")
-print(paste("+ ",yyyymmdd," -~-----------------",sep=""))
-ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
-             "metno?re=14&p=TAMRR&fd=",date,"&td=",date,
-             "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
-             "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
-#print(ulric)
-o.cont<-1
-while (o.cont<=10) {
-  o<-NULL
-  try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
-          stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
- 	          encoding = "UTF-8", quote = "",na.string=-999))
-#    print(o)
-#    print(length(o))
-  indx<-which(o$TA!=-999)
-  LOBS.d<-length(indx==T)
-  if (LOBS.d<10) {
-    print("exit with error in command:")
-    print(ulric)
-    o.cont<-o.cont+1
-    Sys.sleep(5)
-#      q(status=1)
-  } else {
-    break
-  }
-}
-if (o.cont>10) {
-  print("Fatal Error in command:")
-  print(ulric)
-  q(status=1)
-}
-# o: column names
-  #  Stnr Year Month Day Time.NMT.   TA
-indx<-which(o$TA!=-999)
-LOBS.d<-length(indx==T)
-print(paste("  Total number of observations [not NA] =",LOBS.d))
-if (LOBS.d==0) next
-# OBS: "d"-day observations without NAs
-OBS<-data.frame(matrix(nrow=LOBS.d,ncol=7))
-names(OBS)<-c("Stnr","Year","Month","Day","TAM","DQC")
-OBS$Stnr<-as.numeric(o$Stnr[indx])
-OBS$Year<-o$Year[indx]
-OBS$Month<-o$Month[indx]
-OBS$Day<-o$Day[indx]
-OBS$TA<-as.numeric(o$TAM[indx])
-# DQC flag: -1 missing, 0 good obs, 1 erroneous obs
-OBS$DQC<-rep(-1,LOBS.d)
-rm(indx)
-#  write.table(file="o.txt",o)
-# Cycle over 24 hours
-indx<-which(OBS$Stnr %in% stations$Stnr)
-# obs "d"day "h"hour & having all the geo info 
-LOBSh<-length(indx)
-if (LOBSh<=0) {
-  print("Error: NO valid observations found")
-  break
-}
-print(paste("    Total number of observations [not NA] =",
-            LOBSh))
-# 
-stn.match.obs<-match(stations$Stnr,OBS$Stnr[indx])
-obs.match.stn<-match(OBS$Stnr[indx],stations$Stnr)
-yo[]<-NA
-yo[obs.match.stn]<-as.numeric(as.vector(OBS$TA[indx]))
+# get data from KDVH
+data<-getStationData(var="TAMRR", from.yyyy=yyyy, from.mm=mm, from.dd=dd,
+                     to.yyyy=yyyy, to.mm=mm, to.dd=dd,
+                     qa=NULL, statlist=stations, outside.Norway=T,
+                     verbose=T)
+yo<-as.numeric(data$value)
 yo.h.pos<-which(!is.na(yo))
+####date<-paste(dd,".",mm,".",yyyy,sep="")
+####print(paste("+ ",yyyymmdd," -~-----------------",sep=""))
+####ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
+####             "metno?re=14&p=TAMRR&fd=",date,"&td=",date,
+####             "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
+####             "&ct=text/plain&split=1&nod=-999&qa=2",sep="")
+#####print(ulric)
+####o.cont<-1
+####while (o.cont<=10) {
+####  o<-NULL
+####  try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
+####          stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
+#### 	          encoding = "UTF-8", quote = "",na.string=-999))
+##### names(o) -->  Stnr;Year;Month;Day;TAMRR
+#####    print(o)
+#####    print(length(o))
+####  value<-as.numeric(o$TAMRR)
+####  stnr<-as.numeric(o$Stnr)
+####  value[value==-999]<-NA
+####  indx<-which( !is.na(value) & (stnr %in% stations$stnr) )
+####  LOBSt<-length(indx)
+####  if (LOBSt<10) {
+####    print("exit with error in command:")
+####    print(ulric)
+####    o.cont<-o.cont+1
+####    Sys.sleep(5)
+#####      q(status=1)
+####  } else {
+####    break
+####  }
+####}
+####if (o.cont>10) {
+####  print("Fatal Error in command:")
+####  print(ulric)
+####  q(status=1)
+####}
+##### note: LOBSt always greater than 10
+####print(paste("  Total number of observations [not NA] =",LOBSt))
+##### OBS: "d"-day observations not NAs 
+####OBS<-data.frame(matrix(nrow=LOBSt,ncol=7))
+####names(OBS)<-c("stnr","year","month","day","value","DQC")
+####OBS$stnr<-stnr[indx]
+####OBS$year<-o$Year[indx]
+####OBS$month<-o$Month[indx]
+####OBS$day<-o$Day[indx]
+####OBS$value<-value[indx]
+####rm(stnr,o,indx,value)
+##### DQC flag: -1 missing, 0 good obs, 1 erroneous obs
+####OBS$DQC<-rep(-1,LOBSt)
+#####  write.table(file="o.txt",o)
+####stn.match.obs<-match(stations$stnr,OBS$stnr)
+####obs.match.stn<-match(OBS$stnr,stations$stnr)
+####yo[]<-NA
+####yo[obs.match.stn]<-as.numeric(as.vector(OBS$value))
+####yo.h.pos<-which(!is.na(yo))
+####rm(OBS)
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
 # the Lsubsample (closest) surrounding stations.
@@ -473,7 +437,7 @@ for (b in yo.h.pos) {
     J1<-J0+1
   }
 # Background 2  
-# NOTE: yb.set* is defined for all the LOBSh stations
+# NOTE: yb.set* is defined for all the LOBSt stations
 # 1.h0[m];2.h1-h0[m];3.T0[C];4.gamma[C/m];5.a[C]
 # 6. alphaAbove[C/m];7.AlphaBelow[C/m];8.BetaAbove[C/m];9BetaBelow[C/m]
   back2.flag<-T
@@ -566,8 +530,8 @@ for (b in yo.h.pos) {
         round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
         round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
 # DEBUG stop
-# G1 is LOBShOK x Lsubsample matrix to interpolate the Lsubsample values
-# on the whole LOBShOK station dataset
+# G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
+# on the whole LOBStOK station dataset
   G1.b<-S.b[,close2b]
   K.b<-G1.b%*%InvD.b
   rm(G1.b)
@@ -580,7 +544,7 @@ for (b in yo.h.pos) {
     q(status=1)
   }
   rm(K.b,W.b)
-} # end cycle LOBSh
+} # end cycle LOBSt
 LBAKh<-b.inc
 print(paste("# stations used in background elaborations=",LBAKh))
 #if (mode.flag!=0) {
@@ -600,10 +564,10 @@ print(paste("# stations used in background elaborations=",LBAKh))
 #  dev.off()
 #}
 # At this point I've this 5 outputs
-# 1. yb.set<-matrix(data=NA,ncol=btimes,nrow=LOBSh)
-# 2. ybweights.set<-matrix(data=NA,ncol=btimes,nrow=LOBSh)
-# 3. yb.param<-matrix(data=NA,ncol=12,nrow=LOBSh)
-# 4. VecS.set<-matrix(data=NA,ncol=Lsubsample,nrow=LOBSh)
+# 1. yb.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
+# 2. ybweights.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
+# 3. yb.param<-matrix(data=NA,ncol=12,nrow=LOBSt)
+# 4. VecS.set<-matrix(data=NA,ncol=Lsubsample,nrow=LOBSt)
 # 5. VecS.set.pos[b,]<-close2b
 #
 #====================================================================
@@ -628,10 +592,10 @@ isct<-0
 ydqc.flag[]<-rep(0,LOBS)
 ydqc.flag[-yo.h.pos]<-(-1)
 yo.OKh.pos<-which(!is.na(yo) & ydqc.flag!=1)
-LOBShOK<-length(yo.OKh.pos)
+LOBStOK<-length(yo.OKh.pos)
 while (TRUE) {
   print(paste(">> Total number of observations [not NA & not ERR(so far)] =",
-              LOBShOK))
+              LOBStOK))
 # Station points - Background
   if (!is.na(yoBad.id)) {
     isct<-isct+1
@@ -702,7 +666,7 @@ while (TRUE) {
           J1<-J0+1
         }
 # Background 2  
-# NOTE: yb.set* is defined for all the LOBSh stations
+# NOTE: yb.set* is defined for all the LOBSt stations
 # 1.h0[m];2.h1-h0[m];3.T0[C];4.gamma[C/m];5.a[C]
 # 6. alphaAbove[C/m];7.AlphaBelow[C/m];8.BetaAbove[C/m];9BetaBelow[C/m]
         back2.flag<-T
@@ -797,8 +761,8 @@ while (TRUE) {
               round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
               round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
 # DEBUG stop
-# G1 is LOBShOK x Lsubsample matrix to interpolate the Lsubsample values
-# on the whole LOBShOK station dataset
+# G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
+# on the whole LOBStOK station dataset
         G1.b<-S.b[,close2b]
         K.b<-G1.b%*%InvD.b
         rm(G1.b)
@@ -825,7 +789,7 @@ while (TRUE) {
 #      rm(D.b,S.b,yb.set,ybweights.set,ybweights.norm)
 #      rm(VecY.b,VecX.b,VecZ.b,yo.b,close2b,y1.b)
 # Station (CV)Analysis/(CV)IDI
-  ide<-matrix(data=0,ncol=LOBShOK,nrow=LOBShOK)
+  ide<-matrix(data=0,ncol=LOBStOK,nrow=LOBStOK)
   ide[row(ide)==col(ide)]=1
   InvD<-solve(D[yo.OKh.pos,yo.OKh.pos],ide)
   W<-S[yo.OKh.pos,yo.OKh.pos] %*% InvD
@@ -837,7 +801,7 @@ while (TRUE) {
   yav[yo.OKh.pos]<-yo[yo.OKh.pos] + 1./(1.-diag(W)) * (ya[yo.OKh.pos]-yo[yo.OKh.pos])
   yidi<-rowSums(K)
   yidiv<-yidi
-  yidiv[yo.OKh.pos]<-rep(1,LOBShOK) + 1./(1.-diag(W)) * (yidi[yo.OKh.pos]-rep(1,LOBShOK))
+  yidiv[yo.OKh.pos]<-rep(1,LOBStOK) + 1./(1.-diag(W)) * (yidi[yo.OKh.pos]-rep(1,LOBStOK))
 # DQC CHECK - Spatial Continuity Check
   ydqc[]<--9999.
   ydqc[yo.OKh.pos]<-(yo[yo.OKh.pos]-yav[yo.OKh.pos]) *
@@ -853,7 +817,7 @@ while (TRUE) {
   yoBad.pos<-aux
   ydqc.flag[yoBad.pos]<-1
   yo.OKh.pos<-which(!is.na(yo) & ydqc.flag!=1)
-  LOBShOK<-length(yo.OKh.pos)
+  LOBStOK<-length(yo.OKh.pos)
 # DQC flag "1" means erroneous observation
 ##      OBS$DQC[indx[aux]]<-1
   print(paste("SCT found GE-> id yo yb ya yav ydqc",VecS[aux],
@@ -874,9 +838,9 @@ cat(paste(yyyy,mm,dd,
           file=out.file.stn,append=T)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # if something strange take place in the Analysis/SCT cycle the pass to the next iteration
-if (LOBShOK<=0) next
+if (LOBStOK<=0) next
 # DQC flag "0" means good observations
-print(paste(">>>>Total number of observations [not NA & good] =",LOBShOK))
+print(paste(">>>>Total number of observations [not NA & good] =",LOBStOK))
 #------------------------------------------------------------------------------
 # Grid - Background
 xb<-vector(mode="numeric",length=Lgrid)
@@ -1034,9 +998,9 @@ while ((i*ndim)<Lgrid) {
   }
   ndimaux<-end-start+1
   print(paste(round(i),round(start,0),round(end,0),round(Lgrid,0)))
-  aux<-matrix(ncol=LOBShOK,nrow=ndimaux,data=0.)
-  auxz<-matrix(ncol=LOBShOK,nrow=ndimaux,data=0.)
-  G<-matrix(ncol=LOBShOK,nrow=ndimaux,data=0.)
+  aux<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
+  auxz<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
+  G<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
   aux<-(outer(ygrid[start:end],VecY[yo.OKh.pos],FUN="-")**2. +
         outer(xgrid[start:end],VecX[yo.OKh.pos],FUN="-")**2.)**0.5/1000.
 #  for (j in 1:Linfo) writeBin(as.numeric(aux[,j]),to.write,size=4)
