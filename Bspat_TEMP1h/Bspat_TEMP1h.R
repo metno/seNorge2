@@ -532,9 +532,11 @@ for (b in yo.h.pos) {
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset
   G1.b<-S.b[,close2b]
-  K.b<-G1.b%*%InvD.b
+#  K.b<-G1.b%*%InvD.b
+  K.b<-tcrossprod(G1.b,InvD.b)
   rm(G1.b)
-  W.b<-S.b[close2b,close2b]%*%InvD.b
+#  W.b<-S.b[close2b,close2b]%*%InvD.b
+  W.b<-tcrossprod(S.b[close2b,close2b],InvD.b)
   # this is idi (sort of)
   ybweights.set[,b]<-rowSums(K.b)
   if (any(is.na(ybweights.set[,b]))) {
@@ -738,9 +740,11 @@ while (TRUE) {
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset
         G1.b<-S.b[,close2b]
-        K.b<-G1.b%*%InvD.b
+#        K.b<-G1.b%*%InvD.b
+        K.b<-tcrossprod(G1.b,InvD.b)
         rm(G1.b)
-        W.b<-S.b[close2b,close2b]%*%InvD.b
+#        W.b<-S.b[close2b,close2b]%*%InvD.b
+        W.b<-tcrossprod(S.b[close2b,close2b],InvD.b)
         # this is idi (sort of)
         ybweights.set[,b]<-rowSums(K.b)
         if (any(is.na(ybweights.set[,b]))) {
@@ -757,7 +761,8 @@ while (TRUE) {
                   rowSums(ybweights.set[,yb.h.pos])
 # background on station points
   for (m in 1:LOBS) {
-    yb[m]<-ybweights.norm[m,] %*% yb.set[m,yb.h.pos]
+#    yb[m]<-ybweights.norm[m,] %*% yb.set[m,yb.h.pos]
+    yb[m]<-tcrossprod(ybweights.norm[m,],t(yb.set[m,yb.h.pos]))
   }
 # deallocate memory
 #      rm(D.b,S.b,yb.set,ybweights.set,ybweights.norm)
@@ -766,11 +771,14 @@ while (TRUE) {
   ide<-matrix(data=0,ncol=LOBStOK,nrow=LOBStOK)
   ide[row(ide)==col(ide)]=1
   InvD<-solve(D[yo.OKh.pos,yo.OKh.pos],ide)
-  W<-S[yo.OKh.pos,yo.OKh.pos] %*% InvD
+#  W<-S[yo.OKh.pos,yo.OKh.pos] %*% InvD
+  W<-tcrossprod(S[yo.OKh.pos,yo.OKh.pos],InvD)
   G1<-S[,yo.OKh.pos]
-  K<-G1 %*% InvD
+#  K<-G1 %*% InvD
+  K<-tcrossprod(G1,InvD)
   rm(G1)
-  ya<-yb + K %*% (yo[yo.OKh.pos]-yb[yo.OKh.pos])
+#  ya<-yb + K %*% (yo[yo.OKh.pos]-yb[yo.OKh.pos])
+  ya<-yb + tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
   yav<-ya
   yav[yo.OKh.pos]<-yo[yo.OKh.pos] + 1./(1.-diag(W)) * (ya[yo.OKh.pos]-yo[yo.OKh.pos])
   yidi<-rowSums(K)
@@ -850,7 +858,8 @@ for (b in yb.h.pos) {
 #      rm(Disth.b,Distz.b)
   rm(Disth.b)
 #  compute analysis/idi over grid 
-  K.b<-G.b%*%InvD.b
+#  K.b<-G.b%*%InvD.b
+  K.b<-tcrossprod(G.b,InvD.b)
   xbweights.set[,b.aux]<-0
   xbweights.set[xindx,b.aux]<-rowSums(K.b)
   xindx1<-which(xbweights.set[,b.aux]>0.05)
@@ -927,7 +936,8 @@ for (b in yb.h.pos) {
 }
 xbweights.norm<-xbweights.set/rowSums(xbweights.set)
 for (i in 1:Lgrid) {
-  xb[i]<-xbweights.norm[i,] %*% xb.set[i,]
+#  xb[i]<-xbweights.norm[i,] %*% xb.set[i,]
+  xb[i]<-tcrossprod(xbweights.norm[i,],t(xb.set[i,]))
 }
 rm(xb.set,xbweights.norm,xbweights.set,xindx,xindx1)
 #------------------------------------------------------------------------------
@@ -960,9 +970,11 @@ while ((i*ndim)<Lgrid) {
   G<-exp(-0.5*(aux/Dh)**2.-0.5*(auxz/Dz)**2.)
   rm(aux,auxz)
 #  Gt<-exp(-0.5*(aux/Dh)**2.)
-  K<-G%*%InvD
+#  K<-G%*%InvD
+  K<-tcrossprod(G,InvD)
   rm(G)
-  xa[start:end]<-xb[start:end]+K%*%(yo[yo.OKh.pos]-yb[yo.OKh.pos])
+#  xa[start:end]<-xb[start:end]+K%*%(yo[yo.OKh.pos]-yb[yo.OKh.pos])
+  xa[start:end]<-xb[start:end]+tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
   xidi[start:end]<-rowSums(K)
 #  Disth[start:end,1:Linfo] <-aux[1:ndimaux,1:Linfo]
   rm(K)
