@@ -10,6 +10,9 @@
 #  (i.e. 2014/09/01 12 -> precipitation sum 2014/09/01 11:01 2014/09/01 12:00)
 #
 # == Grid specifications ==
+# 2 Grids:
+# 1. FG -> Fine Grid, which is the high-resolution output grid masked on Norwegian mainland
+# 2. CG -> Coarse Grid, which is the low-resolution grid larger than Norway
 # High-Resolution Fine Grid 1Km grid (FG)
 #> print(orog)
 # class       : RasterLayer 
@@ -154,6 +157,18 @@
 #  - geographical information on seNorge2_dem_UTM33.nc
 #  - definition of PREC1d 
 #  - definition of a new directory tree
+#
+# DQCflag
+# NA  observation is NA
+# -1  missing DQC info
+# 0   good observation
+# 100 bad  observation: KDVH flag > 2 | observation not good in external DQC | 
+#                       observed value not plausible | station in blacklist/s  
+# 200 bad  observation: dry-station surrounded only by wet-stations (close enough)
+# 300 bad  observation: wet-stations surrounded only by dry-stations (close enough)
+# 400 bad  observation: dry observation is (1) not included in a dry area
+#                       (2) is in Norway 
+# 500 bad  observation: wet observation is (1) not included in an event (2) in Norway
 # -----------------------------------------------------------------------------
 rm(list=ls())
 # Libraries
@@ -164,38 +179,10 @@ library(rgdal)
 library(ncdf)
 require(tripack)
 require(cluster)
-# paths
-#[DEVELOPMENT]
-main.path<-"/disk1/projects/seNorge2"
-main.path.output<-"/disk1"
-#
-main.path.prog<-paste(main.path,"/Bspat_PREC1d",sep="")
-main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
-# common libs and etcetera
-path2lib.com<-paste(main.path,"/lib",sep="")
-path2etc.com<-paste(main.path,"/etc",sep="")
-#
-path2output.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
-path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
-path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
-path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
-path2output.add.eve<-paste(path2output.add,"/event_dataset",sep="")
-# External Functions
-source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
-source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
-source(paste(path2lib.com,"/getStationData.R",sep=""))
-# Read Geographical Information
-filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
-filenamedem.CG<-paste(main.path.geoinfo,"/fennodem_utm33.nc",sep="")
 # CRS strings
 proj4.wgs84<-"+proj=longlat +datum=WGS84"
 proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
 proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-#
-max.Km.stnINdomain<-300
-# Aux files
-file_CG2FG<-paste(path2etc.com,"/CG2FG.bin",sep="")
 #..............................................................................
 # Functions
 # + st.log:
@@ -233,22 +220,24 @@ fgauss <- function(sigma, n) {
   # sum of weights should add up to 1     
   m / sum(m)
 }
+# manage fatal error
+error_exit<-function(str=NULL) {
+  print("Fatal Error:")
+  if (!is.null(str)) print(str)
+  quit(status=1)
+}
 #-------------------------------------------------------------------
 # [] Setup parameters
 # eps2 meaning: believe in observations
 eps2<-0.1
 # rain/norain threshold
 rr.inf<-0.1
-# upscale 1Km orog field with a factor of "fact" (faster computations)  
-fact<-5
-#
+# Contiguous NO-Rain and Rain Area (first step) 
 Lsubsample.max<-20
 Lsubsample.DHmax<-150
-# identify adjacent nodes
+# identify adjacent nodes - Establish (local-) triangulation (Delauney)
 n.sector<-16
 sector.angle<-360/n.sector
-# 
-superobs.radius<-30 #Km
 # DQC thresholds 
 yo.dqc.plausible.min<-0 # mm/h
 yo.dqc.plausible.max<-500 # mm/h
@@ -257,8 +246,7 @@ yo.dqc.plausible.max<-500 # mm/h
 #q75.hourly<-1.0 #mm/h (normal/moderate-strong)
 q50.daily<-3 #mm/daily (weak/normal)
 q75.daily<-8 #mm/daily (normal/moderate-strong)
-# 
-n.Dh.seq<-10
+# definition of Dh sequence - horizontal de-correlation length scale
 min.Dh.seq.allowed<-10 # Km
 #Dh.seq.ref<-100 # Km
 Dh.seq.ref<-50 # Km
@@ -271,9 +259,87 @@ Dh.seq.reference<-c(5000,4000,3000,2000,1000, 900, 800, 700, 600, 500,
 #Dh.seq.reference<-c(500, 100,  40,  20,  10)
 Dz.seq.gt50<-c(5000,1000) # m
 Dz.seq.le50<-c(1000,500) # m
-#
+# analysis cycle on FG
 ndim.FG.iteration<-10000
 #ndim.FG.iteration<-5000
+# stations outside Norway
+max.Km.stnINdomain<-300
+# MAIN ========================================================================
+# [] Read command line arguments
+arguments <- commandArgs()
+print("Arguments")
+print(arguments)
+date.b.string<-arguments[3]
+date.e.string<-arguments[4]
+file_blacklist_current<-arguments[5]
+file_blacklist_never<-arguments[6]
+file_errobs<-arguments[7]
+config_file<-arguments[8]
+config_par<-arguments[9]
+if (length(arguments)!=9) 
+  ext<-error_exit(paste("Error in command line arguments: \n",
+  " R --vanilla yyyy.mm.dd yyyy.mm.dd blacklist_current blacklist_never errobs configFILE configPAR \n",
+  "             begin -----> end of the accumulation period",sep=""))
+# [] define/check paths
+if (!file.exists(config_file)) ext<-error_exit("Fatal Error: configuration file not found")
+source(config_file)
+for (p in 1:length(config_list)) {
+  if (config_list[[p]]$pname==config_par) break
+}
+if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )  
+  ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
+main.path<-config_list[[p]]$opt$main.path
+main.path.output<-config_list[[p]]$opt$main.path.output
+testmode<-config_list[[p]]$opt$testmode
+if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
+  ext<-error_exit("Fatal Error: path not found")
+# geographical information
+main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
+filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+filenamedem.CG<-paste(main.path.geoinfo,"/fennodem_utm33.nc",sep="")
+if (!file.exists(paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep=""))) 
+  ext<-error_exit(paste("File not found:",main.path.geoinfo,"/seNorge2_dem_UTM33.nc"))
+if (!file.exists(paste(main.path.geoinfo,"/fennodem_utm33.nc",sep=""))) 
+  ext<-error_exit(paste("File not found:",main.path.geoinfo,"/fennodem_utm33.nc"))
+# common libs and etcetera
+path2lib.com<-paste(main.path,"/lib",sep="")
+path2etc.com<-paste(main.path,"/etc",sep="")
+if (!file.exists(paste(path2lib.com,"/nogrid.ncout.R",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/nogrid.ncout.R"))
+if (!file.exists(paste(path2lib.com,"/ncout.spec.list.r",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/ncout.spec.list.r"))
+if (!file.exists(paste(path2lib.com,"/getStationData.R",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/getStationData.R"))
+source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
+source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+source(paste(path2lib.com,"/getStationData.R",sep=""))
+# test mode
+print(testmode)
+if (testmode) {
+  print("TESTMODE TESTMODE TESTMODE")
+  if (file.exists(paste(main.path,"/Bspat_PREC1d/testbed",sep=""))) {
+    testbed<-paste(main.path,"/Bspat_PREC1d/testbed",sep="")
+    station.info<-paste(testbed,"/station_data.csv",sep="")
+    observed.data<-paste(testbed,"/observed_data.csv",sep="")
+  } else {
+    ext<-error_exit(paste("testbed not found"))
+  }
+}
+# output directories
+dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
+dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
+path2output.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
+path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
+path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
+path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
+path2output.add.eve<-paste(path2output.add,"/event_dataset",sep="")
+if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
+if (!(file.exists(path2output.main.stn))) dir.create(path2output.main.stn,showWarnings=F) 
+if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWarnings=F) 
+if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
+if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
+if (!(file.exists(path2output.add.eve)))  dir.create(path2output.add.eve,showWarnings=F) 
 # netcdf fixed parameters
 grid.type <- "utm33"
 source.nc<-"daily precipitation from station data"
@@ -295,25 +361,6 @@ if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=pname.xa) ) {
   times.ref.xa <-ncout.spec.list[[p]]$opts$t.ref
   reference.xa <- ncout.spec.list[[p]]$opts$reference
 }
-# MAIN ========================================================================
-# [] Read command line arguments
-arguments <- commandArgs()
-arguments
-date.b.string<-arguments[3]
-date.e.string<-arguments[4]
-file_blacklist_current<-arguments[5]
-file_blacklist_never<-arguments[6]
-file_errobs<-arguments[7]
-if (length(arguments)!=7) {
-  print("Error in command line arguments:")
-  print("R --vanilla yyyy.mm.dd yyyy.mm.dd blacklist_current blacklist_never errobs")
-  print("             begin -----> end of the accumulation period")
-  quit(status=1)
-}
-# mode.flag=0 -> operational mode
-#
-# date.x.string<-"YYYY.MM.DD"
-#                 1234567890
 # [] set Time-related variables
 start.string<-paste(date.b.string,sep="")
 end.string<-paste(date.e.string,sep="")
@@ -327,8 +374,6 @@ start.day <- strptime(start.string.day,"%Y.%m.%d.%H","UTC")
 end.day <- strptime(end.string.day,"%Y.%m.%d.%H","UTC")
 dayseq<-as.POSIXlt(seq(as.POSIXlt(start.day),as.POSIXlt(end.day),by="1 day"),"UTC")
 nday<-length(dayseq)
-monthseq<-as.POSIXlt(seq(as.POSIXlt(start.day),as.POSIXlt(end.day),by="1 month"),"UTC")
-nmonth<-length(monthseq)
 yyyy.b<-timeseq$year[1]+1900
 mm.b<-timeseq$mon[1]+1
 dd.b<-timeseq$mday[1]
@@ -391,11 +436,7 @@ cat(paste("year","month","day","nday","eve.lab","nobs",
           "\n",sep=";"),
           file=out.file.eve,append=F)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#------------------------------------------------------------------------------
 # [] Grid
-# 3 Grids:
-# 1. FG -> Fine Grid, which is the high-resolution output grid masked on Norwegian mainland
-# 2. CG -> Coarse Grid, which is the low-resolution grid larger than Norway
 # CRS Coordinate Reference System
 r.orog.FG<-trim(raster(filenamedem))
 nx.FG<-ncol(r.orog.FG)
@@ -465,8 +506,12 @@ print(paste("Lgrid.CG",as.integer(Lgrid.CG)))
 # conditions:
 # 1. stations in KDVH
 # 2. stations in CG
-stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.b,
-                                 max.Km=max.Km.stnINdomain)
+if (!testmode) {
+  stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.b,
+                                   max.Km=max.Km.stnINdomain)
+} else {
+  stations.tmp<-read.csv(file=station.info)
+}
 # check if in CG
 n.tmp<-length(stations.tmp$stnr)
 aux<-extract(r.orog.CG,cbind(stations.tmp$x,stations.tmp$y),na.rm=T)
@@ -512,33 +557,6 @@ z.CG<-extract(r.orog.CG,cbind(VecX,VecY),na.rm=T)
 stn.out.CG<-vector(length=L.y.tot)
 stn.out.CG[1:L.y.tot]<-F
 stn.out.CG[which(is.na(z.CG))]<-T
-# [] Read blacklists/errobs
-if (file.exists(file_errobs)) {
-  errobs<-read.table(file=file_errobs,header=T,sep=";")
-  names(errobs)<-c("stnr","year","month","day","hour","value")
-  err.timeseq<-as.POSIXlt(strptime(paste(errobs$year,
-                          formatC(errobs$month,width=2,flag="0"),
-                          formatC(errobs$day,width=2,flag="0"),
-                          formatC(errobs$hour,width=2,flag="0"),sep=""),"%Y%m%d%H"),"UTC")
-  err.stnr<-unique(errobs$stnr)
-} else {
-  print("Warning: file not found")
-  print(file_errobs)
-}
-if (file.exists(file_blacklist_current)) {
-  blacklist_current<-read.table(file=file_blacklist_current,header=T,sep=";")
-  names(blacklist_current)<-c("stnr")
-} else {
-  print("Warning: file not found")
-  print(file_blacklist_current)
-}
-if (file.exists(file_blacklist_never)) {
-  blacklist_never<-read.table(file=file_blacklist_never,header=T,sep=";")
-  names(blacklist_never)<-c("stnr")
-} else {
-  print("Warning: file not found")
-  print(file_blacklist_never)
-}
 # [] compute Disth and Distz (symmetric) matrices: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
 #  Distz(i,j)=elevation difference between i-th station and j-th station [m]
@@ -559,80 +577,73 @@ xx.CG[]<-NA
 n.yo[]<-NA
 yo[]<-NA
 # set DQC flag to 0 for every station/observation
-ydqc.flag[]<-0
+ydqc.flag[]<-NA
 # cycle over days to get data from KDVH
-if (nday==1) {
-  data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
-                       to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
-                       qa=NULL, statlist=stations, outside.Norway=T,
-                       err.file=file_errobs, blist.perm=file_blacklist_never,
-                       blist.curr=file_blacklist_current, verbose=T,
-                       val.min.allowed=yo.dqc.plausible.min,
-                       val.max.allowed=yo.dqc.plausible.max)
+if (!testmode) {
+  if (nday==1) {
+    data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+                         to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+                         qa=NULL, statlist=stations, outside.Norway=T,
+                         err.file=file_errobs, blist.perm=file_blacklist_never,
+                         blist.curr=file_blacklist_current, verbose=T,
+                         val.min.allowed=yo.dqc.plausible.min,
+                         val.max.allowed=yo.dqc.plausible.max)
+  } else {
+    data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+                         to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+                         qa=NULL, statlist=stations, outside.Norway=T,
+                         err.file=file_errobs, blist.perm=file_blacklist_never, 
+                         blist.curr=file_blacklist_current, verbose=T,
+                         val.min.allowed=yo.dqc.plausible.min, 
+                         val.max.allowed=yo.dqc.plausible.max,fun="sum")
+  }
 } else {
-  data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
-                       to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
-                       qa=NULL, statlist=stations, outside.Norway=T,
-                       err.file=file_errobs, blist.perm=file_blacklist_never, 
-                       blist.curr=file_blacklist_current, verbose=T,
-                       val.min.allowed=yo.dqc.plausible.min, 
-                       val.max.allowed=yo.dqc.plausible.max,fun="sum")
+  data<-read.csv(file=observed.data)
 }
+# debug: start
+print("Observed data (alligned with station info):")
 print(data)
-#data.names<-c("stnr","year","month","day","hour","ntime",
-#              "value","nvalue","DQC",
-#              "KDVHflag",
-#              "plausible","err.ext",
-#              "blist.perm","blist.curr")
+# debug: end
 yo<-data$value
 y.notNA<-which(!is.na(yo))
 L.y.notNA<-length(y.notNA)
-#
-data$DQC[]<-NA
 for (i in 1:L.y.tot) {
   if (is.na(data$value[i])) next
-  data$DQC[i]<--1
-  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]>2) data$DQC[i]<-100
-  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]==0 | data$KDVHflag[i]==1 | data$KDVHflag[i]==2) data$DQC[i]<-0
+  ydqc.flag[i]<--1
+  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]>2) ydqc.flag[i]<-100
+  if (!is.na(data$KDVHflag[i])) if (data$KDVHflag[i]==0 | data$KDVHflag[i]==1 | data$KDVHflag[i]==2) ydqc.flag[i]<-0
   if (data$ntime[i]!=data$nvalue[i] |
       !data$plausible[i] |
       data$err.ext[i] |
       data$blist.perm[i] |
-      data$blist.curr[i]) data$DQC[i]<-100
+      data$blist.curr[i]) ydqc.flag[i]<-100
 }
 print(data)
 #data.names<-c("stnr","year","month","day","hour","ntime",
 # "value","nvalue","DQC","KDVHflag","plausible","err.ext","blist.perm","blist.curr")
 print(paste("number of station having at least one available observation =",L.y.notNA,"(tot=",L.y.tot,")"))
-print(paste("number of station having good observation           (so far)=",length(which(data$DQC<=0 & !is.na(yo)))))
+print(paste("number of station having good observation           (so far)=",length(which(ydqc.flag<=0 & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(!data$plausible & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation           (KDVH DQC) =",length(which(data$KDVHflag>2 & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation       (external DQC) =",length(which(data$err.ext & !is.na(yo)))))
 print(paste("  # station blacklisted for the time period considered =",length(which(data$blist.curr & !is.na(yo)))))
 print(paste("  # station blacklisted (permanently) =",length(which(data$blist.perm & !is.na(yo)))))
 print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)))))
-# debug: start
-#png(file="prov0.png",width=1200,height=1200)
-#plot(r.orog.CG)
-#points(VecX,VecY)
-#points(VecX[which(stn.out.CG & !is.na(yo))],VecY[which(stn.out.CG & !is.na(yo))],pch=19,col="green")
-#dev.off()
-# debug: end
 # define Vectors and Matrices
 xidi.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
 xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
 # loop for DQC
-yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
+yo.ok.pos<-which(ydqc.flag<=0 & !is.na(yo))
 L.yo.ok<-length(yo.ok.pos)
 while (L.yo.ok>0) {
 # vector with the positions (pointers to VecS) of presumably good observations 
 # daily observations [L.yo.ok]
-  yo.ok.pos<-which(data$DQC<=0 & !is.na(yo))
+  yo.ok.pos<-which(ydqc.flag<=0 & !is.na(yo))
   L.yo.ok<-length(yo.ok.pos)
 # vectors with the positions (pointers to VecS) of valid (i.e. not NAs & DQC-ok)
 # daily observations and "wet" or "dry" [L.yo.ok.wet,L.yo.ok.dry]
-  yo.ok.wet<-data$DQC<=0 & !is.na(yo) & yo>=rr.inf
-  yo.ok.dry<-data$DQC<=0 & !is.na(yo) & yo<rr.inf
+  yo.ok.wet<-ydqc.flag<=0 & !is.na(yo) & yo>=rr.inf
+  yo.ok.dry<-ydqc.flag<=0 & !is.na(yo) & yo<rr.inf
   yo.ok.pos.wet<-which(yo.ok.wet)
   yo.ok.pos.dry<-which(yo.ok.dry)
   L.yo.ok.wet<-length(yo.ok.pos.wet)
@@ -803,22 +814,10 @@ while (L.yo.ok>0) {
 #    if (min.dist.from.dry.stn<min.dist.allowed) {
     if (min.dist.from.dry.stn<=20) {
       flag.dry.dqc<-T
-      data$DQC[nor.1st.j.dry]<-200
+      ydqc.flag[nor.1st.j.dry]<-200
     }
   }
   if (flag.dry.dqc) next
-# debug
-#png(file="prov2.png",width=1200,height=1200)
-#plot(r.orog.FG)
-#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-#points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
-#for (i in 1:nnor.1st.vec) {
-#  if (i%%2==0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="black")
-#  if (i%%2!=0) points(VecX[nor.1st.vec[i,1:Lnor.1st.vec[i]]],VecY[nor.1st.vec[i,1:Lnor.1st.vec[i]]],pch=19,col="gray")
-#}
-#points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="red",cex=3)
-#dev.off()
-# debug: end
 # DQC DQC end
   # [] Contiguous Rain Area: First Guess
   Lsubsample.vec[]<-NA
@@ -944,23 +943,10 @@ while (L.yo.ok>0) {
 #    if (min.dist.from.wet.stn<min.dist.allowed) {
     if (min.dist.from.wet.stn<=20) {
       flag.wet.dqc<-T
-      data$DQC[eve.1st.j.wet]<-300
+      ydqc.flag[eve.1st.j.wet]<-300
     }
   }
   if (flag.wet.dqc) next
-# debug
-#png(file="prov3.png",width=1200,height=1200)
-#plot(r.orog.FG)
-#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-#points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=2)
-#for (i in 1:neve.1st.vec) {
-#  if (i%%2==0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="black")
-#  if (i%%2!=0) points(VecX[eve.1st.vec[i,1:Leve.1st.vec[i]]],VecY[eve.1st.vec[i,1:Leve.1st.vec[i]]],pch=19,col="gray")
-#}
-#points(VecX[which(data$DQC==200)],VecY[which(data$DQC==200)],pch=19,col="darkred",cex=3)
-#points(VecX[which(data$DQC==300)],VecY[which(data$DQC==300)],pch=19,col="cyan",cex=3)
-#dev.off()
-# debug: end
 # GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID GRID
 # [] Contiguous NO-Rain Area: First Guess on the grid.CG
   print("++ define nor.1st on the grid.CG")
@@ -990,14 +976,6 @@ while (L.yo.ok>0) {
                         ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
   r.CG[]<-NA
   r.CG[mask.CG]<-lab.nor.CG.1st
-# debug
-#png(file="prov3.png",width=1200,height=1200)
-#plot(r.CG)
-#points(VecX[yo.ok.pos],VecY[yo.ok.pos])
-#points(VecX[which(!is.na(y.nor.1st))],VecY[which(!is.na(y.nor.1st))],pch=19,col="blue",cex=2)
-#points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
-#dev.off()
-# debug: end
 # [] Refine identification (Identify Wet and Dry Areas within the nor first guess)
   print("++ Refine nor identification (Identify Wet and Dry Areas within the nor first guess)")
   xa.Dh.nor.1st<-vector(mode="numeric",length=Lgrid.CG)
@@ -1101,10 +1079,10 @@ while (L.yo.ok>0) {
   stn.nor.dry<-extract(r.CG.nor.dry,cbind(VecX,VecY),na.rm=T)
   yo.ok.dry.fail<-!(yo.ok.pos.dry %in% which(stn.nor.dry==1 | is.na(stn.nor.dry)))
   if (any(yo.ok.dry.fail)) {
-    data$DQC[yo.ok.pos.dry[which(yo.ok.dry.fail)]]<-400
+    ydqc.flag[yo.ok.pos.dry[which(yo.ok.dry.fail)]]<-400
     next
   }
-#  print(paste(yo,stn.nor.dry,stn.nor.dry,data$DQC,"\n"))
+#  print(paste(yo,stn.nor.dry,stn.nor.dry,ydqc.flag,"\n"))
 # [] Contiguous Rain Area: First Guess on the grid.CG
 # [] Refine eve identification (Identify Wet and Dry Areas within the eve first guess)
   print("++ Refine eve identification (Identify Wet and Dry Areas within the eve first guess)")
@@ -1214,30 +1192,9 @@ while (L.yo.ok>0) {
   stn.eve.wet<-extract(r.CG.eve.wet,cbind(VecX,VecY),na.rm=T)
   yo.ok.wet.fail<-!(yo.ok.pos.wet %in% which(stn.eve.wet==1 | is.na(stn.eve.wet)))
   if (any(yo.ok.wet.fail)) {
-    data$DQC[yo.ok.pos.wet[which(yo.ok.wet.fail)]]<-500
+    ydqc.flag[yo.ok.pos.wet[which(yo.ok.wet.fail)]]<-500
     next
   }
-#  png(file="../../seNorge2_scratch/Bspat_PREC1d/nordry.png",width=1200,height=1200)
-#  plot(r.CG.nor.dry)
-#  points(VecX,VecY)
-#  points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
-#  points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=1.5)
-#  points(VecX[which(stn.nor.dry==1)],VecY[which(stn.nor.dry==1)],pch=19,col="darkred",cex=1)
-#  points(VecX[which(stn.nor.dry==0)],VecY[which(stn.nor.dry==0)],pch=19,col="darkblue",cex=1)
-#  points(VecX[which(is.na(stn.nor.dry))],VecY[which(is.na(stn.nor.dry))],pch=19,col="gold",cex=1)
-##  points(VecX[which(is.na(stn.nor.dry) & !is.na(yo))],VecY[which(is.na(stn.nor.dry) & !is.na(yo))],pch=19,col="gold",cex=1)
-#  points(VecX[which(data$DQC==400)],VecY[which(data$DQC==400)],col="pink",pch=4,cex=2,lwd=3)
-#  dev.off()
-#  png(file="../../seNorge2_scratch/Bspat_PREC1d/evewet.png",width=1200,height=1200)
-#  plot(r.CG.eve.wet)
-#  points(VecX,VecY)
-#  points(VecX[yo.ok.pos.dry],VecY[yo.ok.pos.dry],pch=19,col="red",cex=1.5)
-#  points(VecX[yo.ok.pos.wet],VecY[yo.ok.pos.wet],pch=19,col="blue",cex=1.5)
-#  points(VecX[which(stn.eve.wet==1)],VecY[which(stn.eve.wet==1)],pch=19,col="darkblue",cex=1)
-#  points(VecX[which(stn.eve.wet==0)],VecY[which(stn.eve.wet==0)],pch=19,col="darkred",cex=1)
-#  points(VecX[which(is.na(stn.eve.wet))],VecY[which(is.na(stn.eve.wet))],pch=19,col="gold",cex=1)
-#  points(VecX[which(data$DQC==500)],VecY[which(data$DQC==500)],col="cyan",pch=4,cex=2,lwd=3)
-#  dev.off()
 # [] eve Labelling (Identify final eve on the grid)
 # lab.eve.CG -> =0 gridpoint "dry"; =-1 gridpoint "wet", waiting to labelled;
 #             n>0 gridpoint "wet" belonging to eve n (only for isolated wet station)
@@ -1246,12 +1203,9 @@ while (L.yo.ok>0) {
   aux<-which(!is.na(f.lab[,1]))
   f.lab.val<-f.lab[aux,1]
   f.lab.n<-f.lab[aux,2]
-#  print("f.lab")
-#  print(f.lab)
-#  print(f.lab.val)
-#  print(f.lab.n)
   l.CG<-extract(r.lab.eve.CG,1:ncell(r.lab.eve.CG))
   lab.eve.CG<-l.CG[mask.CG]
+  rm(f.lab,aux)
 # [] assign stations at eve
 #  remarks: 1. each eve must include at least 1 observation; 
 #   2. it is possible to have wet-observations not included in any of the eve 
@@ -1260,8 +1214,6 @@ while (L.yo.ok>0) {
   eve.labels<-as.vector(na.omit(unique(y.eve[yo.ok.pos.wet])))
   n.eve<-length(eve.labels)
   eve.nostn.pos<-which(!(f.lab.val %in% eve.labels))
-#  print("f.lab.val[eve.nostn.pos]")
-#  print(f.lab.val[eve.nostn.pos])
   if (length(eve.nostn.pos)>0) {
     r <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
@@ -1297,8 +1249,6 @@ while (L.yo.ok>0) {
     eve.labels<-as.vector(na.omit(unique(y.eve[yo.ok.pos.wet])))
     n.eve<-length(eve.labels)
   }
-#  print("unique(lab.eve.CG)")
-#  print(unique(lab.eve.CG))
   rm(l.CG)
   if (exists("r")) rm(r,x.aux,aux,dist)
 # finally, we're interested only in events occurring in Norway
@@ -1308,44 +1258,14 @@ while (L.yo.ok>0) {
   aux<-extract(r.lab.eve.FG,1:ncell(r.lab.eve.FG))
   lab.eve.FG<-as.integer(aux[mask.FG])
   rm(aux)
-#  print("unique(lab.eve.FG)")
-#  print(unique(lab.eve.FG))
   aux<-which(eve.labels %in% lab.eve.FG)
   if (length(aux)<n.eve) {
     eve.labels<-eve.labels[aux]
     n.eve<-length(eve.labels)
   }
-#  print("eve.labels")
-#  print(eve.labels)
-#  print("n.eve")
-#  print(n.eve)
   r.lab.eve.FG[]<-NA
   r.lab.eve.FG[mask.FG]<-lab.eve.FG
-#png(file="../../seNorge2_scratch/Bspat_PREC1d/eveFG.png",width=1200,height=1200)
-#  mx<-as.integer(max(eve.labels,na.rm=T))
-#  cols<-c("gray",rainbow((mx-1)))
-#  plot(r.lab.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
-#dev.off()
-#  print("paste(yo,stn.eve.wet,stn.eve.dry,data$DQC,y.eve)")
-#  print(paste(yo,stn.eve.wet,data$DQC,y.eve,"\n"))
-#  print("eve.labels")
-#  print(eve.labels)
-#  print("n.eve")
-#  print(n.eve)
-#  png(file="../../seNorge2_scratch/Bspat_PREC1d/evelab.png",width=1200,height=1200)
-#  mx<-as.integer(max(eve.labels,na.rm=T))
-#  cols<-c("gray",rainbow((mx-1)))
-#  plot(r.lab.eve.CG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
-#  points(VecX[which(stn.eve.wet==1)],VecY[which(stn.eve.wet==1)])
-#  points(VecX[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],VecY[which(stn.eve.wet==0 & stn.eve.dry==0 & !is.na(yo))],pch=19,col="red")
-#  points(VecX[which(data$DQC==500)],VecY[which(data$DQC==500)],col="black",pch=19,cex=3)
-#  points(VecX,VecY)
-#  for (i in 1:mx) {
-#    aux<-which(y.eve==i)
-#    if (length(aux>0)) points(VecX[aux],VecY[aux],col=cols[i],pch=19,cex=0.9)
-#  }
-#  points(VecX[which(is.na(y.eve))],VecY[which(is.na(y.eve))],pch=19,col="gold")
-#  dev.off()
+# ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
   print("++ events Analysis")
 # + data structures definition
@@ -1366,9 +1286,6 @@ while (L.yo.ok>0) {
   yav<-vector(mode="numeric",length=L.y.tot)
   ya.tmp<-vector(mode="numeric",length=L.y.tot)
   yav.tmp<-vector(mode="numeric",length=L.y.tot)
-# vectors used in the last iteration of the analysis procedure
-  Dh.eve.smallest<-vector(mode="numeric",length=n.eve)
-  Dz.eve.smallest<-vector(mode="numeric",length=n.eve)
 #  eps2.eve.smallest<-vector(mode="numeric",length=n.eve)
 # events descriptive vectors
   n.y.eve<-vector(mode="numeric",length=n.eve)
@@ -1425,14 +1342,13 @@ while (L.yo.ok>0) {
   ya[yo.ok.pos]<-0
   yav[]<-NA
   yav[yo.ok.pos]<-0
-  Dh.eve.smallest[]<-NA
-  Dz.eve.smallest[]<-NA
   ell.locx.eve[]<-NA
   ell.locy.eve[]<-NA
   ell.smajor.eve[]<-NA
   ell.sminor.eve[]<-NA
   ell.smadir.eve[]<-NA
 #  eps2.eve.smallest[]<-NA
+# ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS 
 # + Ellipsoid hulls
 # ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
   # debug: start
@@ -1475,6 +1391,7 @@ while (L.yo.ok>0) {
 # debug: close plot session
 #  dev.off()
   rm(xindx.eve.CG,xy,ell,eigenval,eigenvec,e)
+# ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  
 # + Analysis cycle over events 
   print("++ Analysis cycle over events")
   for (n in 1:n.eve) {
@@ -1833,13 +1750,66 @@ while (L.yo.ok>0) {
       yb[yindx]<-ya[yindx]
     } # end cycle on horizontal decorrelation lenght scales
     if (exists("K.CG")) rm(K.CG,G.CG)
-    Dh.eve.smallest[n]<-max(Dh.seq[n.Dh.seq]/2,min.Disth)
-    Dz.eve.smallest[n]<-Dz.choice
-#    eps2.eve.smallest[n]<-0.1
+    #
+    idi.norm.fac[n]<-max(xidi.eve.FG[xindx.eve.FG],yidi.eve[yindx],yidiv.eve[yindx])
+    xidi.eve.FG[xindx.eve.FG]<-xidi.eve.FG[xindx.eve.FG]/idi.norm.fac[n]
+    yidi.eve[yindx]<-yidi.eve[yindx]/idi.norm.fac[n]
+    yidiv.eve[yindx]<-yidiv.eve[yindx]/idi.norm.fac[n]
+    volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
+    meanidi.x.eve[n]<-mean(xidi.eve.FG[xindx.eve.FG])
+    meanidi.y.eve[n]<-mean(yidi.eve[yindx])
+    meanidiv.y.eve[n]<-mean(yidiv.eve[yindx])
+    meanrain.eve[n]<-mean(xa.FG[xindx.eve.FG])
+    maxrain.x.eve[n]<-max(xa.FG[xindx.eve.FG])
+    yo.aux<-yo[yindx]
+    ya.aux<-ya[yindx]
+    yav.aux<-yav[yindx]
+    yidiv.aux<-yidiv.eve[yindx]
+    maxrain.yo.eve[n]<-max(yo.aux)
+    maxrain.ya.eve[n]<-max(ya.aux)
+    maxrain.yav.eve[n]<-max(yav.aux)
+    cv.rel.eve.all[n]<-mean(yav.aux/yo.aux)
+    aux<-yav.aux-yo.aux
+    cv.bias.eve.all[n]<-mean(aux)
+    cv.rmse.eve.all[n]<-sqrt(mean(aux**2.))
+    cv.made.eve.all[n]<-1.4826*median(abs(aux))
+    q50.pos<-which(yo.aux>=q50.daily)
+    q75.pos<-which(yo.aux>=q75.daily)
+    n.q50[n]<-length(q50.pos)
+    n.q75[n]<-length(q75.pos)
+    if (n.q50[n]>0) {
+      cv.rel.eve.q50[n]<-mean(yav.aux[q50.pos]/yo.aux[q50.pos])
+      cv.bias.eve.q50[n]<-mean(aux[q50.pos])
+      cv.rmse.eve.q50[n]<-sqrt(mean(aux[q50.pos]**2.))
+      cv.made.eve.q50[n]<-1.4826*median(abs(aux[q50.pos]))
+      meanidiv.y.eve.q50[n]<-mean(yidiv.aux[q50.pos])
+    } else {
+      cv.rel.eve.q50[n]<-NA
+      cv.bias.eve.q50[n]<-NA
+      cv.rmse.eve.q50[n]<-NA
+      cv.made.eve.q50[n]<-NA
+      meanidiv.y.eve.q50[n]<-NA
+    }
+    if (n.q75[n]>0) {
+      cv.rel.eve.q75[n]<-mean(yav.aux[q75.pos]/yo.aux[q75.pos])
+      cv.bias.eve.q75[n]<-mean(aux[q75.pos])
+      cv.rmse.eve.q75[n]<-sqrt(mean(aux[q75.pos]**2.))
+      cv.made.eve.q75[n]<-1.4826*median(abs(aux[q75.pos]))
+      meanidiv.y.eve.q75[n]<-mean(yidiv.aux[q75.pos])
+    } else {
+      cv.rel.eve.q75[n]<-NA
+      cv.bias.eve.q75[n]<-NA
+      cv.rmse.eve.q75[n]<-NA
+      cv.made.eve.q75[n]<-NA
+      meanidiv.y.eve.q75[n]<-NA
+    }
   } # END CYCLE over events
   if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.eve.CG,xb.CG,xa.CG,xindx.eve.CG)
   break
 } # end of DQC loop
+
+
+
 xx[]<-NA
 xx[mask.FG]<-xa.FG
 #xx<-focal(xx,w=matrix(1/9, nr=3, nc=3),na.rm=T,NAonly=T)
@@ -1854,6 +1824,86 @@ xx[mask.FG]<-xidi.FG
 rnc <- writeRaster(xx,
                    filename=paste("../../seNorge2_scratch/Bspat_PREC1d/xidi.nc",sep=""),
                    format="CDF", overwrite=TRUE)
+q()
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+print("++ Output")
+# Station Points - Write output on file 
+cat(paste(yyyy.b,mm.b,dd.b,nday,
+          round(VecS,0),
+          round(VecX,0),
+          round(VecY,0),
+          round(VecZ,0),
+          round(y.eve,0),
+          round(yo,1),
+          round(yb,2),
+          round(ya,2),
+          round(yav,2),
+          round(100*yidi.eve,2),
+          round(100*yidiv.eve,2),
+          round(ydqc.flag,2),
+          "\n",sep=";"),file=out.file.stn,append=T)
+cat(paste(yyyy.b,mm.b,dd.b,nday,
+          eve.labels,
+          n.y.eve,
+          round(area.eve,0),
+          round(volume.eve,2),
+          round(100*meanidi.x.eve,2),
+          round(100*meanidi.y.eve,2),
+          round(100*meanidiv.y.eve,2),
+          round(meanrain.eve,2),
+          round(maxrain.x.eve,2),
+          round(maxrain.yo.eve,2),
+          round(maxrain.ya.eve,2),
+          round(maxrain.yav.eve,2),
+          round(ell.locx.eve,1),
+          round(ell.locy.eve,1),
+          round(ell.smajor.eve,1),
+          round(ell.sminor.eve,1),
+          round(ell.smadir.eve,1),
+          round(cv.rel.eve.all,4),
+          round(cv.bias.eve.all,4),
+          round(cv.rmse.eve.all,4),
+          round(cv.made.eve.all,4),
+          round(cv.rel.eve.q50,4),
+          round(cv.bias.eve.q50,4),
+          round(cv.rmse.eve.q50,4),
+          round(cv.made.eve.q50,4),
+          round(100*meanidiv.y.eve.q50,2),
+          round(n.q50,0),
+          round(cv.rel.eve.q75,4),
+          round(cv.bias.eve.q75,4),
+          round(cv.rmse.eve.q75,4),
+          round(cv.made.eve.q75,4),
+          round(100*meanidiv.y.eve.q75,2),
+          round(n.q75,0),
+          round(idi.norm.fac,5),
+          "\n",sep=";"),file=out.file.eve,append=T)
+# Figure: eve
+xx[mask.FG]<-round(100*xidi.eve.FG,1)
+rnc <- writeRaster(xx,
+                   filename=out.file.grd.idi,
+                   format="CDF", overwrite=TRUE)
+# Figure: Analysis on high-resolution grid
+xx[mask.FG]<-round(xa.FG,1)
+if (flag.write.xa) {
+  nogrid.ncout(grid=t(as.matrix(xx)),
+               x=x.FG,y=y.FG,grid.type=grid.type,
+               file.name=out.file.grd.ana,
+               var.name=var.name.xa,
+               var.longname=var.longname.xa,
+               var.unit=var.unit.xa,
+               var.mv=var.mv.xa,
+               var.version=var.version.xa,
+               times=c(paste(yyyymmdd.b,"0000",sep="")),times.unit=times.unit.xa,
+               times.ref=times.ref.xa,
+               prod.date=prod.date,
+               reference=reference.xa,
+               proj4.string="+proj=utm +zone=33 +ellps=WGS84",
+               source.string=source.nc)
+}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+quit(status=0)
 
 q()
 # Analysis on high-res grid
