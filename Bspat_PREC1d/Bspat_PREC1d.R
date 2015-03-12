@@ -552,11 +552,11 @@ VecX<-as.numeric(as.vector(stations$x))
 VecY<-as.numeric(as.vector(stations$y))
 VecZ<-as.numeric(as.vector(stations$z))
 VecS<-as.numeric(as.vector(stations$stnr))
-# identify stations without dem
-z.CG<-extract(r.orog.CG,cbind(VecX,VecY),na.rm=T)
-stn.out.CG<-vector(length=L.y.tot)
-stn.out.CG[1:L.y.tot]<-F
-stn.out.CG[which(is.na(z.CG))]<-T
+# identify stations without dem (FG)
+z.FG<-extract(r.orog.FG,cbind(VecX,VecY),na.rm=T)
+stn.out.FG<-vector(length=L.y.tot)
+stn.out.FG[1:L.y.tot]<-F
+stn.out.FG[which(is.na(z.FG))]<-T
 # [] compute Disth and Distz (symmetric) matrices: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
 #  Distz(i,j)=elevation difference between i-th station and j-th station [m]
@@ -564,15 +564,11 @@ Disth<-(outer(VecY,VecY,FUN="-")**2.+outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
 Distz<-abs(outer(VecZ,VecZ,FUN="-"))
 print("list of station ids")
 print(cbind(1:L.y.tot,VecS))
+# Stations on the Norwegian mainland
+stn.NO<-which(stations$NO & !stn.out.FG)
+n.stn.NO<-length(stn.NO)
 #------------------------------------------------------------------------------
 # Elaborations
-# xx/xx.CG raster structures usefull for map production
-xx <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG, ymn=ymn.FG, ymx=ymx.FG,
-            crs=proj4.utm33)
-xx[]<-NA
-xx.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
-               ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
-xx.CG[]<-NA
 # Get and sum daily observations from KDVH
 n.yo[]<-NA
 yo[]<-NA
@@ -656,24 +652,26 @@ while (L.yo.ok>0) {
     print("no rain over the whole domain")
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     cat(paste(yyyy.b,mm.b,dd.b,nday,
-              round(VecS[yo.ok.pos],0),
-              round(VecX[yo.ok.pos],0),
-              round(VecY[yo.ok.pos],0),
-              round(VecZ[yo.ok.pos],0),
-              rep(NA,L.yo.ok), #eve.lab
-              round(yo[yo.ok.pos],1),
-              rep(NA,L.yo.ok), #yb
-              rep(0,L.yo.ok), #ya
-              rep(NA,L.yo.ok), #yav
-              rep(NA,L.yo.ok), #yidi.eve
-              rep(NA,L.yo.ok), #yidiv.eve
-              round(ydqc.flag[yo.ok.pos],2),
+              round(VecS[stn.NO],0),
+              round(VecX[stn.NO],0),
+              round(VecY[stn.NO],0),
+              round(VecZ[stn.NO],0),
+              rep(NA,n.stn.NO), #eve.lab
+              round(yo[stn.NO],1),
+              rep(NA,n.stn.NO), #yb
+              rep(0,n.stn.NO), #ya
+              rep(NA,n.stn.NO), #yav
+              rep(NA,n.stn.NO), #yidi.eve
+              rep(NA,n.stn.NO), #yidiv.eve
+              round(ydqc.flag[stn.NO],2),
               "\n",sep=";"),file=out.file.stn,append=T)
     # Figures
+    r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                  ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
-    xx[mask.FG]<-round(xa.FG,1)
-    nogrid.ncout(grid=t(as.matrix(xx)),
+    r.aux.FG[mask.FG]<-round(xa.FG,1)
+    nogrid.ncout(grid=t(as.matrix(r.aux.FG)),
                  x=x.FG,y=y.FG,grid.type=grid.type,
                  file.name=out.file.grd.ana,
                  var.name=var.name.xa,
@@ -687,7 +685,7 @@ while (L.yo.ok>0) {
                  reference=reference.xa,
                  proj4.string="+proj=utm +zone=33 +ellps=WGS84",
                  source.string=source.nc)
-    quit()
+    quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   } # end case of no-rain over the whole domain
   # [] Contiguous NO-Rain Area: First Guess
@@ -998,8 +996,8 @@ while (L.yo.ok>0) {
     VecZ.nor.1st<-VecZ[nor.1st.vec[nor.1st,1:Lnor.1st]]
     VecS.nor.1st<-VecS[nor.1st.vec[nor.1st,1:Lnor.1st]]
     yo.nor.1st<-yo[nor.1st.vec[nor.1st,1:Lnor.1st]]
-    yoindx.nor.1st.wet<-which(yo.nor.1st>=rr.inf)
-    yoindx.nor.1st.dry<-which(yo.nor.1st<rr.inf)
+    yoindx.nor.1st.wet<-which(yo.nor.1st>=rr.inf & !is.na(yo.nor.1st))
+    yoindx.nor.1st.dry<-which(yo.nor.1st<rr.inf & !is.na(yo.nor.1st))
     yoindx.wet<-nor.1st.vec[nor.1st,yoindx.nor.1st.wet]
     yoindx.dry<-nor.1st.vec[nor.1st,yoindx.nor.1st.dry]
     n.nor.1st.wet<-length(yoindx.nor.1st.wet)
@@ -1110,8 +1108,8 @@ while (L.yo.ok>0) {
     VecZ.eve.1st<-VecZ[eve.1st.vec[eve.1st,1:Leve.1st]]
     VecS.eve.1st<-VecS[eve.1st.vec[eve.1st,1:Leve.1st]]
     yo.eve.1st<-yo[eve.1st.vec[eve.1st,1:Leve.1st]]
-    yoindx.eve.1st.wet<-which(yo.eve.1st>=rr.inf)
-    yoindx.eve.1st.dry<-which(yo.eve.1st<rr.inf)
+    yoindx.eve.1st.wet<-which(yo.eve.1st>=rr.inf & !is.na(yo.eve.1st))
+    yoindx.eve.1st.dry<-which(yo.eve.1st<rr.inf & !is.na(yo.eve.1st))
     yoindx.wet<-eve.1st.vec[eve.1st,yoindx.eve.1st.wet]
     yoindx.dry<-eve.1st.vec[eve.1st,yoindx.eve.1st.dry]
     n.eve.1st.wet<-length(yoindx.eve.1st.wet)
@@ -1260,7 +1258,9 @@ while (L.yo.ok>0) {
   rm(aux)
   aux<-which(eve.labels %in% lab.eve.FG)
   if (length(aux)<n.eve) {
-    eve.labels<-eve.labels[aux]
+    tmp<-eve.labels
+    eve.labels<-NA
+    eve.labels<-tmp[aux]
     n.eve<-length(eve.labels)
   }
   r.lab.eve.FG[]<-NA
@@ -1347,7 +1347,6 @@ while (L.yo.ok>0) {
   ell.smajor.eve[]<-NA
   ell.sminor.eve[]<-NA
   ell.smadir.eve[]<-NA
-#  eps2.eve.smallest[]<-NA
 # ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS  ELLIPSOID HULLS 
 # + Ellipsoid hulls
 # ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
@@ -1440,18 +1439,43 @@ while (L.yo.ok>0) {
 #   ---------------------------------------------------------------------------
 #   + event observed by a single (isolated) station
     if (n.y.eve[n]==1) {
-      xa.FG[xindx.eve.FG]<-yo[yindx]
-      xa.CG[xindx.eve.CG]<-yo[yindx]
+      # Improve the identification of event area (from CG to FG) and smooth the borders
+      # note: xidi=-1; yidi/v=-1; yb=NA; yav=0
+      r.xb.CG[]<-NA
+      r.xb.CG[mask.CG[xindx.eve.CG]]<-yo[yindx]
+      r.xb.CG<-trim(r.xb.CG)
+      r.aux.FG[]<-NA
+      r.aux.FG[mask.FG[xindx.eve.FG]]<-rep(1,length=Lgrid.eve.FG)
+      r.aux.FG<-trim(r.aux.FG)
+      r.xb.FG<-resample(r.xb.CG,r.aux.FG,method="bilinear")
+      r.xb.FG<-extend(r.xb.FG,r.orog.FG)
+      xb.FG<-extract(r.xb.FG,mask.FG)
+      xb.FG[is.na(xb.FG)]<-0
+      r.xb.FG[mask.FG]<-xb.FG
+      r.xb.FG<-focal(r.xb.FG,w=fg,na.rm=T)
+      xb.FG<-extract(r.xb.FG,mask.FG)
+      aux<-which(xb.FG>=rr.inf & !is.na(xb.FG))
+      lab.eve.FG[aux]<-eve.labels[n]
+      xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
+      Lgrid.eve.FG<-length(xindx.eve.FG)
+      area.eve[n]<-Lgrid.eve.FG*area.1cell.FG # Area Km**2
+      rm(r.aux.FG)
+      xa.FG[xindx.eve.FG]<-xb.FG[xindx.eve.FG]
       ya[yindx]<-yo[yindx]
       xb.FG[xindx.eve.FG]<-NA
-      xidi.FG[xindx.eve.FG]<--1
-      xb.CG[xindx.eve.CG]<-NA
-      xidi.eve.CG[xindx.eve.CG]<--1
+      xidi.FG[xindx.eve.FG]<-(-1)
       yb[yindx]<-NA
-      yav[yindx]<-NA
-      yidi.eve[yindx]<-NA
-      yidiv.eve[yindx]<-NA
-      
+      yav[yindx]<-0
+      yidi.eve[yindx]<-(-1)
+      yidiv.eve[yindx]<-(-1)
+      ya[ya.indx]<-extract(r.xb.FG,cbind(VecX[ya.indx],VecY[ya.indx]),na.rm=T)
+      aux<-which(ya[ya.indx]<rr.inf & !is.na(ya[ya.indx]) )
+      ya[ya.indx][aux]<-rr.inf
+      yb[ya.indx]<-NA
+      yav[ya.indx]<-0
+      yidi.eve[ya.indx]<-(-1)
+      yidiv.eve[ya.indx]<-(-1)
+      # event properties 
       volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
       meanidi.x.eve[n]<-NA
       meanidi.y.eve[n]<-NA
@@ -1485,16 +1509,20 @@ while (L.yo.ok>0) {
 #   + Larger-scale Background = mode(distribution of observations)
     histog<-hist(yo[yindx],breaks=seq(0,round((max(yo[yindx])+1),0)),plot=F)
     mode<-which.max(histog$counts)-0.5
+    if (mode<rr.inf) mode<-rr.inf
 #    xb.CG[xindx.eve.CG]<-mode
     xb.CG[]<-0
     xb.CG[xindx.eve.CG]<-mode
     r.xb.CG[mask.CG]<-xb.CG
     r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
     xb.CG<-extract(r.xb.CGf,mask.CG)
-#    xb.FG[xindx.eve.FG]<-mode
+    aux<-which(is.na(xb.CG[xindx.eve.CG]))
+    if (length(aux>0)) xb.CG[xindx.eve.CG][aux]<-rr.inf
+    aux<-which(xb.CG[xindx.eve.CG]<rr.inf)
+    if (length(aux>0)) xb.CG[xindx.eve.CG][aux]<-rr.inf
     yb[yindx]<-mode
     ybv.mat[yindx,yindx]<-mode
-    if (n.ya.eve[n]>0) yb[ya.indx]<-mode 
+    if (n.ya.eve[n]>0) yb[ya.indx]<-mode
 #   + define Dh.seq: sequence of horizontal decorrelation length scales
 #                    (coarser to finer spatial scales)
 #   general case:
@@ -1552,8 +1580,9 @@ while (L.yo.ok>0) {
         rm(aux)
         yav.tmp[yindx]<-yo.n.tmp[yindx] +
                            1./(1.-diag(W.test)) * (ya.tmp[yindx]-yo.n.tmp[yindx])
-        ya.tmp[yindx][ya.tmp[yindx]<rr.inf]<-rr.inf
-        yav.tmp[yindx][yav.tmp[yindx]<rr.inf]<-rr.inf
+        aux<-which(ya.tmp[yindx]<rr.inf & !is.na(ya.tmp[yindx]))
+        ya.tmp[yindx][aux]<-rr.inf
+        yav.tmp[yindx][aux]<-rr.inf
         # cost function
         J.tmp<-(1/n.y.eve[n]*sum((st.log(yav.tmp[yindx])-st.log(yo.n.tmp[yindx]))**2))**0.5
         # J.tmp<-(1/n.y.eve[n]*sum((yav.tmp[yindx]-yo.n.tmp[yindx])**2))**0.5
@@ -1576,7 +1605,7 @@ while (L.yo.ok>0) {
       print(paste("Dh=",Dh.test,"Km ==> Dz=",Dz.choice,"m"))
       rm(D.test.part,D.test,S.test,InvD.test,W.test)
       t.d<-t(yo.n[yindx]-yb[yindx])
-      if ( !(any(abs(t.d)>0.001)) ) next
+      if ( !(any(abs(t.d)>0.001)) & n.iter!=n.Dh.seq) next
 #     + CrossValidated-analysis 
       i<-0
       for (b in yindx) {
@@ -1602,7 +1631,8 @@ while (L.yo.ok>0) {
         yidiv.eve[ya.indx]<-yidi.eve[ya.indx]
         ya[ya.indx]<-tcrossprod(K,t.d)
         ya[ya.indx]<-ya[ya.indx] + yb[ya.indx]
-        ya[ya.indx][ya[ya.indx]<rr.inf]<-rr.inf
+        aux<-which(ya[ya.indx]<rr.inf & !is.na(ya[ya.indx]))
+        ya[ya.indx][aux]<-rr.inf
         yav[ya.indx]<-ya[ya.indx]
         rm(K,G.ya)
       }
@@ -1616,7 +1646,8 @@ while (L.yo.ok>0) {
         # update analysis
         xa.CG[xindx.eve.CG]<-tcrossprod(K.CG,t.d)
         xa.CG[xindx.eve.CG]<-xa.CG[xindx.eve.CG]+xb.CG[xindx.eve.CG]
-        xa.CG[xindx.eve.CG][xa.CG[xindx.eve.CG]<rr.inf]<-rr.inf
+        aux<-which(xa.CG[xindx.eve.CG]<rr.inf & !is.na(xa.CG[xindx.eve.CG]))
+        xa.CG[xindx.eve.CG][aux]<-rr.inf
         # update IDI (which is cumulative)
         xidi.eve.CG[xindx.eve.CG]<-xidi.eve.CG[xindx.eve.CG]+rowSums(K.CG)
         rm(K.CG)
@@ -1627,25 +1658,15 @@ while (L.yo.ok>0) {
         r.xb.CG[mask.CG]<-xb.CG
         r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
         xb.CG<-extract(r.xb.CGf,mask.CG)
-        # debug: start
-#        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
-#        plot(r.xb.CGf)
-#        dev.off()
-#        rnc <- writeRaster(r.xb.CGf,
-#                           filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
-#                           format="CDF", overwrite=TRUE)
-#        xx.CG[]<-NA
-#        xx.CG[mask.CG]<-xa.CG
-#        rnc <- writeRaster(xx.CG,
-#                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
-#                   format="CDF", overwrite=TRUE)
-        # debug: end 
+        aux<-which(is.na(xb.CG[xindx.eve.CG]))
+        if (length(aux>0)) xb.CG[xindx.eve.CG][aux]<-rr.inf
+        aux<-which(xb.CG[xindx.eve.CG]<rr.inf)
+        if (length(aux>0)) xb.CG[xindx.eve.CG][aux]<-rr.inf
         rm(r.xb.CGf)
       } else { 
 #     + Analysis on FG
         # get background from CG, if it is needed, otherwise the background is the "mode"
         # note: if Dh.test==Dh.seq[1] no CG background is present
-#        if (Dh.test!=Dh.seq[1] & flag.firsttime) {
         if (flag.firsttime) {
           flag.firsttime<-F
           r.xidi.CG[]<-NA
@@ -1657,9 +1678,6 @@ while (L.yo.ok>0) {
           r.aux.FG[]<-NA
           r.aux.FG[mask.FG[xindx.eve.FG]]<-rep(1,length=Lgrid.eve.FG)
           r.aux.FG<-trim(r.aux.FG)
-#          r.xb.CGf<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
-#          r.xb.FG<-resample(r.xb.CGf,r.orog.FG,method="bilinear")
-#          r.xidi.FG<-resample(r.aux.CG,r.orog.FG,method="bilinear")
           r.xidi.FG<-resample(r.xidi.CG,r.aux.FG,method="bilinear")
           r.xidi.FG<-extend(r.xidi.FG,r.orog.FG)
           xidi.eve.FG<-extract(r.xidi.FG,mask.FG)
@@ -1670,30 +1688,19 @@ while (L.yo.ok>0) {
           # refine event area
           xb.FG[is.na(xb.FG)]<-0
           r.xb.FG[mask.FG]<-xb.FG
-#          r.xb.FG<-focal(r.xb.FG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
           r.xb.FG<-focal(r.xb.FG,w=fg,na.rm=T)
           xb.FG<-extract(r.xb.FG,mask.FG)
-          lab.eve.FG[xb.FG>=rr.inf]<-eve.labels[n]
+          aux<-which(is.na(xb.FG[xindx.eve.FG]))
+          if (length(aux>0)) xb.FG[xindx.eve.FG][aux]<-rr.inf
+          aux<-which(xb.FG[xindx.eve.FG]<rr.inf)
+          if (length(aux>0)) xb.FG[xindx.eve.FG][aux]<-rr.inf
+          aux<-which(xb.FG>=rr.inf & !is.na(xb.FG))
+          lab.eve.FG[aux]<-eve.labels[n]
           xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
           Lgrid.eve.FG<-length(xindx.eve.FG)
           area.eve[n]<-Lgrid.eve.FG*area.1cell.FG # Area Km**2
           rm(r.aux.FG)
-#        } else if (flag.firsttime) {
-#          r.xb.FG[]<-NA
-#          r.xb.FG[mask.FG[xindx.eve.FG]]<-xb.FG[xindx.eve.FG]
-#          r.xb.FG<-focal(r.xb.FG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
-#          xb.FG<-extract(r.xb.FG,mask.FG)
         }
-        # debug: start
-#        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
-#        r.xb.FG[]<-NA
-#        r.xb.FG[mask.FG]<-xb.FG
-#        plot(r.xb.FG)
-#        dev.off()
-#        rnc <- writeRaster(r.xb.FG,
-#                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxbFG_",n,"_",Dh.test,".nc",sep=""),
-#                   format="CDF", overwrite=TRUE)
-        # debug: end
         # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<Lgrid.eve.FG) {
@@ -1709,39 +1716,16 @@ while (L.yo.ok>0) {
           auxz.FG<-abs(outer(zgrid[pos],VecZ[yindx],FUN="-"))
           G.FG<-matrix(ncol=n.y.eve[n],nrow=ndimaux.FG,data=0.)
           G.FG<-exp(-0.5*(aux.FG/Dh.test)**2.-0.5*(auxz.FG/Dz.choice)**2.)
-#          K.FG<-G.FG%*%InvD
           K.FG<-tcrossprod(G.FG,InvD)
           rm(G.FG)
-#          xa.FG[pos]<-xb.FG[pos]+K.FG%*%(yo.n[yindx]-yb[yindx])
           xa.FG[pos]<-tcrossprod(K.FG,t.d)
-          xa.FG[pos]<-xb.FG[pos]+xa.FG[pos]
+          xa.FG[pos]<-xa.FG[pos]+xb.FG[pos]
           xidi.FG[pos]<-xidi.FG[pos]+rowSums(K.FG)
           rm(aux.FG,auxz.FG,K.FG)
           i<-i+1
         }
-        xa.FG[xindx.eve.FG][xa.FG[xindx.eve.FG]<rr.inf]<-rr.inf
-        # debug: start
-#        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
-#        r.xb.FG[]<-NA
-#        r.xb.FG[mask.FG]<-xa.FG
-#        plot(r.xb.FG)
-#        dev.off()
-#        png(file=paste("../../seNorge2_scratch/Bspat_PREC1d/rxdiFG_",n,"_",Dh.test,".png",sep=""),height=1200,width=1200)
-#        r.xb.FG[]<-NA
-#        r.xb.FG[mask.FG]<-xidi.FG
-#        plot(r.xb.FG)
-#        dev.off()
-#        r.xb.FG[]<-NA
-#        r.xb.FG[mask.FG]<-xa.FG
-#        rnc <- writeRaster(r.xb.FG,
-#                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxaFG_",n,"_",Dh.test,".nc",sep=""),
-#                   format="CDF", overwrite=TRUE)
-#        r.xb.FG[]<-NA
-#        r.xb.FG[mask.FG]<-xidi.FG
-#        rnc <- writeRaster(r.xb.FG,
-#                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/rxidiFG_",n,"_",Dh.test,".nc",sep=""),
-#                   format="CDF", overwrite=TRUE)
-        # debug: end
+        aux<-which(xa.FG[xindx.eve.FG]<rr.inf & !is.na(xa.FG[xindx.eve.FG]))
+        if (length(aux)>0) xa.FG[xindx.eve.FG][aux]<-rr.inf
         # current analysis is next iteration background
         xb.FG[]<-NA
         xb.FG[xindx.eve.FG]<-xa.FG[xindx.eve.FG]
@@ -1751,12 +1735,12 @@ while (L.yo.ok>0) {
     } # end cycle on horizontal decorrelation lenght scales
     if (exists("K.CG")) rm(K.CG,G.CG)
     #
-    idi.norm.fac[n]<-max(xidi.eve.FG[xindx.eve.FG],yidi.eve[yindx],yidiv.eve[yindx])
-    xidi.eve.FG[xindx.eve.FG]<-xidi.eve.FG[xindx.eve.FG]/idi.norm.fac[n]
+    idi.norm.fac[n]<-max(xidi.FG[xindx.eve.FG],yidi.eve[yindx],yidiv.eve[yindx])
+    xidi.FG[xindx.eve.FG]<-xidi.FG[xindx.eve.FG]/idi.norm.fac[n]
     yidi.eve[yindx]<-yidi.eve[yindx]/idi.norm.fac[n]
     yidiv.eve[yindx]<-yidiv.eve[yindx]/idi.norm.fac[n]
     volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
-    meanidi.x.eve[n]<-mean(xidi.eve.FG[xindx.eve.FG])
+    meanidi.x.eve[n]<-mean(xidi.FG[xindx.eve.FG])
     meanidi.y.eve[n]<-mean(yidi.eve[yindx])
     meanidiv.y.eve[n]<-mean(yidiv.eve[yindx])
     meanrain.eve[n]<-mean(xa.FG[xindx.eve.FG])
@@ -1804,89 +1788,88 @@ while (L.yo.ok>0) {
       meanidiv.y.eve.q75[n]<-NA
     }
   } # END CYCLE over events
-  if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.eve.CG,xb.CG,xa.CG,xindx.eve.CG)
+  if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.eve.CG,xa.CG,xindx.eve.CG,r.aux.CG,xb.CG)
+  if (exists("r.xb.FG")) rm(r.xidi.FG,r.xb.FG,r.aux.FG)
   break
 } # end of DQC loop
-
-
-
-xx[]<-NA
-xx[mask.FG]<-xa.FG
-#xx<-focal(xx,w=matrix(1/9, nr=3, nc=3),na.rm=T,NAonly=T)
-#xx<-focal(xx,w=matrix(1/9, nr=3, nc=3),na.rm=T,NAonly=T)
-#xa.FG<-extract(xx,mask.FG)
-xa.FG[is.na(xa.FG)]<-0
-xx[mask.FG]<-xa.FG
-rnc <- writeRaster(xx,
-                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/xa.nc",sep=""),
-                   format="CDF", overwrite=TRUE)
-xx[mask.FG]<-xidi.FG
-rnc <- writeRaster(xx,
-                   filename=paste("../../seNorge2_scratch/Bspat_PREC1d/xidi.nc",sep=""),
-                   format="CDF", overwrite=TRUE)
-q()
+#
+xa.FG[is.na(xa.FG)]<-0.
+#
+r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                  ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+r.aux.FG[]<-NA
+r.aux.FG[mask.FG]<-xa.FG
+#r.aux.FG<-trim(r.aux.FG)
+ya.tmp<-extract(r.aux.FG,cbind(VecX,VecY))
+y.eve[is.na(ya)]<-NA
+ya[is.na(ya)]<-round(ya.tmp[is.na(ya)],1)
+yb[is.na(y.eve)]<-NA
+yav[is.na(y.eve)]<-NA
+yidi.eve[is.na(y.eve)]<-NA
+yidiv.eve[is.na(y.eve)]<-NA
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 print("++ Output")
 # Station Points - Write output on file 
 cat(paste(yyyy.b,mm.b,dd.b,nday,
-          round(VecS,0),
-          round(VecX,0),
-          round(VecY,0),
-          round(VecZ,0),
-          round(y.eve,0),
-          round(yo,1),
-          round(yb,2),
-          round(ya,2),
-          round(yav,2),
-          round(100*yidi.eve,2),
-          round(100*yidiv.eve,2),
-          round(ydqc.flag,2),
+          formatC(VecS[stn.NO],format="f",digits=0),
+          formatC(VecX[stn.NO],format="f",digits=0),
+          formatC(VecY[stn.NO],format="f",digits=0),
+          formatC(VecZ[stn.NO],format="f",digits=0),
+          formatC(y.eve[stn.NO],format="f",digits=0),
+          formatC(yo[stn.NO],format="f",digits=1),
+          formatC(yb[stn.NO],format="f",digits=2),
+          formatC(ya[stn.NO],format="f",digits=2),
+          formatC(yav[stn.NO],format="f",digits=2),
+          formatC(100*yidi.eve[stn.NO],format="f",digits=2),
+          formatC(100*yidiv.eve[stn.NO],format="f",digits=2),
+          formatC(ydqc.flag[stn.NO],format="f",digits=2),
           "\n",sep=";"),file=out.file.stn,append=T)
 cat(paste(yyyy.b,mm.b,dd.b,nday,
           eve.labels,
           n.y.eve,
-          round(area.eve,0),
-          round(volume.eve,2),
-          round(100*meanidi.x.eve,2),
-          round(100*meanidi.y.eve,2),
-          round(100*meanidiv.y.eve,2),
-          round(meanrain.eve,2),
-          round(maxrain.x.eve,2),
-          round(maxrain.yo.eve,2),
-          round(maxrain.ya.eve,2),
-          round(maxrain.yav.eve,2),
-          round(ell.locx.eve,1),
-          round(ell.locy.eve,1),
-          round(ell.smajor.eve,1),
-          round(ell.sminor.eve,1),
-          round(ell.smadir.eve,1),
-          round(cv.rel.eve.all,4),
-          round(cv.bias.eve.all,4),
-          round(cv.rmse.eve.all,4),
-          round(cv.made.eve.all,4),
-          round(cv.rel.eve.q50,4),
-          round(cv.bias.eve.q50,4),
-          round(cv.rmse.eve.q50,4),
-          round(cv.made.eve.q50,4),
-          round(100*meanidiv.y.eve.q50,2),
-          round(n.q50,0),
-          round(cv.rel.eve.q75,4),
-          round(cv.bias.eve.q75,4),
-          round(cv.rmse.eve.q75,4),
-          round(cv.made.eve.q75,4),
-          round(100*meanidiv.y.eve.q75,2),
-          round(n.q75,0),
-          round(idi.norm.fac,5),
+          formatC(area.eve,format="f",digits=0),
+          formatC(volume.eve,format="f",digits=2),
+          formatC(100*meanidi.x.eve,format="f",digits=2),
+          formatC(100*meanidi.y.eve,format="f",digits=2),
+          formatC(100*meanidiv.y.eve,format="f",digits=2),
+          formatC(meanrain.eve,format="f",digits=2),
+          formatC(maxrain.x.eve,format="f",digits=2),
+          formatC(maxrain.yo.eve,format="f",digits=2),
+          formatC(maxrain.ya.eve,format="f",digits=2),
+          formatC(maxrain.yav.eve,format="f",digits=2),
+          formatC(ell.locx.eve,format="f",digits=1),
+          formatC(ell.locy.eve,format="f",digits=1),
+          formatC(ell.smajor.eve,format="f",digits=1),
+          formatC(ell.sminor.eve,format="f",digits=1),
+          formatC(ell.smadir.eve,format="f",digits=1),
+          formatC(cv.rel.eve.all,format="f",digits=4),
+          formatC(cv.bias.eve.all,format="f",digits=4),
+          formatC(cv.rmse.eve.all,format="f",digits=4),
+          formatC(cv.made.eve.all,format="f",digits=4),
+          formatC(cv.rel.eve.q50,format="f",digits=4),
+          formatC(cv.bias.eve.q50,format="f",digits=4),
+          formatC(cv.rmse.eve.q50,format="f",digits=4),
+          formatC(cv.made.eve.q50,format="f",digits=4),
+          formatC(100*meanidiv.y.eve.q50,format="f",digits=2),
+          formatC(n.q50,format="f",digits=0),
+          formatC(cv.rel.eve.q75,format="f",digits=4),
+          formatC(cv.bias.eve.q75,format="f",digits=4),
+          formatC(cv.rmse.eve.q75,format="f",digits=4),
+          formatC(cv.made.eve.q75,format="f",digits=4),
+          formatC(100*meanidiv.y.eve.q75,format="f",digits=2),
+          formatC(n.q75,format="f",digits=0),
+          formatC(idi.norm.fac,format="f",digits=5),
           "\n",sep=";"),file=out.file.eve,append=T)
 # Figure: eve
-xx[mask.FG]<-round(100*xidi.eve.FG,1)
-rnc <- writeRaster(xx,
+r.aux.FG[]<-NA
+r.aux.FG[mask.FG]<-round(100*xidi.FG,1)
+rnc <- writeRaster(r.aux.FG,
                    filename=out.file.grd.idi,
                    format="CDF", overwrite=TRUE)
 # Figure: Analysis on high-resolution grid
-xx[mask.FG]<-round(xa.FG,1)
+r.aux.FG[mask.FG]<-round(xa.FG,1)
 if (flag.write.xa) {
-  nogrid.ncout(grid=t(as.matrix(xx)),
+  nogrid.ncout(grid=t(as.matrix(r.aux.FG)),
                x=x.FG,y=y.FG,grid.type=grid.type,
                file.name=out.file.grd.ana,
                var.name=var.name.xa,
@@ -1902,232 +1885,5 @@ if (flag.write.xa) {
                source.string=source.nc)
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#
-quit(status=0)
-
-q()
-# Analysis on high-res grid
-print("++ Analysis on the high-resolution grid")
-# Fine Grid Analysis: cycle over events
-for (n in 1:n.eve) {
-  xindx.eve.FG<-which(lab.eve.FG==eve.labels[n])
-  Lgrid.eve.FG<-length(xindx.eve.FG)
-  area.eve[n]<-Lgrid.eve.FG*area.1cell.FG # Area Km**2
-#  yindx<-which(y.eve==eve.labels[n])
-  ya.indx<-which(y.eve==eve.labels[n])
-  n.ya.indx<-length(ya.indx)
-  yindx<-which(y.eve==eve.labels[n] & yo.ok.wet)
-  if (n.y.eve[n]==1) {
-    volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
-    meanidi.x.eve[n]<-NA
-    meanidi.y.eve[n]<-NA
-    meanidiv.y.eve[n]<-NA
-    meanidiv.y.eve.q50[n]<-NA
-    meanidiv.y.eve.q75[n]<-NA
-    meanrain.eve[n]<-mean(xa.FG[xindx.eve.FG])
-    maxrain.x.eve[n]<-max(xa.FG[xindx.eve.FG])
-    maxrain.yo.eve[n]<-max(yo[yindx])
-    maxrain.ya.eve[n]<-max(ya[yindx])
-    maxrain.yav.eve[n]<-NA
-    cv.rel.eve.all[n]<-NA
-    cv.bias.eve.all[n]<-NA
-    cv.rmse.eve.all[n]<-NA
-    cv.made.eve.all[n]<-NA
-    cv.rel.eve.q50[n]<-NA
-    cv.bias.eve.q50[n]<-NA
-    cv.rmse.eve.q50[n]<-NA
-    cv.made.eve.q50[n]<-NA
-    cv.rel.eve.q75[n]<-NA
-    cv.bias.eve.q75[n]<-NA
-    cv.rmse.eve.q75[n]<-NA
-    cv.made.eve.q75[n]<-NA
-    idi.norm.fac[n]<-NA
-    n.q50[n]<-NA
-    n.q75[n]<-NA
-    next
-  }
-  if (Dh.eve.smallest[n]>Dh.seq.ref) {
-    xindx.eve.CG<-which(lab.eve.CG==eve.labels[n])
-    for (i in xindx.eve.CG) {
-      aux.CG2FG<-CG2FG[i,which(!is.na(CG2FG[i,]))]
-      xb.FG[aux.CG2FG]<-xb.CG[i]
-      xidi.eve.FG[aux.CG2FG]<-xidi.eve.CG[i]
-      rm(aux.CG2FG)
-    }
-  }
-  D<-exp(-0.5*(Disth[yindx,yindx]/Dh.eve.smallest[n])**2.
-         -0.5*(Distz[yindx,yindx]/Dz.eve.smallest[n])**2.)
-  S<-D
-  D[row(D)==col(D)]<-D[row(D)==col(D)]+eps2
-  InvD<-solve(D)
-  W<-S%*%InvD
-  ya[yindx]<-yb[yindx]+W%*%(yo[yindx]-yb[yindx])
-  ya[yindx][ya[yindx]<rr.inf]<-rr.inf
-  i<-0
-  for (b in yindx) {
-    i<-i+1
-#    InvD.1<-solve(D[-i,-i])
-    InvD.1<-InvD[-i,-i]-1/InvD[i,i]*outer(InvD[-i,i],InvD[i,-i])
-    W.1<-S[,-i]%*%InvD.1
-    ya.tmp[yindx]<-ybv.mat[yindx,b] + W.1 %*% (yo[yindx[-i]]-ybv.mat[yindx[-i],b])
-    yav[yindx[i]]<-ya.tmp[yindx[i]]
-    if (yav[yindx[i]]<rr.inf) yav[yindx[i]]<-rr.inf
-  }
-  yidi.eve[yindx]<-yidi.eve[yindx]+rowSums(W)
-  yidiv.eve[yindx]<-yidiv.eve[yindx]+
-                     rep(1,n.y.eve[n])+ 1./(1.-diag(W)) * (rowSums(W)-rep(1,n.y.eve[n]))
-  rm(W,S,D)
-  i<-0
-  while ((i*ndim.FG.iteration)<Lgrid.eve.FG) {
-    start<-i*ndim.FG.iteration+1
-    end<-(i+1)*ndim.FG.iteration
-    if (end>Lgrid.eve.FG) {
-      end<-Lgrid.eve.FG
-    }
-    ndimaux<-end-start+1
-    aux<-matrix(ncol=n.y.eve[n],nrow=ndimaux,data=0.)
-    auxz<-matrix(ncol=n.y.eve[n],nrow=ndimaux,data=0.)
-    aux<-(outer(ygrid[xindx.eve.FG[start:end]],VecY[yindx],FUN="-")**2. +
-          outer(xgrid[xindx.eve.FG[start:end]],VecX[yindx],FUN="-")**2.)**0.5/1000.
-    auxz<-abs(outer(zgrid[xindx.eve.FG[start:end]],VecZ[yindx],FUN="-"))
-    G<-matrix(ncol=n.y.eve[n],nrow=ndimaux,data=0.)
-    G<-exp(-0.5*(aux/Dh.eve.smallest[n])**2.-0.5*(auxz/Dz.eve.smallest[n])**2.)
-    K<-G%*%InvD
-    xa.FG[xindx.eve.FG[start:end]]<-xb.FG[xindx.eve.FG[start:end]]+K%*%(yo[yindx]-yb[yindx])
-    xa.FG[xindx.eve.FG[start:end]][xa.FG[xindx.eve.FG[start:end]]<rr.inf]<-rr.inf
-    xidi.eve.FG[xindx.eve.FG[start:end]]<-xidi.eve.FG[xindx.eve.FG[start:end]]+rowSums(K)
-    rm(aux,auxz,G,K)
-    i<-i+1
-  }
-  idi.norm.fac[n]<-max(xidi.eve.FG[xindx.eve.FG],yidi.eve[yindx],yidiv.eve[yindx])
-  xidi.eve.FG[xindx.eve.FG]<-xidi.eve.FG[xindx.eve.FG]/idi.norm.fac[n]
-  yidi.eve[yindx]<-yidi.eve[yindx]/idi.norm.fac[n]
-  yidiv.eve[yindx]<-yidiv.eve[yindx]/idi.norm.fac[n]
-  volume.eve[n]<-sum(xa.FG[xindx.eve.FG])
-  meanidi.x.eve[n]<-mean(xidi.eve.FG[xindx.eve.FG])
-  meanidi.y.eve[n]<-mean(yidi.eve[yindx])
-  meanidiv.y.eve[n]<-mean(yidiv.eve[yindx])
-  meanrain.eve[n]<-mean(xa.FG[xindx.eve.FG])
-  maxrain.x.eve[n]<-max(xa.FG[xindx.eve.FG])
-  yo.aux<-yo[yindx]
-  ya.aux<-ya[yindx]
-  yav.aux<-yav[yindx]
-  yidiv.aux<-yidiv.eve[yindx]
-  maxrain.yo.eve[n]<-max(yo.aux)
-  maxrain.ya.eve[n]<-max(ya.aux)
-  maxrain.yav.eve[n]<-max(yav.aux)
-  cv.rel.eve.all[n]<-mean(yav.aux/yo.aux)
-  aux<-yav.aux-yo.aux
-  cv.bias.eve.all[n]<-mean(aux)
-  cv.rmse.eve.all[n]<-sqrt(mean(aux**2.))
-  cv.made.eve.all[n]<-1.4826*median(abs(aux))
-  q50.pos<-which(yo.aux>=q50.daily)
-  q75.pos<-which(yo.aux>=q75.daily)
-  n.q50[n]<-length(q50.pos)
-  n.q75[n]<-length(q75.pos)
-  if (n.q50[n]>0) {
-    cv.rel.eve.q50[n]<-mean(yav.aux[q50.pos]/yo.aux[q50.pos])
-    cv.bias.eve.q50[n]<-mean(aux[q50.pos])
-    cv.rmse.eve.q50[n]<-sqrt(mean(aux[q50.pos]**2.))
-    cv.made.eve.q50[n]<-1.4826*median(abs(aux[q50.pos]))
-    meanidiv.y.eve.q50[n]<-mean(yidiv.aux[q50.pos])
-  } else {
-    cv.rel.eve.q50[n]<-NA
-    cv.bias.eve.q50[n]<-NA
-    cv.rmse.eve.q50[n]<-NA
-    cv.made.eve.q50[n]<-NA
-    meanidiv.y.eve.q50[n]<-NA
-  }
-  if (n.q75[n]>0) {
-    cv.rel.eve.q75[n]<-mean(yav.aux[q75.pos]/yo.aux[q75.pos])
-    cv.bias.eve.q75[n]<-mean(aux[q75.pos])
-    cv.rmse.eve.q75[n]<-sqrt(mean(aux[q75.pos]**2.))
-    cv.made.eve.q75[n]<-1.4826*median(abs(aux[q75.pos]))
-    meanidiv.y.eve.q75[n]<-mean(yidiv.aux[q75.pos])
-  } else {
-    cv.rel.eve.q75[n]<-NA
-    cv.bias.eve.q75[n]<-NA
-    cv.rmse.eve.q75[n]<-NA
-    cv.made.eve.q75[n]<-NA
-    meanidiv.y.eve.q75[n]<-NA
-  }
-} # Fine Grid Analysis: cycle over events
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-print("++ Output")
-# Station Points - Write output on file 
-cat(paste(yyyy.b,mm.b,dd.b,nday,
-          round(VecS[yo.ok.pos],0),
-          round(VecX[yo.ok.pos],0),
-          round(VecY[yo.ok.pos],0),
-          round(VecZ[yo.ok.pos],0),
-          round(y.eve[yo.ok.pos],0),
-          round(yo[yo.ok.pos],1),
-          round(yb[yo.ok.pos],2),
-          round(ya[yo.ok.pos],2),
-          round(yav[yo.ok.pos],2),
-          round(100*yidi.eve[yo.ok.pos],2),
-          round(100*yidiv.eve[yo.ok.pos],2),
-          round(ydqc.flag[yo.ok.pos],2),
-          "\n",sep=";"),file=out.file.stn,append=T)
-cat(paste(yyyy.b,mm.b,dd.b,nday,
-          eve.labels,
-          n.y.eve,
-          round(area.eve,0),
-          round(volume.eve,2),
-          round(100*meanidi.x.eve,2),
-          round(100*meanidi.y.eve,2),
-          round(100*meanidiv.y.eve,2),
-          round(meanrain.eve,2),
-          round(maxrain.x.eve,2),
-          round(maxrain.yo.eve,2),
-          round(maxrain.ya.eve,2),
-          round(maxrain.yav.eve,2),
-          round(ell.locx.eve,1),
-          round(ell.locy.eve,1),
-          round(ell.smajor.eve,1),
-          round(ell.sminor.eve,1),
-          round(ell.smadir.eve,1),
-          round(cv.rel.eve.all,4),
-          round(cv.bias.eve.all,4),
-          round(cv.rmse.eve.all,4),
-          round(cv.made.eve.all,4),
-          round(cv.rel.eve.q50,4),
-          round(cv.bias.eve.q50,4),
-          round(cv.rmse.eve.q50,4),
-          round(cv.made.eve.q50,4),
-          round(100*meanidiv.y.eve.q50,2),
-          round(n.q50,0),
-          round(cv.rel.eve.q75,4),
-          round(cv.bias.eve.q75,4),
-          round(cv.rmse.eve.q75,4),
-          round(cv.made.eve.q75,4),
-          round(100*meanidiv.y.eve.q75,2),
-          round(n.q75,0),
-          round(idi.norm.fac,5),
-          "\n",sep=";"),file=out.file.eve,append=T)
-# Figure: eve
-xx[mask.FG]<-round(100*xidi.eve.FG,1)
-rnc <- writeRaster(xx,
-                   filename=out.file.grd.idi,
-                   format="CDF", overwrite=TRUE)
-# Figure: Analysis on high-resolution grid
-xx[mask.FG]<-round(xa.FG,1)
-if (flag.write.xa) {
-  nogrid.ncout(grid=t(as.matrix(xx)),
-               x=x.FG,y=y.FG,grid.type=grid.type,
-               file.name=out.file.grd.ana,
-               var.name=var.name.xa,
-               var.longname=var.longname.xa,
-               var.unit=var.unit.xa,
-               var.mv=var.mv.xa,
-               var.version=var.version.xa,
-               times=c(paste(yyyymmdd.b,"0000",sep="")),times.unit=times.unit.xa,
-               times.ref=times.ref.xa,
-               prod.date=prod.date,
-               reference=reference.xa,
-               proj4.string="+proj=utm +zone=33 +ellps=WGS84",
-               source.string=source.nc)
-}
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#
+# Success: exit!
 quit(status=0)
