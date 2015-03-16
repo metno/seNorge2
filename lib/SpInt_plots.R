@@ -33,6 +33,7 @@ pointspat<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,brk=N
     }
     legend(x=pos,legend=legtxt,cex=legcex,fill=col1)
     if (length(mtxt1)>0) mtext(mtxt1,side=3,cex=1.6)
+    if (!is.null(xvar.orog)) contour(xvar.orog,levels=c(0,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
     dev.off()
     return()
   }
@@ -56,7 +57,7 @@ pointspat<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,brk=N
       if (b==length(col1)) legtxt[b]<-paste(">=",brk[b-1],sep="")
       if (b>1 & b<length(col1)) legtxt[b]<-paste(brk[b-1]," ",brk[b],sep="")
     }
-    if (!is.null(xvar.orog)) contour(xvar.orog,levels=c(0,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
+    if (!is.null(xvar.orog)) contour(xvar.orog,levels=c(0,100,250,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
     legend(x=pos,legend=legtxt,cex=legcex,fill=col1)
     if (length(mtxt1)>0) mtext(mtxt1,side=3,cex=1.6)
     dev.off()
@@ -111,6 +112,7 @@ pointspat<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,brk=N
 #
   legend(x=pos,legend=legtxt,cex=legcex,fill=col1)
   if (length(mtxt1)>0) mtext(mtxt1,side=3,cex=1.6)
+  if (!is.null(xvar.orog)) contour(xvar.orog,levels=c(0,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
   dev.off()
   return()
 }
@@ -135,7 +137,6 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
   xvar1<-xvar
   xvar1[xvar==0]<-NA
   image(xvar1,breaks=brk,add=T,col=col)
-  contour(xvar.orog,levels=c(0,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
 #  contour(xvar,levels=c(0,-10,-20),drawlabels=F,col=c("red","darkgreen","darkblue"),lwd=2,add=T)
   if (length(colext)==2) {
     mx<-cellStats(xvar,max)
@@ -165,14 +166,14 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
     points(x[cond],y[cond],cex=(cx[b]+0.1),col=colpoints)
   }
 # erroneous 
-  points(x[ydqc==1],y[ydqc==1],col="black",pch=4,lwd=3)
+  points(x[ydqc>0],y[ydqc>0],col="black",pch=4,lwd=3)
 # missing
   if (length(yvar1)>0) {
     for (b in 1:length(col1)) {
       cond<-NULL
-      if (b==1) cond<-which(yvar1<brk[b] & ydqc==-1)
-      if (b==length(col1)) cond<-which(yvar1>=brk[b-1] & ydqc==-1)
-      if (b>1 & b<length(col1)) cond<-which( (yvar1>=brk[b-1]) & (yvar1<brk[b]) & ydqc==-1)
+      if (b==1) cond<-which(yvar1<brk[b] & is.na(ydqc))
+      if (b==length(col1)) cond<-which(yvar1>=brk[b-1] & is.na(ydqc))
+      if (b>1 & b<length(col1)) cond<-which( (yvar1>=brk[b-1]) & (yvar1<brk[b]) & is.na(ydqc))
       points(x[cond],y[cond],pch=19,cex=0.5,col=col1[b])
       points(x[cond],y[cond],cex=0.6,col=colpoints)
     }
@@ -184,6 +185,7 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
 #
   legend(x=pos,legend=legtxt,cex=legcex,fill=c(col1[1],col1[n.col1:2]))
   if (length(mtxt1)>0) mtext(mtxt1,side=3,cex=1.6)
+  contour(xvar.orog,levels=c(0,100,250,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
   dev.off()
   return()
 }

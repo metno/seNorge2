@@ -8,15 +8,15 @@ library(ncdf)
 source(paste("/disk1/projects/seNorge2/lib/SpInt_plots.R",sep=""))
 #
 # Graphic parameter
-#xlim.sw<--75000
-#xlim.ne<-1120000
-#ylim.sw<-6450000
-#ylim.ne<-8000000
-# South Norway only
 xlim.sw<--75000
-xlim.ne<-500000
+xlim.ne<-1120000
 ylim.sw<-6450000
-ylim.ne<-7150000
+ylim.ne<-8000000
+# South Norway only
+#xlim.sw<--75000
+#xlim.ne<-500000
+#ylim.sw<-6450000
+#ylim.ne<-7150000
 #-----------------------------------------------------------------------------
 # [] Colors
 tcol<-c("mediumorchid","plum","paleturquoise3","paleturquoise","palegreen",
@@ -49,14 +49,39 @@ fileborders<-paste("/disk1/projects/seNorge2/geoinfo/TM_WORLD_BORDERS_UTM33/TM_W
 orog<-raster(filenamedem)
 borders<-readOGR(fileborders,"TM_WORLD_BORDERS_UTM33-0.2")
 #
-x.data<-raster(file.nc)
+# open/read/close netcdf file
+nc <- open.ncdf(file.nc)
+data <- get.var.ncdf( nc )
+aux<-att.get.ncdf( nc, "UTM_Zone_33","proj4" )
+projstr<-aux$value
+dx<-nc$dim$X$vals[2]-nc$dim$X$vals[1]
+ex.xmin<-min(nc$dim$X$vals)-dx/2
+ex.xmax<-max(nc$dim$X$vals)+dx/2
+dy<-nc$dim$Y$vals[2]-nc$dim$Y$vals[1]
+ex.ymin<-min(nc$dim$Y$vals)-dy/2
+ex.ymax<-max(nc$dim$Y$vals)+dy/2
+nx<-nc$dim$X$len
+ny<-nc$dim$Y$len
+close.ncdf(nc)
+# Define raster variable "xx"
+r <-raster(ncol=nx, nrow=ny,
+            xmn=ex.xmin, xmx=ex.xmax, ymn=ex.ymin, ymx=ex.ymax,
+            crs=projstr)
+r[]<-NA
+# put data on raster variable (t=transpose)
+r[]<-t(data)
 #
-#y.data<-read.table(file=file.txt,sep=";",header=T)
+y.data<-read.table(file=file.txt,sep=";",header=T,stringsAsFactors=F)
+y.data$dqcflag<-as.integer(y.data$dqcflag)
+print(y.data$dqcflag)
+#year;month;day;nday;stid;x;y;z;eve.lab;yo;yb;ya;yav;yidi;yidiv;dqcflag;
 #
-ee<-rainspatplot(x=NA,#VecX[yo.ok.pos],
-                 y=NA,#VecY[yo.ok.pos],
-                 yvar=NA,#yo[yo.ok.pos],
-                 xvar=x.data,
+ee<-rainspatplot(x=y.data$x,#VecX[yo.ok.pos],
+                 y=y.data$y,#VecY[yo.ok.pos],
+                 yvar=y.data$yo,#yo[yo.ok.pos],
+                 ydqc=y.data$dqcflag,
+#                 xvar=x.data,
+                 xvar=r,
                  xvar.orog=orog,
                  brk=bcol.daily,
                  col=tcol,
