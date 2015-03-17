@@ -2,68 +2,39 @@
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
-#  $>R --vanilla yyyy.mm.dd yyyy.mm.dd 
-#                   begin ---> end accumulation period 
-#
+#  + $>R --vanilla yyyy.mm.dd yyyy.mm.dd file_blacklist_current 
+#  |   file_blacklist_never file_errobs config_file config_par
+#  + time stamps mark begin/end of the accumulation period 
+#  + file_blacklist_current: station blacklist
+#  + file_blacklist_never: station blacklist
+#  + file_errobs: erroneous observations (external DQC)
+#  + config_file: configuration file
+#  + config_par: configuration parameter, within the config file
 # == Time specification ==
 # Timezone is UTC: hour [0,23]. timestamp = end of accumulation period.
 #  (i.e. 2014/09/01 12 -> precipitation sum 2014/09/01 11:01 2014/09/01 12:00)
-#
 # == Grid specifications ==
 # 2 Grids:
-# 1. FG -> Fine Grid, which is the high-resolution output grid masked on Norwegian mainland
-# 2. CG -> Coarse Grid, which is the low-resolution grid larger than Norway
-# High-Resolution Fine Grid 1Km grid (FG)
-#> print(orog)
-# class       : RasterLayer 
-# dimensions  : 1550, 1195, 1852250  (nrow, ncol, ncell)
-# resolution  : 1000, 1000  (x, y)
-# extent      : -75000, 1120000, 6450000, 8e+06  (xmin, xmax, ymin, ymax)
-# coord. ref. : +proj=utm +zone=33 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0 
-# data source : in memory
-# names       : fenno_dem_u33 
-# values      : 0, 2250  (min, max)
-# 
-# Coarse Grid (CG)
-#
-#> print(cbind(xy.CG[1:3,1],xy.CG[1:3,2]))
-#       [,1]    [,2]
-#[1,] -72500 7997500 coordinates of grid.CG[1,1] -> gridpoint is the center of the cell
-#[2,] -67500 7997500 coordinates of grid.CG[1,2]
-#[3,] -62500 7997500 coordinates of grid.CG[1,3]
-#
-#
-#> print(cbind(xy.CG[1:3,1],xy.CG[1:3,2],rc.CG[1:3,1],rc.CG[1:3,2]))
-#       [,1]    [,2] [,3] [,4]
-#[1,] -72500 7997500    1    1
-#[2,] -67500 7997500    1    2
-#[3,] -62500 7997500    1    3
-#
-# row(y)  col(x)->      1       2    ... nx
-# 1                   (1,1)   (1,2)  ... (1,nx)
-# 2                   (2,1)   (2,2)  ... (2,nx)            
-# ..
-# ny                  (ny,1)  (ny,2)  ... (ny,nx)
-#
-# upper-left corner (xmin,ymax) -> upper-left corner of grid-point (1,1)
-#> print(cbind(xy[1:3,1],xy[1:3,2]))
-#        [,1]    [,2]
-# [1,] -74500 7999500
-# [2,] -73500 7999500
-# [3,] -72500 7999500
-#
-# 
+# 1. FG -> Fine Grid, which is the high-resolution (1Km) output grid masked 
+#          on Norwegian mainland
+# 2. CG -> Coarse Grid, which is the low-resolution (7Km) grid larger than the 
+#          Norwegian mainland
 # == OUTPUT:  netCDF files + text files ==
-# NB loof for @@@@ in the code and you'll get the output
+# @@@@ in the code marks output sessions
+# directory tree:
+# +analysis/prediction at gridpoints (FG)
+# | seNorge2->PREC1d->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_grid_"yyyymmdd.b"_"yyyymmdd.e".txt
+# +analysis/prediction at station locations
+# | seNorge2->PREC1d->station_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_station_"yyyymmdd.b"_"yyyymmdd.e".txt
+# +IDI Integral Data Influence
+# | seNorge2_addInfo->PREC1d->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_grid_normIDI_"yyyymmdd.b"_"yyyymmdd.e".txt
+# +additional informations on events
+# | seNorge2_addInfo->PREC1d->event_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_event_"yyyymmdd.b"_"yyyymmdd.e".txt
 #
-# name: seNorge_v2test_PREC_grid_yyyymmdd.b_yyyymmdd.e.nc
-#       [var=out.file.grd.ana] -> analysis field
-#        
-# name: seNorge_v2test_PREC_grid_normIDI_yyyymmdd.b_yyyymmdd.e.nc
-#       [var=out.file.grd.idi] -> normalized IDI field
-#
-# name: seNorge_v2test_PREC_station_yyyymmdd.b_yyyymmdd.e.txt
-#       [var=out.file.stn]
 # ASCII file with data in columns separated by ";". Header:
 # year;month;day;hour;nhour;stid;x;y;z;...
 #  1     2    3    4    5     6  7 8 9
