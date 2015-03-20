@@ -1,5 +1,6 @@
-# get station metadata from KDVH. Only stations having defined UTM_E, UTM_N and AMSL.
+# get station metadata from KDVH
 getStationMetadata<-function(from.year,to.year,max.Km)
+# interaction with KDVH using ULRIC
 # from/to format => yyyy 
 {
   require(raster)
@@ -16,9 +17,10 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   o.cont<-1
   while (o.cont<=10) {
     stataux<-NULL
-    try(stataux <-read.table(myurl, header = TRUE,  sep = ";",
-                           stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-                           encoding = "UTF-8", quote = "",na.string=-999))
+#    try(stataux <-read.table(myurl, header = TRUE,  sep = ";",
+    try(stataux <-read.csv(myurl, header = TRUE,  sep = ";",
+                             stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
+                             encoding = "UTF-8", quote = "",na.string=-999))
 # stataux column names
 # DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
     if (length(stataux)<10) {
@@ -41,7 +43,7 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   lat_dec<-suppressWarnings(as.numeric(stataux$LAT_DEC))
   lon_dec<-suppressWarnings(as.numeric(stataux$LON_DEC))
   z<-suppressWarnings(as.numeric(stataux$AMSL))
-  indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) )
+  indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) & lon_dec>0 & lon_dec<85 )
 # second step: the location must be in Norway or on the border (lee than max.Km)
 #  intermediate step: transformation in Km-coordinates ETRS_LAEA, which has a transformation 
 #    less problematic than UTM33

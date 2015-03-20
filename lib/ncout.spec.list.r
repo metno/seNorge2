@@ -27,6 +27,49 @@ ncout.spec.list <- alist(
 #                       reference = paste("",sep=""))
                        reference = "")
         ),
+
+    list( pname="IDI",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "D",
+                       var.name = "IDI",
+                       var.longname = "Integral Data Influence",
+                       var.unit = "adimensional",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
+
+    list( pname="IDIms",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "D",
+                       var.name = "IDIms",
+                       var.longname = "Integral Data Influence (multiscale modeling)",
+                       var.unit = "adimensional",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
+    
+
+    list( pname="PREC1d",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "D",
+                       var.name = "precipitation_amount",
+                       var.longname = "daily precipitation sum",
+                       var.unit = "millimeter",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
     
     list( pname="RR_1",  
           opts =  alist(

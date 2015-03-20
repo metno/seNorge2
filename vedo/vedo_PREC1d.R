@@ -92,5 +92,6 @@ ee<-rainspatplot(x=y.data$x,#VecX[yo.ok.pos],
                  cx=rep(1.8,(length(tcol)+2)),
                  bnd=borders,
                  xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
+warnings()
 #
 quit()

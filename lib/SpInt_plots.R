@@ -129,6 +129,7 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
   col1<-c(colext[1],col,colext[2])
   if (length(ydqc)==0) ydqc<-rep(0,length=length(yvar))
   if (length(colpoints)==0) colpoints<-"black"
+  y.miss<-which(ydqc==-1)
   png(file=namefileout,width=1200,height=1200)
   plot(x[ydqc==0],y[ydqc==0],main=mtxt,xlab="",ylab="",xlim=xl,ylim=yl,cex.main=1.6)
   plot(bnd,add=T)
@@ -168,14 +169,14 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
 # erroneous 
   points(x[ydqc>0],y[ydqc>0],col="black",pch=4,lwd=3)
 # missing
-  if (length(yvar1)>0) {
+  if (length(y.miss)>0) {
     for (b in 1:length(col1)) {
       cond<-NULL
-      if (b==1) cond<-which(yvar1<brk[b] & is.na(ydqc))
-      if (b==length(col1)) cond<-which(yvar1>=brk[b-1] & is.na(ydqc))
-      if (b>1 & b<length(col1)) cond<-which( (yvar1>=brk[b-1]) & (yvar1<brk[b]) & is.na(ydqc))
-      points(x[cond],y[cond],pch=19,cex=0.5,col=col1[b])
-      points(x[cond],y[cond],cex=0.6,col=colpoints)
+      if (b==1) cond<-which(yvar[ydqc==-1]<brk[b])
+      if (b==length(col1)) cond<-which(yvar[ydqc==-1]>=brk[b-1])
+      if (b>1 & b<length(col1)) cond<-which( (yvar[ydqc==-1]>=brk[b-1]) & (yvar[ydqc==-1]<brk[b]))
+      if (length(cond)>0) points(x[ydqc==-1][cond],y[ydqc==-1][cond],pch=19,cex=cx[b],col=col1[b])
+      if (length(cond)>0) points(x[ydqc==-1][cond],y[ydqc==-1][cond],cex=(cx[b]+0.1),col=colpoints)
     }
   }
 #

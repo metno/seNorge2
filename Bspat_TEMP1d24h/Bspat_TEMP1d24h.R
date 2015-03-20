@@ -1,7 +1,8 @@
-# --~- Bspat_TEMP1d.R  -~--
+# --~- Bspat_TEMP1d24h.R  -~--
 # Bayesian spatial interpolation of daily mean air temperature (06-06 UTC)
 # Spatial Consistency Test (SCT) is included.
-# input: TAMRR from KDVH
+# Observation: TAMRR from KDVH
+# Background: Spatial Interpolation of TA
 #
 # Outputs: look for "@@@@@@@@@" in the code and you'll get the ouput formats
 #
@@ -12,7 +13,7 @@
 #  - allow for the use of observations outside Norway
 #  - revisied queries to KDVH
 #  - geographical information on seNorge2_dem_UTM33.nc
-#  - definition of TEMP1d
+#  - definition of TEMP1d24h
 #  - definition of a new directory tree
 # ==~==========================================================================
 rm(list=ls())
@@ -104,8 +105,8 @@ source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
 print(testmode)
 if (testmode) {
   print("TESTMODE TESTMODE TESTMODE")
-  if (file.exists(paste(main.path,"/Bspat_TEMP1d/testbed",sep=""))) {
-    testbed<-paste(main.path,"/Bspat_TEMP1d/testbed",sep="")
+  if (file.exists(paste(main.path,"/Bspat_TEMP1d24h/testbed",sep=""))) {
+    testbed<-paste(main.path,"/Bspat_TEMP1d24h/testbed",sep="")
     station.info<-paste(testbed,"/station_data.csv",sep="")
     observed.data<-paste(testbed,"/observed_data.csv",sep="")
   } else {
@@ -158,13 +159,26 @@ dd<-substr(date.string,9,10)
 date.dot<-paste(dd,".",mm,".",yyyy,sep="")
 yyyymm<-paste(yyyy,mm,sep="")
 yyyymmdd<-paste(yyyymm,dd,sep="")
+end.string<-paste(substr(date.string,1,10),".06",sep="")
+end<-strptime(end.string,"%Y.%m.%d.%H","UTC")
+timeseq<-as.POSIXlt(seq(as.POSIXlt(end),length=24,by="-1 hour"),"UTC")
+yyyy.v<-timeseq$year+1900
+mm.v<-timeseq$mon+1
+dd.v<-timeseq$mday
+hh.v<-timeseq$hour
+yyyymm.v<-paste(yyyy.v,formatC(mm.v,width=2,flag="0"),sep="")
+yyyymmddhh.v<-paste(yyyy.v,
+                  formatC(mm.v,width=2,flag="0"),
+                  formatC(dd.v,width=2,flag="0"),
+                  formatC(hh.v,width=2,flag="0"),sep="")
+n.timeseq<-length(yyyymmddhh.v)
 # output directories
 dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
 dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
-path2output.main<-paste(main.path.output,"/seNorge2/TEMP1d",sep="")
+path2output.main<-paste(main.path.output,"/seNorge2/TEMP1d24h",sep="")
 path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
 path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1d",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1d24h",sep="")
 path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
 if (!(file.exists(path2output.main.stn))) dir.create(path2output.main.stn,showWarnings=F) 
@@ -177,13 +191,13 @@ dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
 #
 out.file.stn<- paste(path2output.main.stn,"/",yyyymm,
-                "/seNorge_v2_0_TEMP1d_station_",yyyymmdd,".txt",sep="")
+                "/seNorge_v2_0_TEMP1d24h_station_",yyyymmdd,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d24h_grid_",yyyymmdd,".nc",sep="")
 out.file.grd.bck<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_background_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d24h_grid_background_",yyyymmdd,".nc",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm,
-                   "/seNorge_v2_0_TEMP1d_grid_idi_",yyyymmdd,".nc",sep="")
+                   "/seNorge_v2_0_TEMP1d24h_grid_idi_",yyyymmdd,".nc",sep="")
 #
 print("Output files:")
 print("analysis on the grid (netcdf)")
@@ -194,19 +208,42 @@ print("idi on the grid (netcdf)")
 print(out.file.grd.idi)
 print("station outputs (text)")
 print(out.file.stn)
+# input directories
+path2input.main<-paste(main.path.output,"/seNorge2/TEMP1h",sep="")
+path2input.main.stn<-paste(path2input.main,"/station_dataset",sep="")
+path2input.main.grd<-paste(path2input.main,"/gridded_dataset",sep="")
+if (!(file.exists(path2input.main))| 
+    !(file.exists(path2input.main))| 
+    !(file.exists(path2input.main))) {
+  ext<-error_exit(paste("input path not found"))
+}
+# Setup input files
+in.files.stn<-vector(length=n.timeseq)
+in.files.grd.ana<-vector(length=n.timeseq)
+for (i in 1:n.timeseq) {
+  in.files.stn[i]<- paste(path2input.main.stn,"/",yyyymm.v[i],
+                       "/seNorge_v2_0_TEMP1h_station_",yyyymmddhh.v[i],".txt",sep="")
+  in.files.grd.ana[i]<- paste(path2input.main.grd,"/",yyyymm.v[i],
+                           "/seNorge_v2_0_TEMP1h_grid_",yyyymmddhh.v[i],".nc",sep="")
+  if ( !(file.exists(in.files.stn[i]))|
+       !(file.exists(in.files.grd.ana[i])) ) {
+    ext<-error_exit(paste("input file/s not found:",
+                    in.files.stn[i],in.files.grd.ana[i]))
+  }
+}
 #------------------------------------------------------------------------------
 # Grid - it is defined by the DEM file
 # CRS Coordinate Reference System
-stackGeoGrid<-raster(filenamedem)
-nx<-ncol(stackGeoGrid)
-ny<-nrow(stackGeoGrid)
-dx<-xres(stackGeoGrid)
-dy<-yres(stackGeoGrid)
+orog<-raster(filenamedem)
+nx<-ncol(orog)
+ny<-nrow(orog)
+dx<-xres(orog)
+dy<-yres(orog)
 # 4 borders point
-xmn<-xmin(stackGeoGrid)
-xmx<-xmax(stackGeoGrid)
-ymn<-ymin(stackGeoGrid)
-ymx<-ymax(stackGeoGrid)
+xmn<-xmin(orog)
+xmx<-xmax(orog)
+ymn<-ymin(orog)
+ymx<-ymax(orog)
 # South-West Point Coordinates
 #Xnodesw<-xmn+dx/2
 #Ynodesw<-ymn+dy/2
@@ -214,8 +251,6 @@ Xnodesw<-xmn
 Ynodesw<-ymn
 Xnode<-Xnodesw+(0:nx-1)*dx
 Ynode<-Ynodesw+(0:ny-1)*dy
-# Extract orography on unmasked gridpoints only
-orog<-stackGeoGrid
 # extract all the cell values: cells[1] contains the orog[1,1] value
 # Raster: cell numbers start at 1 in the upper left corner,
 # and increase from left to right, and then from top to bottom
@@ -233,7 +268,7 @@ rowgrid<-rc[mask,1]
 colgrid<-rc[mask,2]
 Lgrid<-length(xgrid)
 print(Lgrid)
-rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
+rm(xy,rc,rowgrid,colgrid,cells,aux)
 #------------------------------------------------------------------------------
 # [] Read Station Information 
 # conditions:
@@ -270,6 +305,7 @@ VecX<-as.numeric(as.vector(stations$x))
 VecY<-as.numeric(as.vector(stations$y))
 VecZ<-as.numeric(as.vector(stations$z))
 VecS<-as.numeric(as.vector(stations$stnr))
+z.G<-extract(orog,cbind(VecX,VecY))
 # compute S and D=S+R matrices (R is assumed to be diagonal = sigma_obs**2*I)
 # Disth and Distz are the (symmetric) matrices where 
 #      Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
@@ -320,7 +356,235 @@ if (!testmode) {
 }
 yo<-as.numeric(data$value)
 yo.h.pos<-which(!is.na(yo))
-# BACKGROUND AT STATION LOCATIONS
+#yo.pos<-which(!is.na(yo))
+#------------------------------------------------------------------------------
+# BACKGROUND AT STATION LOCATIONS/GRIDPOINTS
+yb.tab<-matrix(nrow=LOBS,ncol=n.timeseq)
+yb<-vector(length=LOBS)
+for (i in 1:n.timeseq) {
+# open/read/close netcdf file
+  nc <- open.ncdf(in.files.grd.ana[i])
+  x.data <- get.var.ncdf( nc )
+  aux<-att.get.ncdf( nc, "UTM_Zone_33","proj4" )
+  projstr<-aux$value
+  dx<-nc$dim$X$vals[2]-nc$dim$X$vals[1]
+  ex.xmin<-min(nc$dim$X$vals)-dx/2
+  ex.xmax<-max(nc$dim$X$vals)+dx/2
+  dy<-nc$dim$Y$vals[2]-nc$dim$Y$vals[1]
+  ex.ymin<-min(nc$dim$Y$vals)-dy/2
+  ex.ymax<-max(nc$dim$Y$vals)+dy/2
+  nx<-nc$dim$X$len
+  ny<-nc$dim$Y$len
+  close.ncdf(nc)
+# Define raster variable "xx"
+  r <-raster(ncol=nx, nrow=ny,
+              xmn=ex.xmin, xmx=ex.xmax, ymn=ex.ymin, ymx=ex.ymax,
+              crs=projstr)
+  r[]<-NA
+# put data on raster variable (t=transpose)
+  r[]<-t(x.data)
+  if (i==1) st<-stack(r)
+  if (i>1)  st<-stack(st,r)
+  yb.tmp<-extract(r,cbind(VecX,VecY))
+  table<-read.table(file=in.files.stn[i],header=T,sep=";",stringsAsFactors=F)
+  table$stid<-as.integer(table$stid)
+  table$ya<-as.numeric(table$ya)
+  yb.tab[,i]<-table$ya[match(VecS,table$stid)]
+  # if yb is NA take yb.tab from the grid
+  aux<-which(is.na(yb.tab[,i]))
+  gamma<--0.00649 #C/m
+  yb.tab[aux,i]<-yb.tmp[aux]+gamma*(VecZ[aux]-z.G[aux])
+#  for (s in yo.h.pos) {
+#    pos<-which(table$stid==VecS[s])
+#    if (length(pos)==1) yb.tab[s,i]<-table$ya[i]
+#  }
+  rm(r)
+}
+#> x
+# [1]  1  2  3  4  5  6  7  8  9 10
+#> y
+#[1]  1 11 15  5  6 21 22  2
+#> a
+#[1] 0.1 1.1 1.5 0.5 0.6 2.1 2.2 0.2
+#> a[match(x,y)]
+# [1] 0.1 0.2  NA  NA 0.5 0.6  NA  NA  NA  NA
+yb<-rowMeans(yb.tab)
+r.b<-mean(st)
+xb<-extract(r.b,mask)
+#====================================================================
+# Station Analysis cycle (with SCT!)
+yoBad.id<-NA
+yoBad.pos<-NA
+isct<-0
+ydqc.flag[]<-rep(0,LOBS)
+ydqc.flag[-yo.h.pos]<-(-1)
+yo.OKh.pos<-which(!is.na(yo) & ydqc.flag!=1)
+LOBStOK<-length(yo.OKh.pos)
+while (LOBStOK>1) {
+  print(paste(">> Total number of observations [not NA & not ERR(so far)] =",
+              LOBStOK))
+# Station (CV)Analysis/(CV)IDI
+  ide<-matrix(data=0,ncol=LOBStOK,nrow=LOBStOK)
+  ide[row(ide)==col(ide)]=1
+  InvD<-solve(D[yo.OKh.pos,yo.OKh.pos],ide)
+  W<-tcrossprod(S[yo.OKh.pos,yo.OKh.pos],InvD)
+  G1<-S[,yo.OKh.pos]
+  K<-tcrossprod(G1,InvD)
+  rm(G1)
+#  ya<-yb + K %*% (yo[yo.OKh.pos]-yb[yo.OKh.pos])
+  ya<-yb + tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
+  yav<-ya
+  yav[yo.OKh.pos]<-yo[yo.OKh.pos] + 1./(1.-diag(W)) * (ya[yo.OKh.pos]-yo[yo.OKh.pos])
+  yidi<-rowSums(K)
+  yidiv<-yidi
+  yidiv[yo.OKh.pos]<-rep(1,LOBStOK) + 1./(1.-diag(W)) * (yidi[yo.OKh.pos]-rep(1,LOBStOK))
+# DQC CHECK - Spatial Continuity Check
+  ydqc[]<--9999.
+  ydqc[yo.OKh.pos]<-(yo[yo.OKh.pos]-yav[yo.OKh.pos]) *
+                               (yo[yo.OKh.pos]-ya[yo.OKh.pos]) / sig2o
+# DQC test: T2 is the SCT threshold, if any(ydqc>T2) is true then reject the 
+# station with highest ydqc value. This mean that the station is not used to
+# compute the analysis
+  if (max(ydqc)<=T2) {
+    break
+  }
+  aux<-which.max(ydqc)
+  yoBad.id<-VecS[aux]
+  yoBad.pos<-aux
+  ydqc.flag[yoBad.pos]<-1
+  yo.OKh.pos<-which(!is.na(yo) & ydqc.flag!=1)
+  LOBStOK<-length(yo.OKh.pos)
+# DQC flag "1" means erroneous observation
+##      OBS$DQC[indx[aux]]<-1
+  print(paste("SCT found GE-> id yo yb ya yav ydqc",VecS[aux],
+              round(yo[aux],1),
+              round(yb[aux],2),
+              round(ya[aux],2),
+              round(yav[aux],2),
+              round(ydqc[aux],2),"\n"))
+# write output file
+} # End of Station Analysis cycle (with SCT!)
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# Station Points - Write output on file 
+cat(paste(yyyy,mm,dd,
+          round(VecS,0),round(VecX,0),round(VecY,0),round(VecZ,0),
+          round(yo,1),round(yb,2),round(ya,2),round(yav,2),
+          round(yidi,3),round(yidiv,3),round(ydqc.flag,2),
+          "\n",sep=";"),
+          file=out.file.stn,append=T)
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# if something strange take place in the Analysis/SCT cycle the pass to the next iteration
+if (LOBStOK<=0) next
+# DQC flag "0" means good observations
+print(paste(">>>>Total number of observations [not NA & good] =",LOBStOK))
+#------------------------------------------------------------------------------
+# Gridded Analysis/IDI    
+xa<-vector(mode="numeric",length=Lgrid)
+xidi<-vector(mode="numeric",length=Lgrid)
+ndim<-10000
+i<-0
+print("++ Grid - Analysis and IDI elaborations\n")
+print("# gridpoint.start gridpoint.end gridpoint.total\n")
+#to.write <- file("aux.bin", "wb")
+#to.read<-file("aux.bin", "rb")
+while ((i*ndim)<Lgrid) {
+  start<-i*ndim+1
+  end<-(i+1)*ndim
+  if (end>Lgrid) {
+    end<-Lgrid
+  }
+  ndimaux<-end-start+1
+  print(paste(round(i),round(start,0),round(end,0),round(Lgrid,0)))
+  aux<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
+  auxz<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
+  G<-matrix(ncol=LOBStOK,nrow=ndimaux,data=0.)
+  aux<-(outer(ygrid[start:end],VecY[yo.OKh.pos],FUN="-")**2. +
+        outer(xgrid[start:end],VecX[yo.OKh.pos],FUN="-")**2.)**0.5/1000.
+#  for (j in 1:Linfo) writeBin(as.numeric(aux[,j]),to.write,size=4)
+#  aux<-matrix(readBin(to.read,numeric(),size=4,ndimaux*Linfo),ndimaux,Linfo)
+# vertical distance
+  auxz<-abs(outer(zgrid[start:end],VecZ[yo.OKh.pos],FUN="-"))
+  G<-exp(-0.5*(aux/Dh)**2.-0.5*(auxz/Dz)**2.)
+  rm(aux,auxz)
+  K<-tcrossprod(G,InvD)
+  rm(G)
+  xa[start:end]<-xb[start:end]+tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
+  xidi[start:end]<-rowSums(K)
+  rm(K)
+  i<-i+1
+}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# output - ANALYSIS
+  r <-raster(ncol=nx, nrow=ny,
+              xmn=ex.xmin, xmx=ex.xmax, ymn=ex.ymin, ymx=ex.ymax,
+              crs=projstr)
+r[]<-NA
+r[mask]<-round(xa,1)
+if (xa.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.ana,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmdd,"0000",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xa.var.name,
+               var.longname=xa.var.longname,
+               var.unit=xa.var.unit,
+               var.mv=xa.var.mv,
+               var.version=xa.var.version,
+               times.unit=xa.times.unit,
+               times.ref=xa.times.ref,
+               reference=xa.reference,
+               source.string=xa.source.nc)
+}
+# output - background
+r[]<-NA
+r[mask]<-round(xb,1)
+if (xa.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.bck,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmdd,"0000",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xa.var.name,
+               var.longname=xa.var.longname,
+               var.unit=xa.var.unit,
+               var.mv=xa.var.mv,
+               var.version=xa.var.version,
+               times.unit=xa.times.unit,
+               times.ref=xa.times.ref,
+               reference=xa.reference,
+               source.string=xa.source.nc)
+}
+# output - IDI
+r[]<-NA
+r[mask]<-round(100*xidi,1)
+if (xidi.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.idi,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmdd,"0000",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xidi.var.name,
+               var.longname=xidi.var.longname,
+               var.unit=xidi.var.unit,
+               var.mv=xidi.var.mv,
+               var.version=xidi.var.version,
+               times.unit=xidi.times.unit,
+               times.ref=xidi.times.ref,
+               reference=xidi.reference,
+               source.string=xidi.source.nc)
+}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# Exit - Success
+q(status=0)
+# FINO A QUI
+
+
+
+
 # For each station, compute a non-linear vertical profile using 
 # the Lsubsample (closest) surrounding stations.
 # The non-linear profile allows for a lat-lon dependance and

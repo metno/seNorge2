@@ -19,33 +19,19 @@ rm(list=ls())
 library(raster)
 library(rgdal)
 library(ncdf)
-# paths
-#[DEVELOPMENT]
-main.path<-"/disk1/projects/seNorge2"
-main.path.output<-"/disk1"
-#
-main.path.prog<-paste(main.path,"/Bspat_TEMP1h",sep="")
-main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
-# common libs and etcetera
-path2lib.com<-paste(main.path,"/lib",sep="")
-path2etc.com<-paste(main.path,"/etc",sep="")
-#
-path2output.main<-paste(main.path.output,"/seNorge2/TEMP1h",sep="")
-path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
-path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1h",sep="")
-path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
-# External Functions
-source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
-source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
-source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
-source(paste(path2lib.com,"/getStationData.R",sep=""))
-# Read Geographical Information
-filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+#-------------------------------------------------------------------
+# FUNCTIONS 
+# manage fatal error
+error_exit<-function(str=NULL) {
+  print("Fatal Error:")
+  if (!is.null(str)) print(str)
+  quit(status=1)
+}
+#-------------------------------------------------------------------
 # CRS strings
 proj4.wgs84<-"+proj=longlat +datum=WGS84"
 proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
-proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 #
 max.Km.stnINdomain<-50
 #-------------------------------------------------------------------
@@ -55,13 +41,6 @@ eps2<-0.5
 Dh<-60
 Dz<-600
 T2<-20
-#
-print("ANALYSIS and DQC parameters")
-print(paste("EPS2 Dh[Km] Dz[m] > ", round(eps2,3),
-                                    round(Dh,3),
-                                    round(Dz,3),
-                                    sep=" "))
-print(paste("VARobs[C^2] T^2 = ", round(sig2o,3), round(T2,3),sep=" "))
 # Background - parameters
 Dh.b<-70.
 eps2.b<-0.5
@@ -69,34 +48,110 @@ Lsubsample<-50
 Lsubsample.max<-50
 Lsubsample.DHmax<-200
 Lsubsample.vec<-vector()
-# netcdf fixed parameters
-grid.type <- "utm33"
-source.nc<-"air temperature from station data"
-var.version.xa <- "1.0"
-prod.date <- substr(Sys.time(),1,10)
-pname.xa<-"TEMP1h"
-for (p in 1:length(ncout.spec.list)) {
-  if (ncout.spec.list[[p]]$pname==pname.xa) break
-}
-if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=pname.xa) ) {
-  flag.write.xa<-F
-} else {
-  flag.write.xa<-T
-  var.name.xa<-ncout.spec.list[[p]]$opts$var.name
-  var.longname.xa<-ncout.spec.list[[p]]$opts$var.longname
-  var.unit.xa<-ncout.spec.list[[p]]$opts$var.unit
-  var.mv.xa<-as.numeric(ncout.spec.list[[p]]$opts$var.mv)
-  times.unit.xa <-ncout.spec.list[[p]]$opts$t.unit
-  times.ref.xa <-ncout.spec.list[[p]]$opts$t.ref
-  reference.xa <- ncout.spec.list[[p]]$opts$reference
-}
+#
+print("ANALYSIS and DQC parameters")
+print(paste("EPS2 Dh[Km] Dz[m] > ", round(eps2,3),
+                                    round(Dh,3),
+                                    round(Dz,3),
+                                    sep=" "))
+print(paste("VARobs[C^2] T^2 = ", round(sig2o,3), round(T2,3),sep=" "))
 # MAIN ========================================================================
 # Read command line arguments
 arguments <- commandArgs()
 arguments
 date.string<-arguments[3]
-#1234567890123
-#yyyy.mm.dd.hh
+config_file<-arguments[4]
+config_par<-arguments[5]
+if (length(arguments)!=5) 
+  ext<-error_exit(paste("Error in command line arguments: \n",
+  " R --vanilla yyyy.mm.dd.hh configFILE configPAR \n",
+  sep=""))
+# [] define/check paths
+if (!file.exists(config_file)) 
+  ext<-error_exit("Fatal Error: configuration file not found")
+source(config_file)
+for (p in 1:length(config_list)) {
+  if (config_list[[p]]$pname==config_par) break
+}
+if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )  
+  ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
+main.path<-config_list[[p]]$opt$main.path
+main.path.output<-config_list[[p]]$opt$main.path.output
+testmode<-config_list[[p]]$opt$testmode
+if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
+  ext<-error_exit("Fatal Error: path not found")
+# geographical information
+main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
+filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+if (!file.exists(paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep=""))) 
+  ext<-error_exit(paste("File not found:",main.path.geoinfo,"/seNorge2_dem_UTM33.nc"))
+# common libs and etcetera
+path2lib.com<-paste(main.path,"/lib",sep="")
+path2etc.com<-paste(main.path,"/etc",sep="")
+if (!file.exists(paste(path2lib.com,"/nogrid.ncout.R",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/nogrid.ncout.R"))
+if (!file.exists(paste(path2lib.com,"/ncout.spec.list.r",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/ncout.spec.list.r"))
+if (!file.exists(paste(path2lib.com,"/getStationData.R",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/getStationData.R"))
+source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
+source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+source(paste(path2lib.com,"/getStationData.R",sep=""))
+source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
+# test mode
+print(testmode)
+if (testmode) {
+  print("TESTMODE TESTMODE TESTMODE")
+  if (file.exists(paste(main.path,"/Bspat_TEMP1h/testbed",sep=""))) {
+    testbed<-paste(main.path,"/Bspat_TEMP1h/testbed",sep="")
+    station.info<-paste(testbed,"/station_data.csv",sep="")
+    observed.data<-paste(testbed,"/observed_data.csv",sep="")
+  } else {
+    ext<-error_exit(paste("testbed not found"))
+  }
+}
+# netcdf fixed parameters
+grid.type <- "utm33"
+source.nc<-"air temperature from station data"
+xa.var.version <- "1.0"
+prod.date <- substr(Sys.time(),1,10)
+xa.source.nc<-"instantaneous air temperature from station data (hourly sampling rate)"
+xa.var.version <- "1.0"
+xa.pname<-"TEMP1h"
+for (p in 1:length(ncout.spec.list)) {
+  if (ncout.spec.list[[p]]$pname==xa.pname) break
+}
+if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=xa.pname) ) {
+  xa.flag.write<-F
+} else {
+  xa.flag.write<-T
+  xa.var.name<-ncout.spec.list[[p]]$opts$var.name
+  xa.var.longname<-ncout.spec.list[[p]]$opts$var.longname
+  xa.var.unit<-ncout.spec.list[[p]]$opts$var.unit
+  xa.var.mv<-as.numeric(ncout.spec.list[[p]]$opts$var.mv)
+  xa.times.unit <-ncout.spec.list[[p]]$opts$t.unit
+  xa.times.ref <-ncout.spec.list[[p]]$opts$t.ref
+  xa.reference <- ncout.spec.list[[p]]$opts$reference
+}
+xidi.source.nc<-"IDI for instantaneous air temperature from station data (hourly sampling rate)"
+xidi.var.version <- "1.0"
+xidi.pname<-"IDI"
+for (p in 1:length(ncout.spec.list)) {
+  if (ncout.spec.list[[p]]$pname==xidi.pname) break
+}
+if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=xidi.pname) ) {
+  xidi.flag.write<-F
+} else {
+  xidi.flag.write<-T
+  xidi.var.name<-ncout.spec.list[[p]]$opts$var.name
+  xidi.var.longname<-ncout.spec.list[[p]]$opts$var.longname
+  xidi.var.unit<-ncout.spec.list[[p]]$opts$var.unit
+  xidi.var.mv<-as.numeric(ncout.spec.list[[p]]$opts$var.mv)
+  xidi.times.unit <-ncout.spec.list[[p]]$opts$t.unit
+  xidi.times.ref <-ncout.spec.list[[p]]$opts$t.ref
+  xidi.reference <- ncout.spec.list[[p]]$opts$reference
+}
+# set Time-related variables
 yyyy<-substr(date.string,1,4)
 mm<-substr(date.string,6,7)
 dd<-substr(date.string,9,10)
@@ -118,7 +173,20 @@ yyyymm<-paste(yyyy,mm,sep="")
 yyyymmdd<-paste(yyyymm,dd,sep="")
 yyyymmddhh<-paste(yyyymmdd,hh,sep="")
 h<-as.numeric(hh)
-#
+# output directories
+dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
+dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
+path2output.main<-paste(main.path.output,"/seNorge2/TEMP1h",sep="")
+path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
+path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/TEMP1h",sep="")
+path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
+if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
+if (!(file.exists(path2output.main.stn))) dir.create(path2output.main.stn,showWarnings=F) 
+if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWarnings=F) 
+if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
+if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
+# Setup output files 
 dir.create(paste(path2output.main.stn,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
@@ -160,7 +228,7 @@ Xnodesw<-xmn
 Ynodesw<-ymn
 Xnode<-Xnodesw+(0:nx-1)*dx
 Ynode<-Ynodesw+(0:ny-1)*dy
-# Extract orography and urban-weight on unmasked gridpoints only
+# Extract orography on unmasked gridpoints only
 orog<-stackGeoGrid
 # extract all the cell values: cells[1] contains the orog[1,1] value
 # Raster: cell numbers start at 1 in the upper left corner,
@@ -171,19 +239,28 @@ x.G<-sort(unique(xy[,1]))
 y.G<-sort(unique(xy[,2]),decreasing=T)
 rc<-rowColFromCell(orog,1:ncell(orog))
 aux<-as.vector(cells)
-ccgrid<-which(!is.na(aux))
-zgrid<-aux[ccgrid]
-xgrid<-xy[ccgrid,1]
-ygrid<-xy[ccgrid,2]
-rowgrid<-rc[ccgrid,1]
-colgrid<-rc[ccgrid,2]
+mask<-which(!is.na(aux))
+zgrid<-aux[mask]
+xgrid<-xy[mask,1]
+ygrid<-xy[mask,2]
+rowgrid<-rc[mask,1]
+colgrid<-rc[mask,2]
 Lgrid<-length(xgrid)
 print(Lgrid)
 rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
 #------------------------------------------------------------------------------
-# Read Station Information 
-stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
-                             max.Km=max.Km.stnINdomain)
+# [] Read Station Information 
+# conditions:
+# 1. stations in KDVH having: lat, lon and elevation. Note that UTM33 is 
+#    obtained from lat,lon. Furthermore, the location must be in Norway or on
+#    the border (less than max.Km.stnINdomain)
+# 2. stations in CG
+if (!testmode) {
+  stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
+                               max.Km=max.Km.stnINdomain)
+} else {
+  stations<-read.csv(file=station.info)
+}
 LOBS<-length(stations$stnr)
 print(LOBS)
 # define Vectors and Matrices
@@ -242,77 +319,22 @@ D.b[row(D.b)==col(D.b)]<-D.b[row(D.b)==col(D.b)]+eps2.b
 cat(paste("year","month","day","hour","stid","x","y","z","yo",
           "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
           file=out.file.stn,append=F)
-# xx is the raster structure used for map production
-xx <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
+# r is the raster structure used for map production
+r <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
-xx[]<-NA
+r[]<-NA
 # get data from KDVH
-data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd,
-                     h=h,
+if (!testmode) {
+data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd, h=h,
                      to.yyyy=yyyy, to.mm=mm, to.dd=dd,
                      qa=NULL, statlist=stations, outside.Norway=T,
                      verbose=T)
+} else {
+  data<-read.csv(file=observed.data)
+}
 print(data)
 yo<-as.numeric(data$value)
 yo.h.pos<-which(!is.na(yo))
-#
-####print(paste("+ ",yyyymmddhh," -~-----------------",sep=""))
-####ulric<-paste("http://klapp.oslo.dnmi.no/metnopub/production/",
-####             "metno?re=17&p=TA&fd=",date.dot,"&td=",date.dot,"&h=",h,
-####             "&nob=0.0&ddel=dot&del=semicolon&nmt=0",
-####             "&ct=text/plain&split=1&nod=-999",sep="")
-#####print(ulric)
-####o.cont<-1
-####while (o.cont<=10) {
-####  o<-NULL
-####  try(o <- read.table(ulric, header = TRUE,  sep = ";", #nrows = nrows,
-####          stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-#### 	          encoding = "UTF-8", quote = "",na.string=-999))
-##### names(o) -->  stnr;Year;Month;Day;TA
-#####    print(o)
-#####    print(length(o))
-####  value<-as.numeric(o$TA)
-####  stnr<-as.numeric(o$Stnr)
-####  hour.seq<-as.integer(o$Time.UTC.)
-####  value[value==-999]<-NA
-####  indx<-which( !is.na(value) & (stnr %in% stations$stnr) & (hour.seq==h) )
-####  LOBSt<-length(indx)
-####  if (LOBSt<10) {
-####    print("exit with error in command:")
-####    print(ulric)
-####    o.cont<-o.cont+1
-####    Sys.sleep(5)
-#####      q(status=1)
-####  } else {
-####    break
-####  }
-####}
-####if (o.cont>10) {
-####  print("Fatal Error in command:")
-####  print(ulric)
-####  q(status=1)
-####}
-##### note: LOBSt always greater than 10
-####print(paste("  Total number of observations [not NA] =",LOBSt))
-##### OBS: "d"-day observations without NAs
-####OBS<-data.frame(matrix(nrow=LOBSt,ncol=7))
-####names(OBS)<-c("stnr","year","month","day","hour","value","DQC")
-####OBS$stnr<-stnr[indx]
-####OBS$year<-o$Year[indx]
-####OBS$month<-o$Month[indx]
-####OBS$day<-o$Day[indx]
-####OBS$hour<-hour.seq[indx]
-####OBS$value<-value[indx]
-####rm(stnr,o,indx,value,hour.seq)
-##### DQC flag: -1 missing, 0 good obs, 1 erroneous obs
-####OBS$DQC<-rep(-1,LOBSt)
-#####  write.table(file="o.txt",o)
-####stn.match.obs<-match(stations$stnr,OBS$stnr)
-####obs.match.stn<-match(OBS$stnr,stations$stnr)
-####yo[]<-NA
-####yo[obs.match.stn]<-as.numeric(as.vector(OBS$value))
-####yo.h.pos<-which(!is.na(yo))
-####rm(OBS)
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
 # the Lsubsample (closest) surrounding stations.
@@ -338,55 +360,15 @@ for (b in yo.h.pos) {
     finoa<-as.integer(Lsubsample.max*1/4)
     if (VecY[b]<7750000 & VecZ[b]<800) finoa<-as.integer(Lsubsample.max*2/4)
     if (VecY[b]<7100000 & VecZ[b]<800) finoa<-as.integer(Lsubsample.max*3/4)
-    if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:finoa]) {
-#              print(VecS[b])
-#              print(VecS.set[yo.h.pos[1:(which(b==yo.h.pos)-1)],2:Lsubsample])
-      next
-    }
-####        if (VecY[b]<7750000) {
-####          if (VecY[b]<7100000) {
-####            if (b.inc>0) {
-####              aux.sort<-sort(Disth[b,yo.h.pos])
-####              if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:as.integer(Lsubsample.max/2)] &
-####                  min(Disth[b,yb.h.pos[1:b.inc]])<(2*Dh.b) & aux.sort[2]<Dh.b) {
-#####              print(VecS[b])
-#####              print(VecS.set[yo.h.pos[1:(which(b==yo.h.pos)-1)],2:Lsubsample])
-####                next
-####              }
-####            }
-####        # VecS>=70000 & VecS<91000
-####          } else {
-####            if (b.inc>0) {
-####              aux.sort<-sort(Disth[b,yo.h.pos])
-####              if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:as.integer(Lsubsample.max/4)] &
-####                  min(Disth[b,yb.h.pos[1:b.inc]])<(2*Dh.b) & aux.sort[2]<Dh.b) {
-#####              print(VecS[b])
-#####              print(VecS.set[yo.h.pos[1:(which(b==yo.h.pos)-1)],2:Lsubsample])
-####                next
-####              }
- ####           }
-####          }
-####        # VecS>=91000
-####        } else  {
-####          if (b.inc>0) {
-####            if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:4]) {
-#####              print(VecS[b])
-#####              print(VecS.set[yo.h.pos[1:(which(b==yo.h.pos)-1)],2:Lsubsample])
-####              next
-####            }
- ####         }
-####        }
+    if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:finoa]) next
   }
 # select the closest (respect to b-th station) Lsubsample stations
   close2b.aux<-order(Disth[b,],decreasing=F)
   close2b.au1<-close2b.aux[which(close2b.aux%in%yo.h.pos)][1:Lsubsample]
   if (Disth[b,close2b.au1[2]]>(2*Dh.b)) next
   Lsubsample.vec[b]<-Lsubsample.max
-  if (Disth[b,close2b.au1[Lsubsample.max]]>Lsubsample.DHmax) {
-#        print(Disth[b,close2b.au1])
+  if (Disth[b,close2b.au1[Lsubsample.max]]>Lsubsample.DHmax) 
     Lsubsample.vec[b]<-max(which(Disth[b,close2b.au1]<=Lsubsample.DHmax))
-#        print(Lsubsample.vec[b])
-  }
   close2b<-close2b.au1[1:Lsubsample.vec[b]]
   b.inc<-b.inc+1
   yb.h.pos[b.inc]<-b
@@ -493,6 +475,17 @@ for (b in yo.h.pos) {
     back2.flag<-F
     J2<-J0+1
   }
+# DEBUG start      
+#      png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
+#      plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,
+#           xlim=c(min(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b]),na.rm=T),
+#                  max(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b]),na.rm=T)))
+#      points(yb.set0[close2b],VecZ[close2b],col="gray",cex=1.8)
+#      points(yb.set1[close2b],VecZ[close2b],pch=19,col="blue",cex=1.8)
+#      points(yb.set2[close2b],VecZ[close2b],pch=19,col="red",cex=1.8)
+##      mtext(,side=3,cex=1.6)
+#      dev.off()
+# DEBUG stop      
 # Best background
   aux<-order(c(J0,J1,J2))
   best<-aux[1]-1
@@ -532,10 +525,8 @@ for (b in yo.h.pos) {
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset
   G1.b<-S.b[,close2b]
-#  K.b<-G1.b%*%InvD.b
   K.b<-tcrossprod(G1.b,InvD.b)
   rm(G1.b)
-#  W.b<-S.b[close2b,close2b]%*%InvD.b
   W.b<-tcrossprod(S.b[close2b,close2b],InvD.b)
   # this is idi (sort of)
   ybweights.set[,b]<-rowSums(K.b)
@@ -554,21 +545,6 @@ print(paste("# stations used in background elaborations=",LBAKh))
 # 3. yb.param<-matrix(data=NA,ncol=12,nrow=LOBSt)
 # 4. VecS.set<-matrix(data=NA,ncol=Lsubsample,nrow=LOBSt)
 # 5. VecS.set.pos[b,]<-close2b
-#
-#====================================================================
-### normalization of the yb weights such that their sum equals to one
-##    ybweights.norm<-ybweights.set[,yo.h.pos] / 
-##                    rowSums(ybweights.set[,yo.h.pos])
-##    print(ncol(ybweights.norm))
-##    print(nrow(ybweights.norm))
-### background on station points
-##    for (m in 1:LOBS) {
-##      yb[m]<-ybweights.norm[m,] %*% yb.set[m,yo.h.pos]
-##    }
-##    print(paste("id yo yb",VecS,
-##                round(yo,1),
-##                round(yb,2),"\n"))
-##    q()
 #====================================================================
 # Station Analysis cycle (with SCT!)
 yoBad.id<-NA
@@ -701,6 +677,15 @@ while (TRUE) {
           back2.flag<-F
           J2<-J0+1
         }
+# DEBUG start
+#            png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
+#            plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,xlim=c(min(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b])),
+#                                                               max(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b])))
+#            points(yb.set0[close2b],VecZ[close2b],col="gray",cex=1.8)
+#            points(yb.set1[close2b],VecZ[close2b],pch=19,col="blue",cex=1.8)
+#            points(yb.set2[close2b],VecZ[close2b],pch=19,col="red",cex=1.8)
+#            dev.off()
+# DEBUG stop
 # Best background
         aux<-order(c(J0,J1,J2))
         best<-aux[1]-1
@@ -740,10 +725,8 @@ while (TRUE) {
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset
         G1.b<-S.b[,close2b]
-#        K.b<-G1.b%*%InvD.b
         K.b<-tcrossprod(G1.b,InvD.b)
         rm(G1.b)
-#        W.b<-S.b[close2b,close2b]%*%InvD.b
         W.b<-tcrossprod(S.b[close2b,close2b],InvD.b)
         # this is idi (sort of)
         ybweights.set[,b]<-rowSums(K.b)
@@ -761,7 +744,6 @@ while (TRUE) {
                   rowSums(ybweights.set[,yb.h.pos])
 # background on station points
   for (m in 1:LOBS) {
-#    yb[m]<-ybweights.norm[m,] %*% yb.set[m,yb.h.pos]
     yb[m]<-tcrossprod(ybweights.norm[m,],t(yb.set[m,yb.h.pos]))
   }
 # deallocate memory
@@ -771,10 +753,8 @@ while (TRUE) {
   ide<-matrix(data=0,ncol=LOBStOK,nrow=LOBStOK)
   ide[row(ide)==col(ide)]=1
   InvD<-solve(D[yo.OKh.pos,yo.OKh.pos],ide)
-#  W<-S[yo.OKh.pos,yo.OKh.pos] %*% InvD
   W<-tcrossprod(S[yo.OKh.pos,yo.OKh.pos],InvD)
   G1<-S[,yo.OKh.pos]
-#  K<-G1 %*% InvD
   K<-tcrossprod(G1,InvD)
   rm(G1)
 #  ya<-yb + K %*% (yo[yo.OKh.pos]-yb[yo.OKh.pos])
@@ -828,13 +808,11 @@ print(paste(">>>>Total number of observations [not NA & good] =",LOBStOK))
 xb<-vector(mode="numeric",length=Lgrid)
 xb.set<-matrix(data=0,ncol=LBAKh,nrow=Lgrid)
 xbweights.set<-matrix(data=NA,ncol=LBAKh,nrow=Lgrid)
-##    for (b in 1:btimes) {
 b.aux<-0
 print("++ Grid - Background elaborations\n")
 print("#/tot stnid #grid.points/#grid.points.tot")
 for (b in yb.h.pos) {
   b.aux<-b.aux+1
-#      xindx<-which( (abs(xgrid-VecX[b])<(2*(Dh.b*1000))) & (abs(ygrid-VecY[b])<(2*(Dh.b*1000))) )
   xindx<-which( (xgrid-min(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-3*Dh.b*1000) & (xgrid-max(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<(3*Dh.b*1000) &
                 (ygrid-min(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-3*Dh.b*1000) & (ygrid-max(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<(3*Dh.b*1000) )
   Lgrid.b<-length(xindx)
@@ -848,17 +826,12 @@ for (b in yb.h.pos) {
   InvD.b<-solve(D.b[VecS.set.pos[b,1:Lsubsample.vec[b]],VecS.set.pos[b,1:Lsubsample.vec[b]]],ide.b)
 # G matrix
   Disth.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-#      Distz.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
   G.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
   Disth.b<-(outer(ygrid[xindx],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.+
             outer(xgrid[xindx],VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.)**0.5/1000.
-#      Distz.b<-abs(outer(zgrid[xindx],VecZ[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-"))
-#      G.b<-exp(-0.5*(Disth.b/Dh.b)**2.-0.5*(Distz.b/Dz.b)**2.)
   G.b<-exp(-0.5*(Disth.b/Dh.b)**2.)
-#      rm(Disth.b,Distz.b)
   rm(Disth.b)
 #  compute analysis/idi over grid 
-#  K.b<-G.b%*%InvD.b
   K.b<-tcrossprod(G.b,InvD.b)
   xbweights.set[,b.aux]<-0
   xbweights.set[xindx,b.aux]<-rowSums(K.b)
@@ -917,30 +890,37 @@ for (b in yb.h.pos) {
        (yb.param[b,7]*(xgrid[xindx1[aux.bw]]-yb.param[b,10])+yb.param[b,9]*(ygrid[xindx1[aux.bw]]-yb.param[b,11]))*(h1-zgrid[xindx1[aux.bw]]) ) / yb.param[b,2]
     rm(aux.ab,aux.bl,aux.bw)
   }
-# G matrix
-#      Disth.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-#      Distz.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-#      G.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-#      Disth.b<-(outer(ygrid[xindx],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.+
-#                outer(xgrid[xindx],VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.)**0.5/1000.
-#      Distz.b<-abs(outer(zgrid[xindx],VecZ[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-"))
-##      G.b<-exp(-0.5*(Disth.b/Dh.b)**2.-0.5*(Distz.b/Dz.b)**2.)
-#      G.b<-exp(-0.5*(Disth.b/Dh.b)**2.)
-#      rm(Disth.b,Distz.b)
-##  compute analysis/idi over grid 
-#      K.b<-G.b%*%InvD.b
-#      xbweights.set[,b.aux]<-0
-#      xbweights.set[xindx,b.aux]<-rowSums(K.b)
-#      print(paste(b.aux,"/",LBAKh," ",VecS[b]," ",Lgrid.b,"/",Lgrid,"\n",sep=""))
-#      rm(G.b,K.b)
 }
 xbweights.norm<-xbweights.set/rowSums(xbweights.set)
+# DEBUG start
+#    for (b in 1:length(yb.h.pos)) {
+#      b.pos<-yb.h.pos[b]
+#      xindx<-which( (xgrid-min(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))>(-3*Dh.b*1000) & 
+#                    (xgrid-max(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))<(3*Dh.b*1000) &
+#                    (ygrid-min(VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))>(-3*Dh.b*1000) & 
+#                    (ygrid-max(VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]]))<(3*Dh.b*1000) )
+#      r[mask]<-NA
+#      r[mask[xindx]]<-xbweights.norm[xindx,b]
+#      png(file=paste("xb_norm_",VecS[b.pos],".png",sep=""),width=1400,height=1400)
+#      image(r,breaks=seq(0,1,by=0.01),col=rainbow(100))
+#      points(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],pch=19,col="black")
+#      points(VecX[b.pos],VecY[b.pos],pch=19,col="black",cex=2)
+#      legend(x="bottomright",legend=seq(0,1,by=0.01),fill=rainbow(100),cex=0.9)
+#      dev.off()
+#      r[mask[xindx]]<-xbweights.set[xindx,b]
+#      png(file=paste("xb_set_",VecS[b.pos],".png",sep=""),width=1400,height=1400)
+#      image(r,breaks=seq(0,1,by=0.01),col=rainbow(100))
+#      points(VecX[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],VecY[VecS.set.pos[b.pos,1:Lsubsample.vec[b.pos]]],pch=19,col="black")
+#      points(VecX[b.pos],VecY[b.pos],pch=19,col="black",cex=2)
+#      legend(x="bottomright",legend=seq(0,1,by=0.01),fill=rainbow(100),cex=0.9)
+#      dev.off()
+#    }
+# DEBUG end
+#    print(paste(round(rowSums(ybweights.set),9),"\n"))
 for (i in 1:Lgrid) {
-#  xb[i]<-xbweights.norm[i,] %*% xb.set[i,]
   xb[i]<-tcrossprod(xbweights.norm[i,],t(xb.set[i,]))
 }
 rm(xb.set,xbweights.norm,xbweights.set,xindx,xindx1)
-#------------------------------------------------------------------------------
 # Gridded Analysis/IDI    
 xa<-vector(mode="numeric",length=Lgrid)
 xidi<-vector(mode="numeric",length=Lgrid)
@@ -983,44 +963,65 @@ while ((i*ndim)<Lgrid) {
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # output - ANALYSIS
-xx[]<-NA
-# 
-xx[ccgrid]<-round(xa,1)
-nogrid.ncout(grid=t(as.matrix(xx)),
-             x=x.G,y=y.G,grid.type=grid.type,
-             file.name=out.file.grd.ana,
-             var.name=var.name.xa,
-             var.longname=var.longname.xa,
-             var.unit=var.unit.xa,
-             var.mv=var.mv.xa,
-             var.version=var.version.xa,
-             times=c(paste(yyyymmddhh,"00",sep="")),times.unit=times.unit.xa,
-             times.ref=times.ref.xa,
-             prod.date=prod.date,
-             reference=reference.xa,
-             proj4.string="+proj=utm +zone=33 +ellps=WGS84",
-             source.string=source.nc)
+r[]<-NA
+r[mask]<-round(xa,1)
+if (xa.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.ana,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmddhh,"00",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xa.var.name,
+               var.longname=xa.var.longname,
+               var.unit=xa.var.unit,
+               var.mv=xa.var.mv,
+               var.version=xa.var.version,
+               times.unit=xa.times.unit,
+               times.ref=xa.times.ref,
+               reference=xa.reference,
+               source.string=xa.source.nc)
+}
 # output - background
-xx[]<-NA
-xx[ccgrid]<-round(xb,1)
-nogrid.ncout(grid=t(as.matrix(xx)),
-             x=x.G,y=y.G,grid.type=grid.type,
-             file.name=out.file.grd.bck,
-             var.name=var.name.xa,
-             var.longname=var.longname.xa,
-             var.unit=var.unit.xa,
-             var.mv=var.mv.xa,
-             var.version=var.version.xa,
-             times=c(paste(yyyymmddhh,"00",sep="")),times.unit=times.unit.xa,
-             times.ref=times.ref.xa,
-             prod.date=prod.date,
-             reference=reference.xa,
-             proj4.string="+proj=utm +zone=33 +ellps=WGS84",
-             source.string=source.nc)
+r[]<-NA
+r[mask]<-round(xb,1)
+if (xa.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.bck,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmddhh,"00",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xa.var.name,
+               var.longname=xa.var.longname,
+               var.unit=xa.var.unit,
+               var.mv=xa.var.mv,
+               var.version=xa.var.version,
+               times.unit=xa.times.unit,
+               times.ref=xa.times.ref,
+               reference=xa.reference,
+               source.string=xa.source.nc)
+}
 # output - IDI
-xx[]<-NA
-xx[ccgrid]<-round(xidi,3)
-rnc <- writeRaster(xx, filename=out.file.grd.idi,format="CDF",overwrite=TRUE)
+r[]<-NA
+r[mask]<-round(xidi*100,1)
+if (xidi.flag.write) {
+  nogrid.ncout(file.name=out.file.grd.idi,
+               grid=t(as.matrix(r)),
+               x=x.G,y=y.G,grid.type=grid.type,
+               times=c(paste(yyyymmddhh,"00",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xidi.var.name,
+               var.longname=xidi.var.longname,
+               var.unit=xidi.var.unit,
+               var.mv=xidi.var.mv,
+               var.version=xidi.var.version,
+               times.unit=xidi.times.unit,
+               times.ref=xidi.times.ref,
+               reference=xidi.reference,
+               source.string=xidi.source.nc)
+}
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Exit - Success
 q(status=0)
