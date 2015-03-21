@@ -397,7 +397,7 @@ cat(paste("year","month","day","nday","eve.lab","nobs",
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # [] Grid
 # CRS Coordinate Reference System
-r.orog.FG<-trim(raster(filenamedem))
+r.orog.FG<-raster(filenamedem)
 nx.FG<-ncol(r.orog.FG)
 ny.FG<-nrow(r.orog.FG)
 dx.FG<-xres(r.orog.FG)
@@ -409,7 +409,7 @@ xmx.FG<-xmax(r.orog.FG)
 ymn.FG<-ymin(r.orog.FG)
 ymx.FG<-ymax(r.orog.FG)
 #
-r.orog.CG<-trim(raster(filenamedem.CG))
+r.orog.CG<-raster(filenamedem.CG)
 nx.CG<-ncol(r.orog.CG)
 ny.CG<-nrow(r.orog.CG)
 dx.CG<-xres(r.orog.CG)
@@ -587,13 +587,15 @@ print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)
 print(paste("  # station in output file (on Norwegian mainland or within CG and not NA) =",length(stn.output)))
 #------------------------------------------------------------------------------
 # Elaborations
-# define Vectors and Matrices
-xidi.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
-xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
-# loop for DQC
 yo.ok.pos<-which(ydqc.flag<=0 & !is.na(yo))
 L.yo.ok<-length(yo.ok.pos)
+# loop for DQC
 while (L.yo.ok>0) {
+# define Vectors and Matrices
+  if (exists("xidi.CG.wet")) rm(xidi.CG.wet)
+  if (exists("xidi.CG.dry")) rm(xidi.CG.dry)
+  xidi.CG.wet<-vector(mode="numeric",length=Lgrid.CG)
+  xidi.CG.dry<-vector(mode="numeric",length=Lgrid.CG)
 # vector with the positions (pointers to VecS) of good observations 
   yo.ok.pos<-which(ydqc.flag<=0 & !is.na(yo))
   L.yo.ok<-length(yo.ok.pos)
@@ -1183,9 +1185,9 @@ while (L.yo.ok>0) {
                ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
     x.aux<-vector(mode="numeric",length=Lgrid.CG)
     for (i in eve.nostn.pos) {
-      aux<-which(l.CG==f.lab.val[i])
+      aux<-which(x.eve.CG==f.lab.val[i])
       x.aux[]<-NA
-      x.aux[aux]<-l.CG[aux]
+      x.aux[aux]<-x.eve.CG[aux]
       r[]<-NA
       r[mask.CG]<-round(x.aux,0)
       dist.min<-NA
@@ -1202,12 +1204,11 @@ while (L.yo.ok>0) {
         }
       }
       new.lab.pos<-which(f.lab.val==new.lab)
-      l.CG[aux]<-new.lab
+      x.eve.CG[aux]<-new.lab
       f.lab.val[i]<-NA
       f.lab.n[new.lab.pos]<-f.lab.n[new.lab.pos]+f.lab.n[i]
       f.lab.n[i]<-NA
-      r.eve.CG<-l.CG
-      x.eve.CG<-l.CG[mask.CG]
+      r.eve.CG[mask.CG[aux]]<-x.eve.CG[aux]
     }
     y.eve<-extract(r.eve.CG,cbind(VecX,VecY),na.rm=T)
     eve.labels<-as.vector(na.omit(unique(y.eve[yo.ok.pos.wet])))

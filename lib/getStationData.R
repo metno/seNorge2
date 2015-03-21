@@ -221,21 +221,18 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
                           "&ct=text/plain&split=1&nod=-999&flag=10",
                           str.out,sep="")
   }
-  if (verbose) {
-    print(ulric.data)
-    print(ulric.flag)
-    print(ulric.data.out)
-    print(ulric.flag.out)
-  }
   o.cont<-1
   while (o.cont<=max.try) {
     o<-NULL
     q<-NULL
     o.out<-NULL
     q.out<-NULL
+    if (verbose) print("query under processing: data inside Norway")
+    if (verbose) print(ulric.data)
     try(o <- read.table(ulric.data, header = TRUE,  sep = ";",
                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                    encoding = "UTF-8", quote = "",na.string=-999))
+#    print(o)
     if (length(o$Stnr)==0) {
       if (verbose) {
         print("getStationData: exit with error in command:")
@@ -245,17 +242,27 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       Sys.sleep(sleep.int)
       next
     }
+    if (verbose) print("query under processing: quality flags inside Norway")
+    if (verbose) print(ulric.flag)
     try(q <- read.table(ulric.flag, header = TRUE,  sep = ";",
                         stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                    encoding = "UTF-8", quote = "",na.string=-999))
+#    print(q)
     if (outside.Norway) {
+      if (verbose) print("query under processing: data outside Norway")
+      if (verbose) print(ulric.data.out)
       try(o.out <- read.table(ulric.data.out, header = TRUE,  sep = ";",
                               stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                          encoding = "UTF-8", quote = "",na.string=-999))
+#      print(o.out)
+      if (verbose) print("query under processing: quality flags outside Norway")
+      if (verbose) print(ulric.flag.out)
       try(q.out <- read.table(ulric.flag.out, header = TRUE,  sep = ";",
                               stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
  	                          encoding = "UTF-8", quote = "",na.string=-999))
+#      print(q.out)
     }
+    if (verbose) print("all queries done")
     if ( daily) {
       names(o)<-names.daily
       if (length(q$Stnr)>0) names(q)<-names.daily
@@ -422,7 +429,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       data.fun$month[1:n.stat]<-from.mm
       data.fun$day[1:n.stat]<-from.dd
       if (!daily & !is.null(from.hh)) data.fun$hour[1:n.stat]<-from.hh
-      if (!daily & is.null(from.hh)) data.fun$hour[1:n.stat]<-NA
+      if (!daily & is.null(from.hh)) data.fun$hour[1:n.stat]<-min(h)
       if (daily)  data.fun$hour[1:n.stat]<-NA
       data.fun$ntime[1:n.stat]<-n.t
       data.fun$nvalue[1:n.stat]<-NA
