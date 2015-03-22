@@ -85,7 +85,35 @@ ncout.spec.list <- alist(
                        reference = "")
         ),
     
+    list( pname="PREC1hRT",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "H",
+                       var.name = "precipitation_amount",
+                       var.longname = "hourly precipitation sum",
+                       var.unit = "millimeter",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
+    
     list( pname="PREC3h",  
+          opts =  alist(
+                       fname.nc = "AUTO",
+                       t.ref = "190001010000",
+                       t.unit = "H",
+                       var.name = "precipitation_amount_3h",
+                       var.longname = "3 hour precipitation sum",
+                       var.unit = "millimeter",
+#                       var.mv = -999.99,
+                       var.mv = "-999.99",
+#                       reference = paste("",sep=""))
+                       reference = "")
+        ),
+    
+    list( pname="PREC3hRT",  
           opts =  alist(
                        fname.nc = "AUTO",
                        t.ref = "190001010000",
