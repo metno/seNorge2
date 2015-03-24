@@ -122,9 +122,9 @@
 # -----------------------------------------------------------------------------
 rm(list=ls())
 # Libraries
+library(igraph)
 library(raster)
 #rasterOptions(chunksize=2e+07,maxmemory=3e+08)
-library(igraph)
 library(rgdal)
 library(ncdf)
 require(tripack)
@@ -156,7 +156,19 @@ st.log<-function(x,lc=NULL) {
   }
   return(res)
 }
-# manage fatal error
+# + Gaussian filter for square cells
+fgauss <- function(sigma, n) {
+             m <- matrix(nc=n, nr=n)
+             col <- rep(1:n, n)
+             row <- rep(1:n, each=n)
+             x <- col - ceiling(n/2)
+             y <- row - ceiling(n/2)
+     # according to http://en.wikipedia.org/wiki/Gaussian_filter
+             m[cbind(row, col)] <- 1/(2*pi*sigma^2) * exp(-(x^2+y^2)/(2*sigma^2))
+     # sum of weights should add up to 1     
+             m / sum(m)
+}
+# + manage fatal error
 error_exit<-function(str=NULL) {
   print("Fatal Error:")
   if (!is.null(str)) print(str)
@@ -331,6 +343,10 @@ datestring.b<-paste(yyyy.b,".",mm.b,".",dd.b," ",sep="")
 yyyymmdd.e<-paste(yyyy.e,formatC(mm.e,width=2,flag="0"),formatC(dd.e,width=2,flag="0"),sep="")
 yyyymm.e<-paste(yyyy.e,formatC(mm.e,width=2,flag="0"),sep="")
 datestring.e<-paste(yyyy.e,".",mm.e,".",dd.e," ",sep="")
+print(timeseq)
+print(nhour)
+print(dayseq)
+print(nday)
 # output directories
 dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
 dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
@@ -422,15 +438,15 @@ ymx.CG<-ymax(r.orog.CG)
 # Raster: cell numbers start at 1 in the upper left corner,
 # and increase from left to right, and then from top to bottom
 zvalues.FG<-extract(r.orog.FG,1:ncell(r.orog.FG))
-xy<-xyFromCell(r.orog.FG,1:ncell(r.orog.FG))
-x.FG<-sort(unique(xy[,1]))
-y.FG<-sort(unique(xy[,2]),decreasing=T)
+xy.FG<-xyFromCell(r.orog.FG,1:ncell(r.orog.FG))
+x.FG<-sort(unique(xy.FG[,1]))
+y.FG<-sort(unique(xy.FG[,2]),decreasing=T)
 rc<-rowColFromCell(r.orog.FG,1:ncell(r.orog.FG))
 aux<-as.vector(zvalues.FG)
 mask.FG<-which(!is.na(aux))
 zgrid<-aux[mask.FG]
-xgrid<-xy[mask.FG,1]
-ygrid<-xy[mask.FG,2]
+xgrid<-xy.FG[mask.FG,1]
+ygrid<-xy.FG[mask.FG,2]
 rowgrid<-rc[mask.FG,1]
 colgrid<-rc[mask.FG,2]
 Lgrid.FG<-length(mask.FG)
@@ -448,8 +464,8 @@ colgrid.CG<-rc.CG[mask.CG,2]
 Lgrid.CG<-length(mask.CG)
 # clean memory
 rm(zvalues.CG,zvalues.FG)
-rm(xy,rc,aux,rowgrid,colgrid)
-rm(xy.CG,rc.CG,aux.CG)
+rm(rc,aux,rowgrid,colgrid)
+rm(rc.CG,aux.CG)
 # debug info
 print("grid parameters")
 print(paste("nx ny dx dy",as.integer(nx.FG),as.integer(ny.FG),round(dx.FG,2),round(dy.FG,2)))
@@ -467,7 +483,7 @@ print(paste("Lgrid.CG",as.integer(Lgrid.CG)))
 #    the border (less than max.Km.stnINdomain)
 # 2. stations in CG
 if (!testmode) {
-  stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.b,
+  stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.e,
                                    max.Km=max.Km.stnINdomain)
 } else {
   stations.tmp<-read.csv(file=station.info)
@@ -587,9 +603,9 @@ print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)
 print(paste("  # station in output file (on Norwegian mainland or within CG and not NA) =",length(stn.output)))
 #------------------------------------------------------------------------------
 # Elaborations
+# loop for DQC
 yo.ok.pos<-which(ydqc.flag<=0 & !is.na(yo))
 L.yo.ok<-length(yo.ok.pos)
-# loop for DQC
 while (L.yo.ok>0) {
 # define Vectors and Matrices
   if (exists("xidi.CG.wet")) rm(xidi.CG.wet)
@@ -1073,7 +1089,7 @@ while (L.yo.ok>0) {
     if (n.eve.1st.wet==0) next
     # case of an isolated wet station...
     if (n.eve.1st.dry==0) {
-      x.CG.eve.wet[which(x.eve.CG.1st==eve.1st)]<-1
+      x.wet.CG[which(x.eve.CG.1st==eve.1st)]<-1
       next
     }
     xindx.eve.CG<-which(x.eve.CG.1st==eve.1st)
@@ -1246,6 +1262,8 @@ while (L.yo.ok>0) {
 # Y vectors (station locations)
   ya<-vector(mode="numeric",length=L.y.tot)
   yb<-vector(mode="numeric",length=L.y.tot)
+  yb1.tmp<-vector(mode="numeric",length=L.y.tot)
+  yb2.tmp<-vector(mode="numeric",length=L.y.tot)
   ybv.mat<-matrix(ncol=L.y.tot,nrow=L.y.tot,data=0.)
   yidi.eve<-vector(mode="numeric",length=L.y.tot)
   yidiv.eve<-vector(mode="numeric",length=L.y.tot)
@@ -1301,6 +1319,10 @@ while (L.yo.ok>0) {
   yo.n[yo.ok.pos]<-0
   yb[]<-NA
   yb[yo.ok.pos]<-0
+  yb1.tmp[]<-NA
+  yb1.tmp[yo.ok.pos]<-0
+  yb2.tmp[]<-NA
+  yb2.tmp[yo.ok.pos]<-0
   yidi.eve[]<-NA
   yidi.eve[yo.ok.pos]<-0
   yidiv.eve[]<-NA
@@ -1368,25 +1390,31 @@ while (L.yo.ok>0) {
                      ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
     r.xidi.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
                        ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+    r.aux.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                      ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+    r.edge.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                      ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
     r.xb.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                      ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
     r.xidi.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                        ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
-    r.aux.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
-                      ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
     r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                       ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+    r.edge.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                      ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
     xb.CG<-vector(mode="numeric",length=Lgrid.CG)
-    xidi.eve.CG<-vector(mode="numeric",length=Lgrid.CG)
+    xidi.CG<-vector(mode="numeric",length=Lgrid.CG)
     #
     r.xb.CG[]<-NA
-    r.xb.FG[]<-NA
     r.xidi.CG[]<-NA
-    r.xidi.FG[]<-NA
     r.aux.CG[]<-NA
+    r.edge.CG[]<-NA
+    r.xb.FG[]<-NA
+    r.xidi.FG[]<-NA
     r.aux.FG[]<-NA
+    r.edge.FG[]<-NA
     xb.CG[]<-NA
-    xidi.eve.CG[]<-0
+    xidi.CG[]<-0
     # identify event extension on the grid
     xindx.eve.CG<-which(x.eve.CG==eve.labels[n])
     xindx.eve.FG<-which(x.eve.FG==eve.labels[n])
@@ -1404,6 +1432,7 @@ while (L.yo.ok>0) {
                 "(",n,"/",n.eve,")",
                 " #obs=",n.y.eve[n]," #stns=",(n.y.eve[n]+n.ya.eve[n]),
                 sep=""))
+
     print(paste("event range x / y=",eve.rx,"/",eve.ry))
 #   ---------------------------------------------------------------------------
 #   + event observed by a single (isolated) station
@@ -1468,6 +1497,33 @@ while (L.yo.ok>0) {
     }
 #   ---------------------------------------------------------------------------
 #   + event including more than one observation
+#   edge detection (CG)
+    r.edge.CG[]<-1000
+    r.edge.CG[mask.CG]<-rep(NA,length(mask.CG))
+    r.edge.CG[mask.CG[xindx.eve.CG]]<-rep(1,Lgrid.eve.CG)
+    r.edge.CG<-edge(r.edge.CG)
+    x.edge.CG<-as.vector(r.edge.CG[mask.CG])
+    x.edge.CG[x.edge.CG!=1]<-NA
+    r.edge.CG[]<-NA
+    r.edge.CG[mask.CG[xindx.eve.CG]]<-x.edge.CG[xindx.eve.CG]
+    edge.CG<-which(!is.na(as.vector(r.edge.CG)))
+    xedge.CG<-xy.CG[edge.CG,1]
+    yedge.CG<-xy.CG[edge.CG,2]
+    r.dist<-distanceFromPoints(r.aux.CG,cbind(xedge.CG,yedge.CG))
+    r.aux.CG[]<-NA
+    r.aux.CG[mask.CG[xindx.eve.CG]]<-r.dist[mask.CG[xindx.eve.CG]]
+    r.dist<-r.aux.CG
+    x.dist.edge.CG<-as.vector(r.dist[mask.CG])
+    x.dist.edge.CG[x.dist.edge.CG>(2*dx.CG)]<-2*dx.CG
+    x.w.smo.CG<-1-exp(-0.5*(x.dist.edge.CG-2*dx.CG)**2/(dx.CG/2)**2)
+    x.w.nosmo.CG<-exp(-0.5*(x.dist.edge.CG-2*dx.CG)**2/(dx.CG/2)**2)
+    rm(r.edge.CG,x.edge.CG,edge.CG,r.dist,x.dist.edge.CG)
+#    r.aux.CG[]<-NA
+#    r.aux.CG[mask.CG]<-x.w.smo.CG
+#    writeRaster(file="wsmoCG",r.aux.CG,overwrite=T)
+#    r.aux.CG[]<-NA
+#    r.aux.CG[mask.CG]<-x.w.nosmo.CG
+#    writeRaster(file="wnosmoCG",r.aux.CG,overwrite=T)
 #   + Larger-scale Background = mode(distribution of observations)
     histog<-hist(yo[yindx],breaks=seq(0,round((max(yo[yindx])+1),0)),plot=F)
     mode<-which.max(histog$counts)-0.5
@@ -1495,10 +1551,147 @@ while (L.yo.ok>0) {
     auxz.CG<-abs(outer(zgrid.CG[xindx.eve.CG],VecZ[yindx],FUN="-"))
     InvD<-matrix(data=0,ncol=n.y.eve[n],nrow=n.y.eve[n])
 #   + cycle on horizontal decorrelation length scales
-    flag.firsttime<-T
+    flag.CGtoFG<-T
     n.iter<-0
     for (Dh.test in Dh.seq) {
       n.iter<-n.iter+1
+      # smooth background
+      d.fracCGtoFG<-ceiling(min(c(dx.CG,dy.CG))/min(c(dx.FG,dy.FG)))
+      if (Dh.test>Dh.seq.ref) {
+#        n.fgauss<-ceiling(4*Dh.seq.ref/d.CG.Km)
+#        if (n.fgauss%%2==0) n.fgauss+1
+#        sigma.fgauss<-ceiling(Dh.seq.ref/(2*d.CG.Km))
+        n.fgauss<-5
+        sigma.fgauss<-1
+      } else {
+#        n.fgauss<-ceiling(4*Dh.test/d.FG.Km)
+#        if (n.fgauss%%2==0) n.fgauss+1
+#        sigma.fgauss<-ceiling(Dh.test/(2*d.FG.Km))
+        sigma.fgauss<-d.fracCGtoFG
+        n.fgauss<-d.fracCGtoFG*4
+        if (n.fgauss%%2==0) n.fgauss<-n.fgauss+1
+      }
+      gf<-fgauss(sigma=sigma.fgauss,n=n.fgauss)
+      if (Dh.test>Dh.seq.ref) {
+        r.aux.CG <-raster(ncol=nx.CG, nrow=ny.CG, xmn=xmn.CG, xmx=xmx.CG,
+                          ymn=ymn.CG, ymx=ymx.CG, crs=proj4.utm33)
+        r.aux.CG[]<-NA
+        r.aux.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
+        yb1.tmp[yindx]<-extract(r.aux.CG,cbind(VecX[yindx],VecY[yindx]))
+        if (n.ya.eve[n]>0) yb1.tmp[ya.indx]<-extract(r.aux.CG,cbind(VecX[ya.indx],VecY[ya.indx]))
+        r.aux.CG<-trim(r.aux.CG)
+        r.smo.CG<-focal(r.aux.CG,w=gf,na.rm=T,pad=T)
+        r.smo.CG<-extend(r.smo.CG,r.orog.CG)
+        xb.CG[xindx.eve.CG]<-x.w.smo.CG[xindx.eve.CG]*as.vector(r.smo.CG[mask.CG[xindx.eve.CG]])+
+                             x.w.nosmo.CG[xindx.eve.CG]*xb.CG[xindx.eve.CG]
+        rm(r.smo.CG)
+        r.aux.CG<-extend(r.aux.CG,r.orog.CG)
+        r.aux.CG[]<-NA
+        r.aux.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
+#        writeRaster(file=paste("xb_",n,"_",Dh.test,sep=""),r.aux.CG,overwrite=T)
+        yb2.tmp[yindx]<-extract(r.aux.CG,cbind(VecX[yindx],VecY[yindx]))
+        aux<-which(!is.na(yb2.tmp[yindx]) & !is.na(yb1.tmp[yindx]))
+        if (length(aux)>0) yb[yindx][aux]<-yb[yindx][aux]+(yb2.tmp[yindx][aux]-yb1.tmp[yindx][aux])
+        if (n.ya.eve[n]>0) {
+          yb2.tmp[ya.indx]<-extract(r.aux.CG,cbind(VecX[ya.indx],VecY[ya.indx]))
+          aux<-which(!is.na(yb2.tmp[ya.indx]) & !is.na(yb1.tmp[ya.indx]))
+          if (length(aux)>0) yb[ya.indx][aux]<-yb[ya.indx][aux]+(yb2.tmp[ya.indx][aux]-yb1.tmp[ya.indx][aux])
+        }
+#        print("yb[yindx]")
+#        print(paste(yo[yindx],yb[yindx],yb1.tmp[yindx],yb2.tmp[yindx],"\n"))
+      } else {
+        # get background from CG
+        if (flag.CGtoFG) {
+          flag.CGtoFG<-F
+          # xidi and xb are derived from CG, smoothing the borders to refine event identification
+          r.xidi.CG[]<-NA
+          r.xidi.CG[mask.CG[xindx.eve.CG]]<-xidi.CG[xindx.eve.CG]
+          r.xidi.CG<-focal(r.xidi.CG,w=gf,na.rm=T)
+          r.xidi.CG[mask.CG[xindx.eve.CG]]<-xidi.CG[xindx.eve.CG]
+          r.xidi.CG<-trim(r.xidi.CG)
+          #          
+          r.xb.CG[]<-NA
+          r.xb.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
+          r.xb.CG<-focal(r.xb.CG,w=matrix(1/9, nc=3, nr=3),na.rm=T)
+          r.xb.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
+          r.xb.CG<-trim(r.xb.CG)
+          # "trim" and "crop" for a faster "resample"
+          r.aux.FG<-crop(r.orog.FG,r.xb.CG)
+          r.aux.FG[]<-NA
+          r.xb.FG<-resample(r.xb.CG,r.aux.FG,method="bilinear")
+          r.xb.FG<-extend(r.xb.FG,r.orog.FG)
+#          writeRaster(file="rxb",r.xb.FG,overwrite=T)
+          xb.FG<-extract(r.xb.FG,mask.FG)
+          xindx.eve.FG<-which(!is.na(xb.FG))
+          Lgrid.eve.FG<-length(xindx.eve.FG)
+          x.eve.FG[xindx.eve.FG]<-eve.labels[n]
+          #
+          r.aux.FG[]<-NA
+          r.xidi.FG<-resample(r.xidi.CG,r.aux.FG,method="bilinear")
+          r.xidi.FG<-extend(r.xidi.FG,r.orog.FG)
+          xidi.FG.aux<-extract(r.xidi.FG,mask.FG)
+          xidi.FG[xindx.eve.FG]<-xidi.FG.aux[xindx.eve.FG]
+          # edge detection (FG)
+          r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                      ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+          r.edge.FG[]<-1000
+          r.edge.FG[mask.FG]<-rep(NA,length(mask.FG))
+          r.edge.FG[mask.FG[xindx.eve.FG]]<-rep(1,Lgrid.eve.FG)
+          r.edge.FG<-edge(r.edge.FG)
+          x.edge.FG<-as.vector(r.edge.FG[mask.FG])
+          x.edge.FG[x.edge.FG!=1]<-NA
+          r.edge.FG[]<-NA
+          r.edge.FG[mask.FG[xindx.eve.FG]]<-x.edge.FG[xindx.eve.FG]
+#          writeRaster(file="redge",r.edge.FG,overwrite=T)
+          edge.FG<-which(!is.na(as.vector(r.edge.FG)))
+          xedge.FG<-xy.FG[edge.FG,1]
+          yedge.FG<-xy.FG[edge.FG,2]
+          r.dist<-distanceFromPoints(r.aux.FG,cbind(xedge.FG,yedge.FG))
+#          writeRaster(file="rdist1",r.dist,overwrite=T)
+          r.aux.FG[]<-NA
+          r.aux.FG[mask.FG[xindx.eve.FG]]<-r.dist[mask.FG[xindx.eve.FG]]
+          r.dist<-r.aux.FG
+#          writeRaster(file="rdist2",r.dist,overwrite=T)
+          x.dist.edge.FG<-as.vector(r.dist[mask.FG])
+          x.dist.edge.FG[x.dist.edge.FG>(2*dx.CG)]<-2*dx.CG
+          x.w.smo.FG<-1-exp(-0.5*(x.dist.edge.FG-2*dx.CG)**2/(dx.CG/2)**2)
+          x.w.nosmo.FG<-exp(-0.5*(x.dist.edge.FG-2*dx.CG)**2/(dx.CG/2)**2)
+          rm(r.edge.FG,x.edge.FG,edge.FG,r.dist,x.dist.edge.FG)
+#          r.aux.FG[]<-NA
+#          r.aux.FG[mask.FG]<-x.w.smo.FG
+#          writeRaster(file="wsmoFG",r.aux.FG,overwrite=T)
+#          r.aux.FG[]<-NA
+#          r.aux.FG[mask.FG]<-x.w.nosmo.FG
+#          writeRaster(file="wnosmoFG",r.aux.FG,overwrite=T)
+        }
+        r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                          ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+        r.aux.FG[]<-NA
+        r.aux.FG[mask.FG[xindx.eve.FG]]<-xb.FG[xindx.eve.FG]
+        yb1.tmp[yindx]<-extract(r.aux.FG,cbind(VecX[yindx],VecY[yindx]))
+        if (n.ya.eve[n]>0) yb1.tmp[ya.indx]<-extract(r.aux.FG,cbind(VecX[ya.indx],VecY[ya.indx]))
+        r.aux.FG<-trim(r.aux.FG)
+        r.smo.FG<-focal(r.aux.FG,w=gf,na.rm=T,pad=T)
+        r.smo.FG<-extend(r.smo.FG,r.orog.FG)
+        xb.FG[xindx.eve.FG]<-x.w.smo.FG[xindx.eve.FG]*as.vector(r.smo.FG[mask.FG[xindx.eve.FG]])+
+               x.w.nosmo.FG[xindx.eve.FG]*xb.FG[xindx.eve.FG]
+        rm(r.smo.FG)
+        r.aux.FG<-extend(r.aux.FG,r.orog.FG)
+        r.aux.FG[]<-NA
+        r.aux.FG[mask.FG[xindx.eve.FG]]<-xb.FG[xindx.eve.FG]
+#        writeRaster(file=paste("xb_",n,"_",Dh.test,sep=""),r.aux.FG,overwrite=T)
+        yb2.tmp[yindx]<-extract(r.aux.FG,cbind(VecX[yindx],VecY[yindx]))
+        aux<-which(!is.na(yb2.tmp[yindx]) & !is.na(yb1.tmp[yindx]))
+        if (length(aux)>0) yb[yindx][aux]<-yb[yindx][aux]+(yb2.tmp[yindx][aux]-yb1.tmp[yindx][aux])
+        if (n.ya.eve[n]>0) {
+          yb2.tmp[ya.indx]<-extract(r.aux.FG,cbind(VecX[ya.indx],VecY[ya.indx]))
+          aux<-which(!is.na(yb2.tmp[ya.indx]) & !is.na(yb1.tmp[ya.indx]))
+          if (length(aux)>0) yb[ya.indx][aux]<-yb[ya.indx][aux]+(yb2.tmp[ya.indx][aux]-yb1.tmp[ya.indx][aux])
+        }
+#        print("yb[yindx]")
+#        print(paste(yo[yindx],yb[yindx],yb1.tmp[yindx],yb2.tmp[yindx],"\n"))
+      }
+      #
       D.test.part<-exp(-0.5*(Disth[yindx,yindx]/Dh.test)**2.)
       J<-1000000
       if (Dh.test>=300) Dz.seq<-c(10000)
@@ -1597,45 +1790,17 @@ while (L.yo.ok>0) {
         aux<-which(xa.CG[xindx.eve.CG]<rr.inf & !is.na(xa.CG[xindx.eve.CG]))
         xa.CG[xindx.eve.CG][aux]<-rr.inf
         # update IDI (which is cumulative)
-        xidi.eve.CG[xindx.eve.CG]<-xidi.eve.CG[xindx.eve.CG]+rowSums(K.CG)
+        xidi.CG[xindx.eve.CG]<-xidi.CG[xindx.eve.CG]+rowSums(K.CG)
         rm(K.CG)
         # next background is the current analysis, only a little bit smoothed
         # smoothing is for realistic border effects
         xb.CG[]<-NA
         xb.CG[xindx.eve.CG]<-xa.CG[xindx.eve.CG]
+        r.aux.CG[]<-NA
+        r.aux.CG[mask.CG]<-xa.CG
+#        writeRaster(file=paste("xa_",n,"_",Dh.test,sep=""),r.aux.CG,overwrite=T)
       } else { 
 #     + Analysis on FG
-        # get background from CG
-        if (flag.firsttime) {
-          flag.firsttime<-F
-          # xidi and xb are derived from CG, smoothing the borders to refine event identification
-          r.xidi.CG[]<-NA
-          r.xidi.CG[mask.CG[xindx.eve.CG]]<-xidi.eve.CG[xindx.eve.CG]
-          r.xidi.CG<-focal(r.xidi.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
-          r.xidi.CG[mask.CG[xindx.eve.CG]]<-xidi.eve.CG[xindx.eve.CG]
-          r.xidi.CG<-trim(r.xidi.CG)
-          #          
-          r.xb.CG[]<-NA
-          r.xb.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
-          r.xb.CG<-focal(r.xb.CG,w=matrix(1/9, nr=3, nc=3),na.rm=T)
-          r.xb.CG[mask.CG[xindx.eve.CG]]<-xb.CG[xindx.eve.CG]
-          r.xb.CG<-trim(r.xb.CG)
-          # "trim" and "crop" for a faster "resample"
-          r.aux.FG<-crop(r.orog.FG,r.xb.CG)
-          r.aux.FG[]<-NA
-          r.xb.FG<-resample(r.xb.CG,r.aux.FG,method="bilinear")
-          r.xb.FG<-extend(r.xb.FG,r.orog.FG)
-          xb.FG<-extract(r.xb.FG,mask.FG)
-          xindx.eve.FG<-which(!is.na(xb.FG))
-          Lgrid.eve.FG<-length(xindx.eve.FG)
-          x.eve.FG[xindx.eve.FG]<-eve.labels[n]
-          #
-          r.aux.FG[]<-NA
-          r.xidi.FG<-resample(r.xidi.CG,r.aux.FG,method="bilinear")
-          r.xidi.FG<-extend(r.xidi.FG,r.orog.FG)
-          xidi.FG.aux<-extract(r.xidi.FG,mask.FG)
-          xidi.FG[xindx.eve.FG]<-xidi.FG.aux[xindx.eve.FG]
-        }
         # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<Lgrid.eve.FG) {
@@ -1667,6 +1832,7 @@ while (L.yo.ok>0) {
       } # end: analysis on FG
       # current analysis is next iteration background
       yb[yindx]<-ya[yindx]
+      yb[ya.indx]<-ya[ya.indx]
     } # end cycle on horizontal decorrelation lenght scales
     if (exists("K.CG")) rm(K.CG,G.CG)
     #
@@ -1724,7 +1890,7 @@ while (L.yo.ok>0) {
       meanidiv.y.eve.q75[n]<-NA
     }
   } # END CYCLE over events
-  if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.eve.CG,xa.CG,xindx.eve.CG,r.aux.CG,xb.CG)
+  if (exists("r.xb.CG")) rm(r.xidi.CG,r.xb.CG,xidi.CG,xa.CG,xindx.eve.CG,r.aux.CG,xb.CG)
   if (exists("r.xb.FG")) rm(r.xidi.FG,r.xb.FG,r.aux.FG)
   break
 } # end of DQC loop
