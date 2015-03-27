@@ -11,6 +11,6 @@ config_list <- alist(
            opt = alist(
                        main.path="/disk1/projects/seNorge2",
                        main.path.output="/disk1",
-                       testmode=TRUE)
+                       testmode=FALSE)
          )
      )

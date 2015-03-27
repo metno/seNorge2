@@ -195,11 +195,11 @@ rainspatplot<-function(x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,br
 PRECplot<-function(namefileout=NULL,
                    y.data=NULL,
                    r.data=NULL,
-                   scale=NULL,
-                   col.scale=NULL,
+#                   scale=NULL,
+#                   col.scale=NULL,
                    orog=NULL,
                    bound=NULL,
-                   mtxt=NULL,xl=NULL,yl=NULL) {
+                   par=NULL) {
 #   NA  observation is NA
 #   -1  missing DQC info
 #   0   good observation
@@ -221,12 +221,49 @@ PRECplot<-function(namefileout=NULL,
 #----------------------------------------------------------------------------------
   y.data$x<-as.numeric(y.data$x)
   y.data$y<-as.numeric(y.data$y)
+  leg.str<-"no rain"
+  n.col<-length(par$col.scale)
+  #
   png(file=namefileout,width=1200,height=1200)
-  plot(y.data$x[!is.na(y.data$yo)],y.data$y[!is.na(y.data$yo)],main=mtxt,xlab="",ylab="",xlim=xl,ylim=yl,cex.main=1.6)
+  plot(y.data$x[!is.na(y.data$yo)],y.data$y[!is.na(y.data$yo)],
+       main=par$main,xlab=par$xlab,ylab=par$ylab,xlim=par$xl,ylim=par$yl,cex.main=1.6,col="white")
   image(orog,breaks=c(0,500,1000,1500,2000,2500),col=gray(seq(0.7,1,length=5)),add=T)
-  image(r.data,col=col.scale,breaks=scale,add=T)
-  points(y.data$x[!is.na(y.data$yo)],y.data$y[!is.na(y.data$yo)])
+  image(r.data,col=par$col.scale,breaks=par$scale,add=T)
+  # dry observations
+  dry<-!is.na(y.data$yo) & (y.data$yo<0.1)
+  aux<-which(dry & y.data$dqcflag<=0)
+  if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],col="black",bg="gray",pch=21,cex=1.2)
+  aux<-which(dry & y.data$dqcflag==100)
+  if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],col="black",bg="gray",pch=24,cex=1.2)
+  aux<-which(dry & y.data$dqcflag>100)
+  if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],col="black",bg="gray",pch=25,cex=1.2)
+  # wet observations
+  for (c in 1:n.col) {
+    in.break<-(!is.na(y.data$yo)) & (y.data$yo>=par$scale[c]) & (y.data$yo<par$scale[c+1])
+    aux<-which(in.break & y.data$dqcflag<=0)
+    if (length(aux)>0) 
+      points(y.data$x[aux],y.data$y[aux],col="black",bg=par$col.scale[c],pch=21,cex=1.2)
+    if (c==1) {
+      leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=1),", ",
+                               formatC(par$scale[c+1],format="f",digits=1),") mm",sep=""))
+    } else if (c==2) {
+      leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=1),", ",
+                               formatC(par$scale[c+1],format="f",digits=0),") mm",sep=""))
+    } else if (c<n.col) {
+      leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=0),", ",
+                           formatC(par$scale[c+1],format="f",digits=0),") mm",sep=""))
+    } else if (c==n.col) {
+      leg.str<-c(leg.str,paste(">",formatC(par$scale[c],format="f",digits=0),"mm",sep=""))
+    }
+    aux<-which(in.break & y.data$dqcflag==100)
+    if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],bg=par$col.scale[c],col="black",pch=24,cex=1.2)
+    aux<-which(in.break & y.data$dqcflag>100)
+    if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],bg=par$col.scale[c],col="black",pch=25,cex=1.2)
+  }
   plot(bound,add=T)
+  legend(x="bottomright",fill=rev(c("gray",par$col.scale)),legend=rev(leg.str),cex=1.5)
+#  contour(orog,levels=c(0,100,250,500,1500),drawlabels=F,col="black",lwd=0.8,add=T)
+#  contour(r.data,levels=c(5,10,30,70,100),drawlabels=F,col="black",lwd=0.8,add=T)
   dev.off()
 #  if (is.null(legcex)) legcex<-0.8
 #  col1<-c(colext[1],col,colext[2])

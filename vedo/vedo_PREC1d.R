@@ -6,7 +6,6 @@ library(ncdf)
 #
 # External Functions
 #source(paste("/disk1/projects/seNorge2/lib/SpInt_plots.R",sep=""))
-source(paste("/disk1/projects/seNorge2/lib/Bspat_plot.R",sep=""))
 #
 # Graphic parameter
 xlim.sw<--75000
@@ -35,7 +34,15 @@ stepseq.r<-as.numeric(stepseq$V1)
 stepseq.g<-as.numeric(stepseq$V2)
 stepseq.b<-as.numeric(stepseq$V3)
 stepseq.col<-rev(rgb(stepseq.r,stepseq.g,stepseq.b,maxColorValue = 1))
-
+stepseq25<-read.table(file="../etc/StepSeq25.rgb",skip=7,stringsAsFactors=F)
+stepseq25.r<-as.numeric(stepseq25$V1)
+stepseq25.g<-as.numeric(stepseq25$V2)
+stepseq25.b<-as.numeric(stepseq25$V3)
+stepseq25.col<-rev(rgb(stepseq25.r,stepseq25.g,stepseq25.b,maxColorValue = 256))
+aux<-stepseq25.col[11:15]
+stepseq25.col[11:15]<-stepseq25.col[1:5]
+stepseq25.col[1:5]<-aux
+#
 tcol<-c("mediumorchid","plum","paleturquoise3","paleturquoise","palegreen",
         "green3","forestgreen","yellow2","darkorange","red")
 tcol_ext<-c("gray","orangered4")
@@ -49,27 +56,125 @@ bcol.idi<-c(0.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,1.)
 #==============================================================================
 arguments <- commandArgs()
 arguments
-file.nc<-arguments[3]
-file.txt<-arguments[4]
-file.out<-arguments[5]
+#
+yyyy.mm.dd<-arguments[3]
+config_file<-arguments[4]
+config_par<-arguments[5]
+#file.nc<-arguments[3]
+#file.txt<-arguments[4]
+#file.out<-arguments[5]
 if (length(arguments)!=5) {
   print("Error in command line arguments:")
-  print("R --vanilla yyyy.mm.dd yyyy.mm.dd blacklist_current blacklist_never errobs")
-  print("             begin -----> end of the accumulation period")
+  print("R --vanilla yyyy.mm.dd config_file config_par")
   quit(status=1)
 }
 #
-# Read Geographical Information
-filenamedem<-paste("/disk1/projects/seNorge2/geoinfo/seNorge2_dem_UTM33.nc",sep="")
-fileborders<-paste("/disk1/projects/seNorge2/geoinfo/TM_WORLD_BORDERS_UTM33/TM_WORLD_BORDERS_UTM33-0.2.shp",sep="")
+# [] define/check paths
+if (!file.exists(config_file)) 
+  ext<-error_exit("Fatal Error: configuration file not found")
+source(config_file)
+for (p in 1:length(config_list)) {
+  if (config_list[[p]]$pname==config_par) break
+}
+if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )  
+  ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
+main.path<-config_list[[p]]$opt$main.path
+main.path.output<-config_list[[p]]$opt$main.path.output
+testmode<-config_list[[p]]$opt$testmode
+if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
+  ext<-error_exit("Fatal Error: path not found")
+# geographical information
+main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
+filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+filenamedem.CG<-paste(main.path.geoinfo,"/fennodem_utm33.nc",sep="")
+fileborders<-paste(main.path.geoinfo,"/TM_WORLD_BORDERS_UTM33/TM_WORLD_BORDERS_UTM33-0.2.shp",sep="")
+if (!file.exists(paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep=""))) 
+  ext<-error_exit(paste("File not found:",main.path.geoinfo,"/seNorge2_dem_UTM33.nc"))
+if (!file.exists(paste(main.path.geoinfo,"/fennodem_utm33.nc",sep=""))) 
+  ext<-error_exit(paste("File not found:",main.path.geoinfo,"/fennodem_utm33.nc"))
+# common libs and etcetera
+path2lib.com<-paste(main.path,"/lib",sep="")
+path2etc.com<-paste(main.path,"/etc",sep="")
+if (!file.exists(paste(path2lib.com,"/Bspat_plot.R",sep=""))) 
+  ext<-error_exit(paste("File not found:",path2lib.com,"/Bspat_plot.R"))
+#if (!file.exists(paste(path2lib.com,"/ncout.spec.list.r",sep=""))) 
+#  ext<-error_exit(paste("File not found:",path2lib.com,"/ncout.spec.list.r"))
+#if (!file.exists(paste(path2lib.com,"/getStationData.R",sep=""))) 
+#  ext<-error_exit(paste("File not found:",path2lib.com,"/getStationData.R"))
+#source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
+#source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+#source(paste(path2lib.com,"/getStationData.R",sep=""))
+source(paste(path2lib.com,"/Bspat_plot.R",sep=""))
+# set Time-related variables
+yyyy<-substr(yyyy.mm.dd,1,4)
+mm<-substr(yyyy.mm.dd,6,7)
+dd<-substr(yyyy.mm.dd,9,10)
+yyyymm<-paste(yyyy,mm,sep="")
+yyyymmdd<-paste(yyyy,mm,dd,sep="")
+# input directories
+# daily precipitation data
+path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
+path2input.1d.main.stn<-paste(path2input.1d.main,"/station_dataset",sep="")
+path2input.1d.main.grd<-paste(path2input.1d.main,"/gridded_dataset",sep="")
+path2input.1d.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
+path2input.1d.add.grd<-paste(path2input.1d.add,"/gridded_dataset",sep="")
+path2input.1d.add.eve<-paste(path2input.1d.add,"/event_dataset",sep="")
+in.1d.file.stn<- paste(path2input.1d.main.stn,"/",yyyymm,
+                       "/seNorge_v2_0_PREC1d_station_",
+                       yyyymmdd,"_",yyyymmdd,".txt",sep="")
+in.1d.file.eve<- paste(path2input.1d.add.eve,"/",yyyymm,
+                       "/seNorge_v2_0_PREC1d_event_",
+                       yyyymmdd,"_",yyyymmdd,".txt",sep="")
+in.1d.file.grd.ana<- paste(path2input.1d.main.grd,"/",yyyymm,
+                           "/seNorge_v2_0_PREC1d_grid_",
+                           yyyymmdd,"_",yyyymmdd,".nc",sep="")
+in.1d.file.grd.idi<- paste(path2input.1d.add.grd,"/",yyyymm,
+                           "/seNorge_v2_0_PREC1d_grid_normIDI_",
+                           yyyymmdd,"_",yyyymmdd,".nc",sep="")
+# output directories
+dir.create(file.path(main.path.output,"seNorge2_scratch"), showWarnings = FALSE)
+path2output.main<-paste(main.path.output,"/seNorge2_scratch/PREC1d",sep="")
+path2output.main.grd<-paste(path2output.main,"/PREC",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_scratch/PREC1d",sep="")
+path2output.add.grd<-paste(path2output.add,"/IDI",sep="")
+if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
+if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWarnings=F) 
+if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
+if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
+# Setup output files 
+#dir.create(paste(path2output.main.stn,"/",yyyymm,sep=""),showWarnings=F)
+dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
+dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
+#dir.create(paste(path2output.add.eve,"/",yyyymm,sep=""),showWarnings=F)
+#out.file.stn<- paste(path2output.main.stn,"/",yyyymm,
+#                     "/seNorge_v2_0_PREC1d_station_",
+#                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
+#out.file.eve<- paste(path2output.add.eve,"/",yyyymm,
+#                     "/seNorge_v2_0_PREC1d_event_",
+#                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
+out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm,
+                         "/seNorge_v2_0_PREC1d_grid_",
+                         yyyymmdd,"_",yyyymmdd,".png",sep="")
+out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm,
+                         "/seNorge_v2_0_PREC1d_grid_normIDI_",
+                         yyyymmdd,"_",yyyymmdd,".png",sep="")
 #
+print("Output files:")
+print("analysis on the grid (netcdf)")
+print(out.file.grd.ana)
+print("event-normalized idi on the grid (netcdf)")
+print(out.file.grd.idi)
+#print("station outputs (text)")
+#print(out.file.stn)
+#print("event outputs (text)")
+#print(out.file.eve)
+# read geographical info
 orog<-raster(filenamedem)
 borders<-readOGR(fileborders,"TM_WORLD_BORDERS_UTM33-0.2")
-#
 # open/read/close netcdf file
-nc <- open.ncdf(file.nc)
-data <- get.var.ncdf( nc )
-aux<-att.get.ncdf( nc, "UTM_Zone_33","proj4" )
+nc <- open.ncdf(in.1d.file.grd.ana)
+data <- get.var.ncdf(nc)
+aux<-att.get.ncdf(nc,"UTM_Zone_33","proj4")
 projstr<-aux$value
 dx<-nc$dim$X$vals[2]-nc$dim$X$vals[1]
 ex.xmin<-min(nc$dim$X$vals)-dx/2
@@ -91,37 +196,24 @@ data<-extract(r,1:ncell(r))
 aux<-which(data==0)
 r[aux]<-rep(NA,length(aux))
 #
-y.data<-read.table(file=file.txt,sep=";",header=T,stringsAsFactors=F)
+y.data<-read.table(file=in.1d.file.stn,sep=";",header=T,stringsAsFactors=F)
 y.data$dqcflag<-as.integer(y.data$dqcflag)
-print(y.data$dqcflag)
 #year;month;day;nday;stid;x;y;z;eve.lab;yo;yb;ya;yav;yidi;yidiv;dqcflag;
 #
-pp<-PRECplot(namefileout=file.out,
-                   y.data=y.data,
-                   r.data=r,
-                   scale=0:128,
-                   col.scale=stepseq.col,
-                   orog=orog,
-                   bound=borders,
-                   mtxt=NULL,xl=NULL,yl=NULL)
-q()
-
-ee<-rainspatplot(x=y.data$x,#VecX[yo.ok.pos],
-                 y=y.data$y,#VecY[yo.ok.pos],
-                 yvar=y.data$yo,#yo[yo.ok.pos],
-                 ydqc=y.data$dqcflag,
-#                 xvar=x.data,
-                 xvar=r,
-                 xvar.orog=orog,
-                 brk=bcol.daily,
-                 col=tcol,
-                 colext=tcol_ext,
-                 legcex=2,
-                 mtxt=paste("TEXT",sep=""),
-                 namefileout=file.out,
-                 cx=rep(1.8,(length(tcol)+2)),
-                 bnd=borders,
-                 xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
-warnings()
+scale.PREC1d<-c(0.1,0.5, 1, 2, 3, 4,
+                  5,  6, 7, 8, 9,
+                 10, 15,20,25,30,
+                 35, 40,45,50,55,
+                70,90,110,130,100000)
 #
-quit()
+par.PREC1d<-list(col.scale=stepseq25.col,scale=scale.PREC1d,
+                 main=paste(yyyy.mm.dd,"PREC1d","daily accumulated precipitation [06-06 UTC]"),
+                 xlab="",ylab="",xl=NULL,yl=NULL)
+#
+pp<-PRECplot(namefileout=out.file.grd.ana,
+             y.data=y.data,
+             r.data=r,
+             orog=orog,
+             bound=borders,
+             par=par.PREC1d)
+q()
