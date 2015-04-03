@@ -19,40 +19,17 @@ ylim.ne<-8000000
 #ylim.ne<-7150000
 #-----------------------------------------------------------------------------
 # [] Colors
-banded<-read.table(file="../etc/NCV_banded.rgb",skip=2,stringsAsFactors=F)
-banded.r<-as.numeric(banded$V1)
-banded.g<-as.numeric(banded$V2)
-banded.b<-as.numeric(banded$V3)
-banded.col<-rgb(banded.r,banded.g,banded.b,maxColorValue = 256)
-rainbow<-read.table(file="../etc/NCV_rainbow2.rgb",skip=2,stringsAsFactors=F)
-rainbow.r<-as.numeric(rainbow$V1)
-rainbow.g<-as.numeric(rainbow$V2)
-rainbow.b<-as.numeric(rainbow$V3)
-rainbow.col<-rgb(rainbow.r,rainbow.g,rainbow.b,maxColorValue = 256)
-stepseq<-read.table(file="../etc/MPL_StepSeq.rgb",skip=2,stringsAsFactors=F)
-stepseq.r<-as.numeric(stepseq$V1)
-stepseq.g<-as.numeric(stepseq$V2)
-stepseq.b<-as.numeric(stepseq$V3)
-stepseq.col<-rev(rgb(stepseq.r,stepseq.g,stepseq.b,maxColorValue = 1))
-stepseq25<-read.table(file="../etc/StepSeq25.rgb",skip=7,stringsAsFactors=F)
-stepseq25.r<-as.numeric(stepseq25$V1)
-stepseq25.g<-as.numeric(stepseq25$V2)
-stepseq25.b<-as.numeric(stepseq25$V3)
-stepseq25.col<-rev(rgb(stepseq25.r,stepseq25.g,stepseq25.b,maxColorValue = 256))
-aux<-stepseq25.col[11:15]
-stepseq25.col[11:15]<-stepseq25.col[1:5]
-stepseq25.col[1:5]<-aux
-#
-tcol<-c("mediumorchid","plum","paleturquoise3","paleturquoise","palegreen",
-        "green3","forestgreen","yellow2","darkorange","red")
-tcol_ext<-c("gray","orangered4")
-# day
-bcol.daily<-c(0.05,0.5,3,7,10,15,20,30,40,50,60)
-# month
-bcol.monthly<-c(0.05,0.5,3,10,50,100,200,300,500,750,1500)
-# annual
-bcol.annual<-c(0.05,0.5,250,500,750,1000,1250,1500,2000,3000,4000)
-bcol.idi<-c(0.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,1.)
+##
+#tcol<-c("mediumorchid","plum","paleturquoise3","paleturquoise","palegreen",
+#        "green3","forestgreen","yellow2","darkorange","red")
+#tcol_ext<-c("gray","orangered4")
+## day
+#bcol.daily<-c(0.05,0.5,3,7,10,15,20,30,40,50,60)
+## month
+#bcol.monthly<-c(0.05,0.5,3,10,50,100,200,300,500,750,1500)
+## annual
+#bcol.annual<-c(0.05,0.5,250,500,750,1000,1250,1500,2000,3000,4000)
+#bcol.idi<-c(0.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,1.)
 #==============================================================================
 arguments <- commandArgs()
 arguments
@@ -111,6 +88,30 @@ mm<-substr(yyyy.mm.dd,6,7)
 dd<-substr(yyyy.mm.dd,9,10)
 yyyymm<-paste(yyyy,mm,sep="")
 yyyymmdd<-paste(yyyy,mm,dd,sep="")
+# [] Colors
+banded<-read.table(file=paste(path2etc.com,"/NCV_banded.rgb",sep=""),skip=2,stringsAsFactors=F)
+banded.r<-as.numeric(banded$V1)
+banded.g<-as.numeric(banded$V2)
+banded.b<-as.numeric(banded$V3)
+banded.col<-rgb(banded.r,banded.g,banded.b,maxColorValue = 256)
+rainbow<-read.table(file=paste(path2etc.com,"/NCV_rainbow2.rgb",sep=""),skip=2,stringsAsFactors=F)
+rainbow.r<-as.numeric(rainbow$V1)
+rainbow.g<-as.numeric(rainbow$V2)
+rainbow.b<-as.numeric(rainbow$V3)
+rainbow.col<-rgb(rainbow.r,rainbow.g,rainbow.b,maxColorValue = 256)
+stepseq<-read.table(file=paste(path2etc.com,"/MPL_StepSeq.rgb",sep=""),skip=2,stringsAsFactors=F)
+stepseq.r<-as.numeric(stepseq$V1)
+stepseq.g<-as.numeric(stepseq$V2)
+stepseq.b<-as.numeric(stepseq$V3)
+stepseq.col<-rev(rgb(stepseq.r,stepseq.g,stepseq.b,maxColorValue = 1))
+stepseq25<-read.table(file=paste(path2etc.com,"/StepSeq25.rgb",sep=""),skip=7,stringsAsFactors=F)
+stepseq25.r<-as.numeric(stepseq25$V1)
+stepseq25.g<-as.numeric(stepseq25$V2)
+stepseq25.b<-as.numeric(stepseq25$V3)
+stepseq25.col<-rev(rgb(stepseq25.r,stepseq25.g,stepseq25.b,maxColorValue = 256))
+aux<-stepseq25.col[11:15]
+stepseq25.col[11:15]<-stepseq25.col[1:5]
+stepseq25.col[1:5]<-aux
 # input directories
 # daily precipitation data
 path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")

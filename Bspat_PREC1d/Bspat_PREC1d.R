@@ -1272,6 +1272,8 @@ while (L.yo.ok>0) {
   # FG clump all the events together, although with a different label respect to CG
   r.clu.FG<-clump(r.CGtoFG,directions=8,gaps=F)
   x.clu.FG<-getValues(r.clu.FG)[mask.FG]
+  mask.clu.FG<-which(!is.na(x.clu.FG))
+  NAmask.clu.FG<-which(is.na(x.clu.FG))
   f.lab<-freq(r.clu.FG)
   aux<-which(!is.na(f.lab[,1]))
   f.lab.val<-f.lab[aux,1]
@@ -1285,14 +1287,57 @@ while (L.yo.ok>0) {
   y.bweight.FG<-extract(r.bweight.FG,cbind(VecX,VecY),method="bilinear")
   storage.mode(y.bweight.FG)<-"numeric"
   y.bweight.FG[is.na(y.bweight.FG)]<-1
-  # link each FG event with the correspondent CG event
-  x.eve.FG<-vector(mode="integer",length=Lgrid.FG)
+  #
+  r.aux.FG<-r.orog.FG
+  x.dist<-vector(mode="numeric",length=Lgrid.FG)
+  x.dist.min<-vector(mode="numeric",length=Lgrid.FG)
+  x.eve.FG<-vector(mode="numeric",length=Lgrid.FG)
+  x.dist.min[]<-NA
+  x.dist[]<-NA
   x.eve.FG[]<-NA
-  for (i in f.lab.val) {
-    indx<-which(x.clu.FG==i)
-    if (length(indx)==0) next
-    lab.fromCGtoFG<-as.integer(names(which.max(table(x.lngb.FG[indx]))))
-    x.eve.FG[indx]<-lab.fromCGtoFG
+  rm.eve<-vector(mode="numeric")
+  for (n in 1:n.eve) {
+    print(n)
+    r.aux.FG[]<-NA
+    r.aux.FG[mask.FG[x.lngb.FG==eve.labels[n]]]<-1
+#    r.edge.FG<-edge(r.aux.FG,type="inner")
+    r.edge.FG<-edge(r.aux.FG,type="outer")
+    x.edge.FG<-getValues(r.edge.FG)[mask.FG]
+    x.edge.FG[x.edge.FG!=1]<-NA
+    r.edge.FG[]<-NA
+    r.edge.FG[mask.FG]<-x.edge.FG
+    edge.FG<-which(!is.na(getValues(r.edge.FG)))
+    n.edge.FG<-length(edge.FG)
+    if (n.edge.FG>0) {
+      xedge.FG<-xy.FG[edge.FG,1]
+      yedge.FG<-xy.FG[edge.FG,2]
+      r.dist<-distanceFromPoints(r.clu.FG,cbind(xedge.FG,yedge.FG))
+      x.dist<-getValues(r.dist)[mask.FG]
+#      x.dist[]<-NA
+#      for (labFG in f.lab.val) {
+#        r.aux.FG[]<-NA
+#        r.aux.FG[mask.FG[which(x.clu.FG==labFG)]]<-1
+#        x.aux<-getValues(r.aux.FG)[mask.FG]
+#        writeRaster(r.aux.FG,file="rauxfg.nc", format="CDF", overwrite=TRUE)
+#        if (any(x.aux==1)) {
+#          r.aux.FG<-trim(r.aux.FG)
+#          r.dist<-distanceFromPoints(r.aux.FG,cbind(xedge.FG,yedge.FG))
+#          r.dist<-extend(r.dist,r.orog.FG)
+#          x.dist.aux<-getValues(r.dist)[mask.FG]
+#          x.dist[which(!is.na(x.dist.aux))]<-x.dist.aux[which(!is.na(x.dist.aux))]
+#        }
+#      }
+      x.dist[NAmask.clu.FG]<-NA
+      if (n==1) {
+        x.dist.min<-x.dist
+        x.eve.FG[mask.clu.FG]<-eve.labels[1]
+      } else {
+        aux<-which(x.dist[mask.clu.FG]<x.dist.min[mask.clu.FG])
+        aux<-mask.clu.FG[aux]
+        x.eve.FG[aux]<-eve.labels[n]
+        x.dist.min[aux]<-x.dist[aux]
+      }
+    }
   }
 # finally, we're interested only in events occurring in Norway
   aux<-which(eve.labels %in% x.eve.FG)
@@ -1303,8 +1348,11 @@ while (L.yo.ok>0) {
     n.eve<-length(eve.labels)
   }
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
-  rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG,indx,lab.fromCGtoFG)
+  rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
   rm(aux,tmp)
+#  r.aux.FG[]<-NA
+#  r.aux.FG[mask.FG]<-x.eve.FG
+#  writeRaster(r.aux.FG,file="r.nc", format="CDF", overwrite=TRUE)
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
