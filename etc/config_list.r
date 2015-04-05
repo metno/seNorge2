@@ -13,4 +13,11 @@ config_list <- alist(
                        main.path.output="/disk1",
                        testmode=FALSE)
          )
+
+     list( pname="vis-m1",
+           opt = alist(
+                       main.path="/home/cristianl/projects/seNorge2",
+                       main.path.output="/home/cristianl",
+                       testmode=FALSE)
+         )
      )
