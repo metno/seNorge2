@@ -58,6 +58,7 @@
 #   0   good observation
 #   100 bad  observation: KDVH flag > 2 | observation not good in external DQC | 
 #                         observed value not plausible | station in blacklist/s  
+#                         # available observations != # time steps (in case of accumulation) 
 #   200 bad  observation: dry-station surrounded only by wet-stations (close enough)
 #   300 bad  observation: wet-stations surrounded only by dry-stations (close enough)
 #   400 bad  observation: dry observation is (1) not included in a dry area
@@ -1283,7 +1284,7 @@ while (L.yo.ok>0) {
   if (exists("r")) rm(r,x.aux,aux,dist)
   #
   print("++ Precipitation events labeling: FG")
-  # CG to FG resample labels with nearest neighbour
+  # CG to FG resample labels with nearest neighbour (ngb)
   r.lngb.FG<-resample(r.eve.CG,r.orog.FG,method="ngb")
   x.lngb.FG<-getValues(r.lngb.FG)[mask.FG]
   # CG to FG resample event area with bilinear
@@ -1311,7 +1312,9 @@ while (L.yo.ok>0) {
   y.bweight.FG<-extract(r.bweight.FG,cbind(VecX,VecY),method="bilinear")
   storage.mode(y.bweight.FG)<-"numeric"
   y.bweight.FG[is.na(y.bweight.FG)]<-1
-  #
+  # link events on FG (bilinear) with the closest CG events (identified by means of ngb+edge)
+  # note: time consuming! because distanceFromPoints compute the distance between each
+  #       FG gridpoint and the event edge, also for NA gridpoints
   r.aux.FG<-r.orog.FG
   x.dist<-vector(mode="numeric",length=Lgrid.FG)
   x.dist.min<-vector(mode="numeric",length=Lgrid.FG)
@@ -1321,7 +1324,6 @@ while (L.yo.ok>0) {
   x.eve.FG[]<-NA
   rm.eve<-vector(mode="numeric")
   for (n in 1:n.eve) {
-    print(n)
     r.aux.FG[]<-NA
     r.aux.FG[mask.FG[x.lngb.FG==eve.labels[n]]]<-1
 #    r.edge.FG<-edge(r.aux.FG,type="inner")
@@ -1337,20 +1339,6 @@ while (L.yo.ok>0) {
       yedge.FG<-xy.FG[edge.FG,2]
       r.dist<-distanceFromPoints(r.clu.FG,cbind(xedge.FG,yedge.FG))
       x.dist<-getValues(r.dist)[mask.FG]
-#      x.dist[]<-NA
-#      for (labFG in f.lab.val) {
-#        r.aux.FG[]<-NA
-#        r.aux.FG[mask.FG[which(x.clu.FG==labFG)]]<-1
-#        x.aux<-getValues(r.aux.FG)[mask.FG]
-#        writeRaster(r.aux.FG,file="rauxfg.nc", format="CDF", overwrite=TRUE)
-#        if (any(x.aux==1)) {
-#          r.aux.FG<-trim(r.aux.FG)
-#          r.dist<-distanceFromPoints(r.aux.FG,cbind(xedge.FG,yedge.FG))
-#          r.dist<-extend(r.dist,r.orog.FG)
-#          x.dist.aux<-getValues(r.dist)[mask.FG]
-#          x.dist[which(!is.na(x.dist.aux))]<-x.dist.aux[which(!is.na(x.dist.aux))]
-#        }
-#      }
       x.dist[NAmask.clu.FG]<-NA
       if (n==1) {
         x.dist.min<-x.dist

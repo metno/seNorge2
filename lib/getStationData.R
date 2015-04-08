@@ -435,7 +435,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       data.fun$nvalue[1:n.stat]<-NA
       data.fun$value[1:n.stat]<-NA
       data.fun$DQC[1:n.stat]<-NA
-      data.fun$KDVHflag[1:n.stat]<-NA
+      data.fun$KDVHflag[1:n.stat]<-0
       data.fun$plausible[1:n.stat]<-T
       data.fun$err.ext[1:n.stat]<-F
       data.fun$blist.perm[1:n.stat]<-F

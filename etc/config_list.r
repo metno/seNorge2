@@ -12,7 +12,7 @@ config_list <- alist(
                        main.path="/disk1/projects/seNorge2",
                        main.path.output="/disk1",
                        testmode=FALSE)
-         )
+         ),
 
      list( pname="vis-m1",
            opt = alist(
