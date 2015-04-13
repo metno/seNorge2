@@ -1,18 +1,18 @@
 #!/bin/bash
 #===============================================================================
-# <seNorge2_TEMP1d.sh>
+# <seNorge2_PREC1hRT.sh>
 #
 # DESCRIPTION:
 # ===========
-# Spatial Interpolation of daily accumulated precipitation.
+# Spatial Interpolation of hourly accumulated precipitation (Real-Time mode).
 #
 # COMMAND LINE:
 # =============
-#  >seNorge2_TEMP1d.sh -s yyyy.mm.dd  (date start)
-#                      -e yyyy.mm.dd  (date end)
-#                      -c config.file (configuration file)
-#                      -p config.par  (parameter name in configuration file)
-#                      -l log.directory (log directory for Bspat)
+#  >seNorge2_PREC1hRT.sh -s yyyy.mm.dd.hh  (date start)
+#                        -e yyyy.mm.dd.hh  (date end)
+#                        -c config.file (configuration file)
+#                        -p config.par  (parameter name in configuration file)
+#                        -l log.directory (log directory for Bspat)
 #===============================================================================
 function trim()
 {
@@ -58,11 +58,11 @@ function trim()
   YYYYbeg=${DATESTART:0:4}
   MMbeg=${DATESTART:5:2}
   DDbeg=${DATESTART:8:2}
-  HHbeg=01
+  HHbeg=${DATESTART:11:2}
   YYYYend=${DATEEND:0:4}
   MMend=${DATEEND:5:2}
   DDend=${DATEEND:8:2}
-  HHend=23
+  HHend=${DATESTART:11:2}
   SECbeg=`date +%s -d "$YYYYbeg-$MMbeg-$DDbeg $HHbeg:00:00"`
   SECend=`date +%s -d "$YYYYend-$MMend-$DDend $HHend:00:00"`
 #------------------------------------------------------------------------------
@@ -101,18 +101,18 @@ function trim()
   MAINDIR=${MAINDIR:1:-1}
 #------------------------------------------------------------------------------
 # log
-  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
+  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
 #------------------------------------------------------------------------------
 # Variables
-  Bspat=$MAINDIR/Bspat_TEMP1d/Bspat_TEMP1d.R
-  BLACKL=$MAINDIR/etc/blacklists/seNorge2_TEMP1d_blacklist.txt
-  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_TEMP1d_suspect_observations.txt
+  Bspat=$MAINDIR/Bspat_PREC1hRT/Bspat_PREC1hRT.R
+  BLACKL=$MAINDIR/etc/blacklists/seNorge2_PREC1h_blacklist.txt
+  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_PREC1h_suspect_observations.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
-#  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
+#  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
 #  find $OUTDIR/ -mtime +1 -exec rm -vf {} \;
 #-----------------------------------------------------
 # Statistical Interpolation 
@@ -120,14 +120,14 @@ function trim()
   SECcur=$SECbeg
   while (( "$SECcur" <= "$SECend" )) 
   do
-    DATEcur=`date --date="1970-01-01 $SECcur sec UTC" +%Y.%m.%d`
-    echo "============================================================================="
-    echo "$R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d_$DATEcur.log 2>&1"
-    $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d_$DATEcur.log 2>&1
-    SECcur=$(( SECcur+86400 ))
+    DATEcur=`date --date="1970-01-01 $SECcur sec UTC" +%Y.%m.%d.%H`
+    echo "================================================================================"
+    echo "`date +%Y-%m-%d" "%H:%M` > $R --vanilla $DATEcur $DATEcur $BLACKL $ERROBS $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1hRT_$DATEcur_$DATEcur.log 2>&1"
+    $R --vanilla $DATEcur $DATEcur $BLACKL $ERROBS $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1hRT_$DATEcur_$DATEcur.log 2>&1
+    SECcur=$(( SECcur+3600 ))
   done
 #--------------------------
 # Exit 
 #--------------------------
-  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
+  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
   exit 0

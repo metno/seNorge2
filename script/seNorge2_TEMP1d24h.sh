@@ -1,18 +1,19 @@
 #!/bin/bash
 #===============================================================================
-# <seNorge2_TEMP1d.sh>
+# <seNorge2_TEMP1d24h.sh>
 #
 # DESCRIPTION:
 # ===========
 # Spatial Interpolation of daily accumulated precipitation.
+#  Observations: TAMRR from KDVH; Background: TA hourly gridded fields
 #
 # COMMAND LINE:
 # =============
-#  >seNorge2_TEMP1d.sh -s yyyy.mm.dd  (date start)
-#                      -e yyyy.mm.dd  (date end)
-#                      -c config.file (configuration file)
-#                      -p config.par  (parameter name in configuration file)
-#                      -l log.directory (log directory for Bspat)
+#  >seNorge2_TEMP1d24h.sh -s yyyy.mm.dd  (date start)
+#                         -e yyyy.mm.dd  (date end)
+#                         -c config.file (configuration file)
+#                         -p config.par  (parameter name in configuration file)
+#                         -l log.directory (log directory for Bspat)
 #===============================================================================
 function trim()
 {
@@ -101,18 +102,18 @@ function trim()
   MAINDIR=${MAINDIR:1:-1}
 #------------------------------------------------------------------------------
 # log
-  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
+  echo "seNorge2_TEMP1d24h.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
 #------------------------------------------------------------------------------
 # Variables
-  Bspat=$MAINDIR/Bspat_TEMP1d/Bspat_TEMP1d.R
+  Bspat=$MAINDIR/Bspat_TEMP1d24h/Bspat_TEMP1d24h.R
   BLACKL=$MAINDIR/etc/blacklists/seNorge2_TEMP1d_blacklist.txt
   ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_TEMP1d_suspect_observations.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
-#  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
+#  echo "seNorge2_TEMP1d24h.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
 #  find $OUTDIR/ -mtime +1 -exec rm -vf {} \;
 #-----------------------------------------------------
 # Statistical Interpolation 
@@ -122,12 +123,12 @@ function trim()
   do
     DATEcur=`date --date="1970-01-01 $SECcur sec UTC" +%Y.%m.%d`
     echo "============================================================================="
-    echo "$R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d_$DATEcur.log 2>&1"
-    $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d_$DATEcur.log 2>&1
+    echo "$R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d24h_$DATEcur.log 2>&1"
+    $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d24h_$DATEcur.log 2>&1
     SECcur=$(( SECcur+86400 ))
   done
 #--------------------------
 # Exit 
 #--------------------------
-  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
+  echo "seNorge2_TEMP1d24h.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
   exit 0

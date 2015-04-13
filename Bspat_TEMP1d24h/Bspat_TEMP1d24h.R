@@ -20,7 +20,6 @@ rm(list=ls())
 # Libraries
 library(raster)
 library(rgdal)
-library(colorspace)
 library(ncdf)
 #-------------------------------------------------------------------
 # FUNCTIONS 
@@ -36,8 +35,8 @@ proj4.wgs84<-"+proj=longlat +datum=WGS84"
 proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
 proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 #
-max.Km.stnINdomain<-50
-#-----------------------------------------------------------------------------
+max.Km.stnINdomain<-300
+#-------------------------------------------------------------------
 # [] Setup OI parameters
 sig2o<-3.0
 eps2<-0.5
@@ -278,7 +277,7 @@ rm(xy,rc,rowgrid,colgrid,cells,aux)
 # 2. stations in CG
 if (!testmode) {
   stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
-                                   max.Km=max.Km.stnINdomain)
+                               max.Km=max.Km.stnINdomain)
 } else {
   stations<-read.csv(file=station.info)
 }
@@ -376,7 +375,7 @@ for (i in 1:n.timeseq) {
   nx<-nc$dim$X$len
   ny<-nc$dim$Y$len
   close.ncdf(nc)
-# Define raster variable "xx"
+# Define raster variable 
   r <-raster(ncol=nx, nrow=ny,
               xmn=ex.xmin, xmx=ex.xmax, ymn=ex.ymin, ymx=ex.ymax,
               crs=projstr)
@@ -400,14 +399,6 @@ for (i in 1:n.timeseq) {
 #  }
   rm(r)
 }
-#> x
-# [1]  1  2  3  4  5  6  7  8  9 10
-#> y
-#[1]  1 11 15  5  6 21 22  2
-#> a
-#[1] 0.1 1.1 1.5 0.5 0.6 2.1 2.2 0.2
-#> a[match(x,y)]
-# [1] 0.1 0.2  NA  NA 0.5 0.6  NA  NA  NA  NA
 yb<-rowMeans(yb.tab)
 r.b<-mean(st)
 xb<-extract(r.b,mask)
