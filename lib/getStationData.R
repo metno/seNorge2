@@ -98,7 +98,7 @@ getStationMetadata<-function(from.year,to.year,max.Km)
 getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
                          to.dd, to.mm, to.yyyy, to.hh,
                          h=NULL, qa=NULL, statlist=NULL, outside.Norway=F,
-                         err.file=NULL, blist.perm=NULL, blist.curr=NULL, 
+                         err.file=NULL, blist=NULL,
                          fun=NULL, verbose=F, 
                          val.min.allowed=NULL, val.max.allowed=NULL)
 # from.date/to.date -> dd.mm.yyyy
@@ -114,11 +114,10 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
 #  KDVHflag: DQC flag from KDVH. in fun="sum" then KDVHflag is set to 100 if at least one of the flags is >2
 #  plausible: plausibility-check result (T=plausible, F=not plausible)
 #  err.ext: DQC flag from external files (T=err, F=good)
-#  blist.perm: T if station is permanently blacklisted
-#  blist.curr: T if station is temporary blacklisted
+#  blist: T if station is blacklisted
 #    note: if fun="sum" then 
 #     plausible=F if at least one of the observation has plausible=F
-#     err.ext,blist.perm,blist.curr=T if at least one of the observation has err.ext,blist.perm,blist.curr=T
+#     err.ext,blist=T if at least one of the observation has err.ext,blist=T
 #================================================================================
 {
   max.try<-10
@@ -129,7 +128,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
                 "value","nvalue","DQC",
                 "KDVHflag",
                 "plausible","err.ext",
-                "blist.perm","blist.curr")
+                "blist")
   data.names.col<-length(data.names)
 # check input information
   from.date<-paste(from.dd,".",from.mm,".",from.yyyy,sep="")
@@ -162,26 +161,15 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       print(file_errobs)
     }
   }
-  blist.perm.file.ok<-F
-  if (!is.null(blist.perm)) {
-    if (file.exists(blist.perm)) {
-      blacklist_permanent<-read.table(file=blist.perm,header=T,sep=";")
-      names(blacklist_permanent)<-c("stnr")
-      blist.perm.file.ok<-T
+  blist.file.ok<-F
+  if (!is.null(blist)) {
+    if (file.exists(blist)) {
+      blacklist<-read.table(file=blist,header=T,sep=";")
+      names(blacklist)<-c("stnr")
+      blist.file.ok<-T
     } else {
       print("Warning: file not found")
-      print(blist.perm)
-    }
-  }
-  blist.curr.file.ok<-F
-  if (!is.null(blist.curr)) {
-    if (file.exists(blist.curr)) {
-      blacklist_current<-read.table(file=blist.curr,header=T,sep=";")
-      names(blacklist_current)<-c("stnr")
-      blist.curr.file.ok<-T
-    } else {
-      print("Warning: file not found")
-      print(blist.curr)
+      print(blist)
     }
   }
 #
@@ -376,8 +364,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
   data$KDVHflag[1:n.data]<-NA
   data$plausible[1:n.data]<-T
   data$err.ext[1:n.data]<-F
-  data$blist.perm[1:n.data]<-F
-  data$blist.curr[1:n.data]<-F
+  data$blist[1:n.data]<-F
   options(warn=1)
   for (t in 1:n.t) {
     yyyy.t<-datetime.seq$year[t]+1900
@@ -414,8 +401,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
         }
       }
       if (err.file.ok) if (any(errobs$stnr==data$stnr[s.t] & aux.d.e)) data$err.ext[s.t]<-T
-      if (blist.perm.file.ok) if (any(blacklist_permanent$stnr==data$stnr[s.t])) data$blist.perm[s.t]<-T
-      if (blist.curr.file.ok) if (any(blacklist_current$stnr==data$stnr[s.t])) data$blist.curr[s.t]<-T
+      if (blist.file.ok) if (any(blacklist$stnr==data$stnr[s.t])) data$blist[s.t]<-T
     }
   }
   if (!is.null(val.min.allowed)) data$plausible[data$value<val.min.allowed]<-F
@@ -438,8 +424,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       data.fun$KDVHflag[1:n.stat]<-0
       data.fun$plausible[1:n.stat]<-T
       data.fun$err.ext[1:n.stat]<-F
-      data.fun$blist.perm[1:n.stat]<-F
-      data.fun$blist.curr[1:n.stat]<-F
+      data.fun$blist[1:n.stat]<-F
       for (s in 1:n.stat) {
         data.fun$stnr[s]<-statlist$stnr[s]
         indx.o<-which(data$stnr==data.fun$stnr[s])
@@ -447,8 +432,7 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
         if (data.fun$nvalue[s]>0)  data.fun$value[s]<-sum(data$value[indx.o],na.rm=T)
         if (any(data$KDVHflag[indx.o]>2,na.rm=T)) data.fun$KDVHflag[s]<-100
         if (any(data$err.ext[indx.o],na.rm=T)) data.fun$err.ext[s]<-T
-        if (any(data$blist.perm[indx.o],na.rm=T)) data.fun$blist.perm[s]<-T
-        if (any(data$blist.curr[indx.o],na.rm=T)) data.fun$blist.curr[s]<-T
+        if (any(data$blist[indx.o],na.rm=T)) data.fun$blist[s]<-T
         if (any(!data$plausible[indx.o],na.rm=T)) data.fun$plausible[s]<-F
       }
     }

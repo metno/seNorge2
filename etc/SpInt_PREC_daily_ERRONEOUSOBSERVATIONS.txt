@@ -1,1 +1,0 @@
-Stnr;Year;Month;Day;Time(NMT);RR_1

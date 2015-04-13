@@ -2,14 +2,12 @@
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
-#  + $>R --vanilla yyyy.mm.dd yyyy.mm.dd file_blacklist_current 
-#  |   file_blacklist_never file_errobs config_file config_par
+#  + $>R --vanilla yyyy.mm.dd yyyy.mm.dd blacklist errobs cfg_file cfg_par
 #  + time stamps mark begin/end of the accumulation period 
-#  + file_blacklist_current: station blacklist
-#  + file_blacklist_never: station blacklist
-#  + file_errobs: erroneous observations (external DQC)
-#  + config_file: configuration file
-#  + config_par: configuration parameter, within the config file
+#  + blacklist: station blacklist
+#  + errobs: suspect/erroneous observations (external DQC)
+#  + cfg_file: configuration file
+#  + cfg_par: configuration parameter name within the config file
 # == Time specification ==
 # Timezone is UTC: hour [0,23]. timestamp = end of accumulation period.
 #  (i.e. 2014/09/01 12 -> precipitation sum 2014/09/01 11:01 2014/09/01 12:00)
@@ -112,14 +110,7 @@
 # idi.norm.fac => IDI normalization factor for that event 
 # 
 # History:
-# 03.12.2014 - Cristian Lussana. Original code.
-# 26.02.2015 - Cristian Lussana. original code from Bspat_PREC1hRT_v1_0.R
-#  change log: 
-#  - allow for the use of observations outside Norway
-#  - modified queries to KDVH
-#  - geographical information from seNorge2_dem_UTM33.nc
-#  - output variable names: PREC1hRT, IDIms
-#  - new directory tree for outputs
+# 26.02.2015 - Cristian Lussana. original code from Bspat_TAMRR_v1_0.R
 # -----------------------------------------------------------------------------
 rm(list=ls())
 # Libraries
@@ -222,15 +213,13 @@ print("Arguments")
 print(arguments)
 date.b.string<-arguments[3]
 date.e.string<-arguments[4]
-file_blacklist_current<-arguments[5]
-file_blacklist_never<-arguments[6]
-file_errobs<-arguments[7]
-config_file<-arguments[8]
-config_par<-arguments[9]
-if (length(arguments)!=9) 
+file_blacklist<-arguments[5]
+file_errobs<-arguments[6]
+config_file<-arguments[7]
+config_par<-arguments[8]
+if (length(arguments)!=8) 
   ext<-error_exit(paste("Error in command line arguments: \n",
-  " R --vanilla yyyy.mm.dd.hh yyyy.mm.dd.hh blacklist_current blacklist_never errobs",
-  " configFILE configPAR \n",
+  " R --vanilla yyyy.mm.dd yyyy.mm.dd blacklist errobs cfgFILE cfgPAR \n",
   sep=""))
 # [] define/check paths
 if (!file.exists(config_file)) 
@@ -557,10 +546,9 @@ if (!testmode) {
                          to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
                          h=hh.b,
                          qa=NULL, statlist=stations, outside.Norway=T,
-                         err.file=file_errobs, blist.perm=file_blacklist_never,
-                         blist.curr=file_blacklist_current, verbose=T,
+                         err.file=file_errobs, blist=file_blacklist,
                          val.min.allowed=yo.dqc.plausible.min,
-                         val.max.allowed=yo.dqc.plausible.max)
+                         val.max.allowed=yo.dqc.plausible.max,verbose=T)
   } else {
     for (d in 1:nday) {
       yyyy.d<-dayseq$year[d]+1900
@@ -572,10 +560,9 @@ if (!testmode) {
                                to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
                                h=hh.d,
                                qa=NULL, statlist=stations, outside.Norway=T,
-                               err.file=file_errobs, blist.perm=file_blacklist_never, 
-                               blist.curr=file_blacklist_current, verbose=T,
+                               err.file=file_errobs, blist=file_blacklist, 
                                val.min.allowed=yo.dqc.plausible.min, 
-                               val.max.allowed=yo.dqc.plausible.max,fun="sum")
+                               val.max.allowed=yo.dqc.plausible.max,fun="sum",verbose=T)
       if (d==1) {
         data<-data.tmp
       } else {
@@ -585,8 +572,7 @@ if (!testmode) {
         data$value[1:L.y.tot]<-data$value[1:L.y.tot]+data.tmp$value[1:L.y.tot]
         data$KDVHflag[data.tmp$KDVHflag==100]<-100
         data$err.ext[data.tmp$err.ext]<-T
-        data$blist.perm[data.tmp$blist.perm]<-T
-        data$blist.curr[data.tmp$blist.curr]<-T
+        data$blist[data.tmp$blist]<-T
         data$plausible[!data.tmp$plausible]<-F
       }
     }
@@ -609,8 +595,7 @@ for (i in 1:L.y.tot) {
   if (data$ntime[i]!=data$nvalue[i] |
       !data$plausible[i] |
       data$err.ext[i] |
-      data$blist.perm[i] |
-      data$blist.curr[i]) ydqc.flag[i]<-100
+      data$blist[i]) ydqc.flag[i]<-100
 }
 # Stations on the output file 
 stn.output<-which((stations$NO & !stn.out.FG) | (!stations$NO & !is.na(yo)) )
@@ -622,9 +607,7 @@ print(paste("number of station having good observation           (so far)=",leng
 print(paste("  # station having at least one erroneous observation (plausibility check) =",length(which(!data$plausible & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation           (KDVH DQC) =",length(which(data$KDVHflag>2 & !is.na(yo)))))
 print(paste("  # station having at least one erroneous observation       (external DQC) =",length(which(data$err.ext & !is.na(yo)))))
-print(paste("  # station blacklisted for the time period considered =",length(which(data$blist.curr & !is.na(yo)))))
-print(paste("  # station blacklisted (permanently) =",length(which(data$blist.perm & !is.na(yo)))))
-#print(paste("  # station in masked areas =",length(which(stn.out.CG & !is.na(yo)))))
+print(paste("  # station blacklisted for the time period considered =",length(which(data$blist & !is.na(yo)))))
 print(paste("  # station in output file (on Norwegian mainland or within CG and not NA) =",length(stn.output)))
 #------------------------------------------------------------------------------
 # Elaborations
