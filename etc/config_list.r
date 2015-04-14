@@ -25,5 +25,12 @@ config_list <- alist(
                        main.path="/home/cristianl/projects/seNorge2",
                        main.path.output="/home/cristianl",
                        testmode=FALSE)
+         ),
+
+     list( pname="dev-vm230",
+           opt = alist(
+                       main.path="/home/cristianl/projects/seNorge2",
+                       main.path.output="/home/cristianl",
+                       testmode=FALSE)
          )
      )

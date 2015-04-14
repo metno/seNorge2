@@ -272,33 +272,14 @@ PRECplot<-function(namefileout=NULL,
 TEMPplot<-function(namefileout=NULL,
                    y.data=NULL,
                    r.data=NULL,
-#                   scale=NULL,
-#                   col.scale=NULL,
                    orog=NULL,
                    bound=NULL,
                    par=NULL) {
-#   NA  observation is NA
-#   -1  missing DQC info
-#   0   good observation
-#   100 bad  observation: KDVH flag > 2 | observation not good in external DQC | 
-#                         observed value not plausible | station in blacklist/s  
-#   200 bad  observation: dry-station surrounded only by wet-stations (close enough)
-#   300 bad  observation: wet-stations surrounded only by dry-stations (close enough)
-#   400 bad  observation: dry observation is (1) not included in a dry area
-#                         (2) is in Norway 
-#   500 bad  observation: wet observation is (1) not included in an event (2) in Norway
-
-
-#x=NULL,y=NULL,yvar=NULL,yvar1=NULL,ydqc=NULL,xvar=NULL,brk=NULL,col=NULL,
-#                   namefileout=NULL,mtxt=NULL,mtxt1=NULL,pos="bottomright",
-#                   xl=NULL,yl=NULL,bnd=NULL,cx=NULL,colext=NULL,
-#                   yvartext=NULL,yvartextcex=NULL,xvar.orog=NULL,
-#                   colpoints=NULL,legcex=NULL) {
 ## ydqc==0 good; ydqc==-1 missing; ydqc==1 erroneous
 #----------------------------------------------------------------------------------
   y.data$x<-as.numeric(y.data$x)
   y.data$y<-as.numeric(y.data$y)
-  leg.str<-""
+  leg.str<-vector()
   n.col<-length(par$col.scale)
   #
   png(file=namefileout,width=1200,height=1200)
@@ -313,22 +294,18 @@ TEMPplot<-function(namefileout=NULL,
     if (length(aux)>0) 
       points(y.data$x[aux],y.data$y[aux],col="black",bg=par$col.scale[c],pch=21,cex=1.2)
     if (c==1) {
-      leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=1),", ",
-                               formatC(par$scale[c+1],format="f",digits=1),") mm",sep=""))
-    } else if (c==2) {
-      leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=1),", ",
-                               formatC(par$scale[c+1],format="f",digits=0),") mm",sep=""))
+      leg.str[1]<-paste("<",formatC(par$scale[c+1],format="f",digits=0),sep="")
     } else if (c<n.col) {
       leg.str<-c(leg.str,paste("[",formatC(par$scale[c],format="f",digits=0),", ",
-                           formatC(par$scale[c+1],format="f",digits=0),") mm",sep=""))
+                           formatC(par$scale[c+1],format="f",digits=0),")",sep=""))
     } else if (c==n.col) {
-      leg.str<-c(leg.str,paste(">",formatC(par$scale[c],format="f",digits=0),"mm",sep=""))
+      leg.str<-c(leg.str,paste(">",formatC(par$scale[c],format="f",digits=0),sep=""))
     }
     aux<-which(in.break & y.data$dqcflag>0)
     if (length(aux)>0) points(y.data$x[aux],y.data$y[aux],bg=par$col.scale[c],col="black",pch=24,cex=1.2)
   }
   plot(bound,add=T)
-  legend(x="bottomright",fill=rev(c("gray",par$col.scale)),legend=rev(leg.str),cex=1.5)
+  legend(x="bottomright",fill=rev(c(par$col.scale,"white")),legend=rev(c(leg.str,expression(paste("Temp,",degree,"C")))),cex=1.5)
   dev.off()
   return()
 }
