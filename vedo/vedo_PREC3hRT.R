@@ -214,11 +214,11 @@ data.idi<-extract(r,1:ncell(r))
 aux<-which(data.idi==0)
 r[aux]<-rep(NA,length(aux))
 par.PREC3hRT.IDI<-list(col.scale=banded.col,scale=scale.PREC3hRT.IDI,
-                 main=paste(yyyy.mm.dd,"TEMP1d/IDI","daily mean temperature [UTC]",sep=" - "),
+                 main=paste(yyyy.mm.dd.hh1,yyyy.mm.dd.hh2,"PREC3hRT/IDI","3-hourly accumulated precipitation [UTC]",sep=" - "),
                  xlab="",ylab="",
                  xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
 #
-plot<-TEMPplot.IDI(namefileout=out.file.grd.idi,
+plot<-PRECplot.IDI(namefileout=out.file.grd.idi,
                    y.data=y.data,
                    r.data=r,
                    orog=orog,

@@ -1,48 +1,42 @@
+# << vedo_PREC1d.R >>
+# Create maps for 3-hourly accumulated precipitation.
+#==============================================================================
 rm(list=ls())
 # Libraries
 library(raster)
 library(rgdal)
 library(ncdf)
-# Graphic parameter
+#------------------------------------------------------------------------------
+# Graphical parameter
 xlim.sw<--75000
 xlim.ne<-1120000
-ylim.sw<-6450000
-ylim.ne<-8000000
+ylim.sw<-6300000
+ylim.ne<-7900000
 # South Norway only
 #xlim.sw<--75000
 #xlim.ne<-500000
 #ylim.sw<-6450000
 #ylim.ne<-7150000
-#-----------------------------------------------------------------------------
-# [] Colors
-##
-#tcol<-c("mediumorchid","plum","paleturquoise3","paleturquoise","palegreen",
-#        "green3","forestgreen","yellow2","darkorange","red")
-#tcol_ext<-c("gray","orangered4")
-## day
-#bcol.daily<-c(0.05,0.5,3,7,10,15,20,30,40,50,60)
-## month
-#bcol.monthly<-c(0.05,0.5,3,10,50,100,200,300,500,750,1500)
-## annual
-#bcol.annual<-c(0.05,0.5,250,500,750,1000,1250,1500,2000,3000,4000)
-#bcol.idi<-c(0.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,1.)
+#
+scale.PREC1d<-c(0.1,0.5, 1, 2, 3, 4,
+                  5,  6, 7, 8, 9,
+                 10, 15,20,25,30,
+                 35, 40,45,50,55,
+                 70,90,110,130,100000)
 #==============================================================================
+# read command line
 arguments <- commandArgs()
 arguments
 #
 yyyy.mm.dd<-arguments[3]
 config_file<-arguments[4]
 config_par<-arguments[5]
-#file.nc<-arguments[3]
-#file.txt<-arguments[4]
-#file.out<-arguments[5]
 if (length(arguments)!=5) {
   print("Error in command line arguments:")
   print("R --vanilla yyyy.mm.dd config_file config_par")
   quit(status=1)
 }
-#
-# [] define/check paths
+# define/check paths
 if (!file.exists(config_file)) 
   ext<-error_exit("Fatal Error: configuration file not found")
 source(config_file)
@@ -70,13 +64,7 @@ path2lib.com<-paste(main.path,"/lib",sep="")
 path2etc.com<-paste(main.path,"/etc",sep="")
 if (!file.exists(paste(path2lib.com,"/Bspat_plot.R",sep=""))) 
   ext<-error_exit(paste("File not found:",path2lib.com,"/Bspat_plot.R"))
-#if (!file.exists(paste(path2lib.com,"/ncout.spec.list.r",sep=""))) 
-#  ext<-error_exit(paste("File not found:",path2lib.com,"/ncout.spec.list.r"))
-#if (!file.exists(paste(path2lib.com,"/getStationData.R",sep=""))) 
-#  ext<-error_exit(paste("File not found:",path2lib.com,"/getStationData.R"))
-#source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
-#source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
-#source(paste(path2lib.com,"/getStationData.R",sep=""))
+# call to external function
 source(paste(path2lib.com,"/Bspat_plot.R",sep=""))
 # set Time-related variables
 yyyy<-substr(yyyy.mm.dd,1,4)
@@ -108,6 +96,11 @@ stepseq25.col<-rev(rgb(stepseq25.r,stepseq25.g,stepseq25.b,maxColorValue = 256))
 aux<-stepseq25.col[11:15]
 stepseq25.col[11:15]<-stepseq25.col[1:5]
 stepseq25.col[1:5]<-aux
+t2m_29lev<-read.table(file=paste(path2etc.com,"/color_table/t2m_29lev.rgb",sep=""),skip=6,stringsAsFactors=F)
+t2m_29lev.r<-as.numeric(t2m_29lev$V1)
+t2m_29lev.g<-as.numeric(t2m_29lev$V2)
+t2m_29lev.b<-as.numeric(t2m_29lev$V3)
+t2m_29lev.col<-rgb(t2m_29lev.r,t2m_29lev.g,t2m_29lev.b,maxColorValue = 256)
 # input directories
 # daily precipitation data
 path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
@@ -139,16 +132,8 @@ if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWa
 if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
 if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
 # Setup output files 
-#dir.create(paste(path2output.main.stn,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.main.grd,"/",yyyymm,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm,sep=""),showWarnings=F)
-#dir.create(paste(path2output.add.eve,"/",yyyymm,sep=""),showWarnings=F)
-#out.file.stn<- paste(path2output.main.stn,"/",yyyymm,
-#                     "/seNorge_v2_0_PREC1d_station_",
-#                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
-#out.file.eve<- paste(path2output.add.eve,"/",yyyymm,
-#                     "/seNorge_v2_0_PREC1d_event_",
-#                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm,
                          "/seNorge_v2_0_PREC1d_grid_",
                          yyyymmdd,"_",yyyymmdd,".png",sep="")
@@ -161,16 +146,15 @@ print("analysis on the grid (netcdf)")
 print(out.file.grd.ana)
 print("event-normalized idi on the grid (netcdf)")
 print(out.file.grd.idi)
-#print("station outputs (text)")
-#print(out.file.stn)
-#print("event outputs (text)")
-#print(out.file.eve)
+#------------------------------------------------------------------------------
 # read geographical info
 orog<-raster(filenamedem)
 borders<-readOGR(fileborders,"TM_WORLD_BORDERS_UTM33-0.2")
 # open/read/close netcdf file
 nc <- open.ncdf(in.1d.file.grd.ana)
+nc.idi <- open.ncdf(in.1d.file.grd.idi)
 data <- get.var.ncdf(nc)
+data.idi <- get.var.ncdf(nc.idi)
 aux<-att.get.ncdf(nc,"UTM_Zone_33","proj4")
 projstr<-aux$value
 dx<-nc$dim$X$vals[2]-nc$dim$X$vals[1]
@@ -182,35 +166,56 @@ ex.ymax<-max(nc$dim$Y$vals)+dy/2
 nx<-nc$dim$X$len
 ny<-nc$dim$Y$len
 close.ncdf(nc)
-# Define raster variable "xx"
+close.ncdf(nc.idi)
+# Define raster variable "r"
 r <-raster(ncol=nx, nrow=ny,
-            xmn=ex.xmin, xmx=ex.xmax, ymn=ex.ymin, ymx=ex.ymax,
-            crs=projstr)
+           xmn=ex.xmin, xmx=ex.xmax,
+           ymn=ex.ymin, ymx=ex.ymax,
+           crs=projstr)
 r[]<-NA
 # put data on raster variable (t=transpose)
 r[]<-t(data)
 data<-extract(r,1:ncell(r))
 aux<-which(data==0)
 r[aux]<-rep(NA,length(aux))
-#
+# read station data
 y.data<-read.table(file=in.1d.file.stn,sep=";",header=T,stringsAsFactors=F)
 y.data$dqcflag<-as.integer(y.data$dqcflag)
 #year;month;day;nday;stid;x;y;z;eve.lab;yo;yb;ya;yav;yidi;yidiv;dqcflag;
-#
-scale.PREC1d<-c(0.1,0.5, 1, 2, 3, 4,
-                  5,  6, 7, 8, 9,
-                 10, 15,20,25,30,
-                 35, 40,45,50,55,
-                70,90,110,130,100000)
-#
+#------------------------------------------------------------------------------
+# Plot analysis 
 par.PREC1d<-list(col.scale=stepseq25.col,scale=scale.PREC1d,
-                 main=paste(yyyy.mm.dd,"PREC1d","daily accumulated precipitation [06-06 UTC]"),
-                 xlab="",ylab="",xl=NULL,yl=NULL)
+                   main=paste(yyyy.mm.dd,"PREC1d","daily accumulated precipitation [UTC]"),
+                   xlab="",ylab="",
+                   xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
 #
-pp<-PRECplot(namefileout=out.file.grd.ana,
-             y.data=y.data,
-             r.data=r,
-             orog=orog,
-             bound=borders,
-             par=par.PREC1d)
-q()
+aux<-PRECplot(namefileout=out.file.grd.ana,
+              y.data=y.data,
+              r.data=r,
+              orog=orog,
+              bound=borders,
+              par=par.PREC1d)
+# Plot IDI
+scale.PREC1d.IDI<-seq(0,110,length=257)
+scale.PREC1d.IDI[length(scale.PREC1d.IDI)]<-1000
+#
+r[]<-NA
+# put data on raster variable (t=transpose)
+r[]<-t(data.idi)
+data.idi<-extract(r,1:ncell(r))
+aux<-which(data.idi==0)
+r[aux]<-rep(NA,length(aux))
+par.PREC1d.IDI<-list(col.scale=banded.col,scale=scale.PREC1d.IDI,
+                 main=paste(yyyy.mm.dd,"PREC1d/IDI","daily accumulated precipitation [UTC]",sep=" - "),
+                 xlab="",ylab="",
+                 xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
+#
+plot<-PRECplot.IDI(namefileout=out.file.grd.idi,
+                   y.data=y.data,
+                   r.data=r,
+                   orog=orog,
+                   bound=borders,
+                   par=par.PREC1d.IDI)
+#------------------------------------------------------------------------------
+# Exit
+quit(status=0)
