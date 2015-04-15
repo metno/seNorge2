@@ -3,10 +3,6 @@ rm(list=ls())
 library(raster)
 library(rgdal)
 library(ncdf)
-#
-# External Functions
-#source(paste("/disk1/projects/seNorge2/lib/SpInt_plots.R",sep=""))
-#
 # Graphic parameter
 xlim.sw<--75000
 xlim.ne<-1120000

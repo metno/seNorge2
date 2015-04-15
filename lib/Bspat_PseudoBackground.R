@@ -864,6 +864,18 @@ XYZnoinv_step0<-function(b_x,b_y,b_z,b_yo) {
   A[3,1]<-A[1,3]
   A[3,2]<-A[2,3]
   A[3,3]<-sum(b_z**2.)
+  A.det<-A[1,1]*(A[2,2]*A[3,3]-A[2,3]*A[3,2])-
+         A[1,2]*(A[2,1]*A[3,3]-A[2,3]*A[3,1])+
+         A[1,3]*(A[2,1]*A[3,2]-A[2,2]*A[3,1])
+  if (abs(A.det)<(1e-08)) {
+    param.out[3]<-myo
+    param.out[4]<-gamma.def
+    param.out[6]<-0.
+    param.out[8]<-0.
+    param.out[10]<-mx
+    param.out[11]<-my
+    return(param.out)
+  }
   b[1]<-sum(devyo*devx)
   b[2]<-sum(devyo*devy)
   b[3]<-sum(devyo*b_z)

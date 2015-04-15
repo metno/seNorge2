@@ -97,7 +97,7 @@ if (!file.exists(paste(path2lib.com,"/getStationData.R",sep="")))
 source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
 source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
 source(paste(path2lib.com,"/getStationData.R",sep=""))
-source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
+source(paste(path2lib.com,"/Bspat_PseudoBackground.R",sep=""))
 # test mode
 print(testmode)
 if (testmode) {
@@ -366,9 +366,11 @@ for (b in yo.h.pos) {
   close2b.aux<-order(Disth[b,],decreasing=F)
   close2b.au1<-close2b.aux[which(close2b.aux%in%yo.h.pos)][1:Lsubsample]
   if (Disth[b,close2b.au1[2]]>(2*Dh.b)) next
-  Lsubsample.vec[b]<-Lsubsample.max
+  aux<-Lsubsample.max
   if (Disth[b,close2b.au1[Lsubsample.max]]>Lsubsample.DHmax) 
-    Lsubsample.vec[b]<-max(which(Disth[b,close2b.au1]<=Lsubsample.DHmax))
+    aux<-max(which(Disth[b,close2b.au1]<=Lsubsample.DHmax))
+  if (aux<10) next
+  Lsubsample.vec[b]<-aux
   close2b<-close2b.au1[1:Lsubsample.vec[b]]
   b.inc<-b.inc+1
   yb.h.pos[b.inc]<-b

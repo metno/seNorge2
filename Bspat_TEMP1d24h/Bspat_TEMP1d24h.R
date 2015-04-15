@@ -99,7 +99,7 @@ if (!file.exists(paste(path2lib.com,"/getStationData.R",sep="")))
 source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
 source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
 source(paste(path2lib.com,"/getStationData.R",sep=""))
-source(paste(path2lib.com,"/SpInt_PseudoBackground.R",sep=""))
+#source(paste(path2lib.com,"/Bspat_PseudoBackground.R",sep=""))
 # test mode
 print(testmode)
 if (testmode) {

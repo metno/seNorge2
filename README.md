@@ -8,6 +8,7 @@ Note that it is possible for observations affected by gross measurement errors t
 seNorge v 2.0 Outputs:
 - TEMP1d: Mean temperature (yesterday at 06 - today at 06 UTC); unit ºC
 - TEMP1h: Air temperature at time of observation (hourly sampling rate); unit ºC
+- TEMP1d24h: Mean temperature (yesterday at 06 - today at 06 UTC) using TEMP1h as background; unit ºC
 - PREC1d: Daily total of precipitation (precipitation day definition: yesterday at 06 UTC - today at 06 UTC); unit mm
 - PRECcor1d: Daily total of precipitation with exposure correction (precipitation day definition: yesterday at 06 UTC - today at 06 UTC); unit mm
 - REC1hRT: Amount of precipitation in 1 hour (for real-time applications); unit mm
