@@ -34,7 +34,11 @@ config_list <- alist(
                        testmode=FALSE)
          ),
 
+<<<<<<< HEAD
      list( pname="nvetest-1",
+=======
+     list( pname="dev-vm078",
+>>>>>>> e0101d11f6b28ea82a09949d69e79808d4aa4bbb
            opt = alist(
                        main.path="/home/cristianl/projects/seNorge2",
                        main.path.output="/home/cristianl",
