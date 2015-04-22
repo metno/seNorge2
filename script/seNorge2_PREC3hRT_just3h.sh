@@ -104,6 +104,11 @@ function trim()
   echo "seNorge2_PREC3hRT_just3h.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
+  vis="vis-m1"
+  if [ "$CONFIG_PAR" == "$vis" ]; then
+    export R_LIBS=/home/cristianl/programs/spatial_interpolation/lib/rpacks
+    echo $R_LIBS
+  fi
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PREC3hRT/Bspat_PREC3hRT.R
