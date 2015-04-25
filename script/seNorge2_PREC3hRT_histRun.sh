@@ -32,7 +32,7 @@ function trim()
   flag_c=0
   flag_p=0
   flag_l=0
-  while getopts "s:e:c:p:l:" Option
+  while getopts "s:e:c:p:l:b:o:" Option
   do
     case $Option in
     s ) flag_s=1
