@@ -39,5 +39,12 @@ config_list <- alist(
                        main.path="/home/cristianl/projects/seNorge2",
                        main.path.output="/home/cristianl",
                        testmode=FALSE)
+         ),
+
+     list( pname="standard",
+           opt = alist(
+                       main.path="/home/cristianl/projects/seNorge2",
+                       main.path.output="/home/cristianl",
+                       testmode=FALSE)
          )
      )

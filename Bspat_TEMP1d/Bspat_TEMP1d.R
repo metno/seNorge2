@@ -19,7 +19,7 @@ rm(list=ls())
 # Libraries
 library(raster)
 library(rgdal)
-library(colorspace)
+#library(colorspace)
 library(ncdf)
 #-------------------------------------------------------------------
 # FUNCTIONS 
