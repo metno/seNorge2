@@ -1447,6 +1447,12 @@ while (L.yo.ok>0) {
     xindx.eve.CG<-which(x.eve.CG==eve.labels[n])
     Lgrid.eve<-length(xindx.eve.CG)
 #    print(Lgrid.eve)
+    if (Lgrid.eve<=(min.Dh.seq.allowed)**2.) {
+      ell.smajor.eve[n] <- 2*min.Dh.seq.allowed
+      ell.sminor.eve[n] <- 2*min.Dh.seq.allowed
+      ell.smadir.eve[n] <- NA
+      next
+    }
     xy<-cbind(xgrid.CG[xindx.eve.CG],ygrid.CG[xindx.eve.CG])
     ell<-ellipsoidhull(xy)
     ell.locx.eve[n]<-ell$loc[1]
