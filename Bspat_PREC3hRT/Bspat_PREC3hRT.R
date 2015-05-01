@@ -554,8 +554,10 @@ if (!testmode) {
       yyyy.d<-dayseq$year[d]+1900
       mm.d<-dayseq$mon[d]+1
       dd.d<-dayseq$mday[d]
-      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon[d]+1)==mm.d & timeseq$mday==dd.d)
+      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon+1)==mm.d & timeseq$mday==dd.d)
       hh.d<-timeseq$hour[aux]
+#      print(paste(yyyy.d,mm.d,dd.d))
+#      print(hh.d)
       data.tmp<-getStationData(var="RR_1", from.yyyy=yyyy.d, from.mm=mm.d, from.dd=dd.d,
                                to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
                                h=hh.d,
