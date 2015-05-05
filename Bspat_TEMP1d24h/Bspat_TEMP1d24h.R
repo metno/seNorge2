@@ -356,6 +356,7 @@ if (!testmode) {
 yo<-as.numeric(data$value)
 yo.h.pos<-which(!is.na(yo))
 #yo.pos<-which(!is.na(yo))
+print(data)
 #------------------------------------------------------------------------------
 # BACKGROUND AT STATION LOCATIONS/GRIDPOINTS
 yb.tab<-matrix(nrow=LOBS,ncol=n.timeseq)
@@ -400,6 +401,7 @@ for (i in 1:n.timeseq) {
   rm(r)
 }
 yb<-rowMeans(yb.tab)
+print(cbind(yo,yb))
 r.b<-mean(st)
 xb<-extract(r.b,mask)
 #====================================================================
@@ -409,7 +411,7 @@ yoBad.pos<-NA
 isct<-0
 ydqc.flag[]<-rep(0,LOBS)
 ydqc.flag[-yo.h.pos]<-(-1)
-yo.OKh.pos<-which(!is.na(yo) & ydqc.flag!=1)
+yo.OKh.pos<-which(!is.na(yo) & !is.na(yb) & ydqc.flag!=1)
 LOBStOK<-length(yo.OKh.pos)
 while (LOBStOK>1) {
   print(paste(">> Total number of observations [not NA & not ERR(so far)] =",
