@@ -1308,9 +1308,12 @@ while (L.yo.ok>0) {
   x.dist[]<-NA
   x.eve.FG[]<-NA
   rm.eve<-vector(mode="numeric")
+  firstTime<-TRUE
   for (n in 1:n.eve) {
+    auxx<-which(x.lngb.FG==eve.labels[n])
+    if (length(auxx)==0) next 
     r.aux.FG[]<-NA
-    r.aux.FG[mask.FG[x.lngb.FG==eve.labels[n]]]<-1
+    r.aux.FG[mask.FG[auxx]]<-1
 #    r.edge.FG<-edge(r.aux.FG,type="inner")
     r.edge.FG<-edge(r.aux.FG,type="outer")
     x.edge.FG<-getValues(r.edge.FG)[mask.FG]
@@ -1325,9 +1328,10 @@ while (L.yo.ok>0) {
       r.dist<-distanceFromPoints(r.clu.FG,cbind(xedge.FG,yedge.FG))
       x.dist<-getValues(r.dist)[mask.FG]
       x.dist[NAmask.clu.FG]<-NA
-      if (n==1) {
+      if (firstTime) {
         x.dist.min<-x.dist
-        x.eve.FG[mask.clu.FG]<-eve.labels[1]
+        x.eve.FG[mask.clu.FG]<-eve.labels[n]
+        firstTime<-FALSE
       } else {
         aux<-which(x.dist[mask.clu.FG]<x.dist.min[mask.clu.FG])
         aux<-mask.clu.FG[aux]
@@ -1347,9 +1351,6 @@ while (L.yo.ok>0) {
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
   rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
   rm(aux,tmp)
-#  r.aux.FG[]<-NA
-#  r.aux.FG[mask.FG]<-x.eve.FG
-#  writeRaster(r.aux.FG,file="r.nc", format="CDF", overwrite=TRUE)
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
@@ -1488,7 +1489,8 @@ while (L.yo.ok>0) {
   } # end cycle: compute ellipsoid hulls
 # debug: close plot session
 #  dev.off()
-  rm(xindx.eve.CG,xy,ell,eigenval,eigenvec,e)
+  if (exists("xindx.eve.CG")) rm(xindx.eve.CG)
+  if (exists("eigenval")) rm(xy,ell,eigenval,eigenvec,e)
 #------------------------------------------------------------------------------
 # ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  
 # + Analysis cycle over events 
