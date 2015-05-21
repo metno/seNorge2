@@ -94,19 +94,31 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   return(stations)
 }
 
-# get station data from KDVH.
+# get station data from KDVH by using Ulric web-based tool
 getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
                          to.dd, to.mm, to.yyyy, to.hh,
                          h=NULL, qa=NULL, statlist=NULL, outside.Norway=F,
                          err.file=NULL, blist=NULL,
                          fun=NULL, verbose=F, 
                          val.min.allowed=NULL, val.max.allowed=NULL)
-# from.date/to.date -> dd.mm.yyyy
-# output (follows the statlist order for stations):
+# Ulric doc, see (http://metklim.met.no/klima/userservices/urlinterface/brukerdok)
+# >> input:
+#  var: "TAMRR","TAM","TA","RR","RR_1"
+#  statlist: station list, if NULL then call getStationMetadata with the current year and max.Km=0
+#  from.date/to.date: from.yyyy from.mm from.dd / to.yyyy to.mm to.dd 
+#  h: hours (vector) 
+#  from.hh and to.hh: not used
+#  qa: not used
+#  outside.Norway: TRUE use observations outside Norway, FALSE do not use them
+#  err.file: path to file with suspect/erroneous observations (supplementary DQC)
+#  blist: path to file with a list of stations which must not enter the spatial interpolation procedure
+#  fun: function applied to observed data. implemented: "sum"
+#  val.min/max.allowed: DQC on plausible range of values
+# >> output (follows the statlist order for stations):
 #  stnr: station number
 #  year month day: date
-#  hour: hour ("NA" in case of daily variables)
-#     note: if fun="sum" then the date is the date of the first step (the older)
+#  h: hour ("NA" in case of daily variables)
+#  note: if fun="sum" then the date is the date of the first step (older)
 #  ntime: number of timestamp requested
 #  value: observed value
 #  nvalue: number of observed values (used in fun)
@@ -153,7 +165,8 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
       err.timeseq<-as.POSIXlt(strptime(paste(errobs$year,
                               formatC(errobs$month,width=2,flag="0"),
                               formatC(errobs$day,width=2,flag="0"),
-                              formatC(errobs$hour,width=2,flag="0"),sep=""),"%Y%m%d%H"),"UTC")
+                              formatC(errobs$hour,width=2,flag="0"),sep=""),
+                              "%Y%m%d%H","UTC"),"UTC")
       err.stnr<-unique(errobs$stnr)
       err.file.ok<-T
     } else {
@@ -322,28 +335,28 @@ getStationData<-function(var=NULL, from.dd, from.mm, from.yyyy, from.hh=NULL,
     datetime.o<-as.POSIXlt(strptime(paste(o.tot$year,
                            formatC(o.tot$month,width=2,flag="0"),
                            formatC(o.tot$day,width=2,flag="0"),
-                           sep=""),"%Y%m%d"),"UTC")
+                           sep=""),"%Y%m%d","UTC"),"UTC")
     datetime.q<-as.POSIXlt(strptime(paste(q.tot$year,
                            formatC(q.tot$month,width=2,flag="0"),
                            formatC(q.tot$day,width=2,flag="0"),
-                           sep=""),"%Y%m%d"),"UTC")
+                           sep=""),"%Y%m%d","UTC"),"UTC")
   } else {
     datetime.o<-as.POSIXlt(strptime(paste(o.tot$year,
                            formatC(o.tot$month,width=2,flag="0"),
                            formatC(o.tot$day,width=2,flag="0"),
                            formatC(o.tot$hour,width=2,flag="0"),
-                           sep=""),"%Y%m%d%H"),"UTC")
+                           sep=""),"%Y%m%d%H","UTC"),"UTC")
     datetime.q<-as.POSIXlt(strptime(paste(q.tot$year,
                            formatC(q.tot$month,width=2,flag="0"),
                            formatC(q.tot$day,width=2,flag="0"),
                            formatC(q.tot$hour,width=2,flag="0"),
-                           sep=""),"%Y%m%d%H"),"UTC")
+                           sep=""),"%Y%m%d%H","UTC"),"UTC")
   }
 #  print("datetime.o")
 #  print(datetime.o)
 #  print("datetime.q")
 #  print(datetime.q)
-  datetime.seq<-as.POSIXlt(unique(datetime.o))
+  datetime.seq<-as.POSIXlt(unique(as.POSIXct(datetime.o,"UTC")),"UTC")
 #  print("datetime.seq")
 #  print(datetime.seq)
   n.t<-length(datetime.seq)
