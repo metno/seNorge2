@@ -5,11 +5,10 @@
 rm(list=ls())
 # Libraries
 library(raster)
+library(ncdf)
+#
+proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
 #------------------------------------------------------------------------------
-dir.in.RR.main<-"/lustre/mnt/cristianl/seNorge2/PREC_daily/gridded_dataset_Bs1.1"
-dir.in.RR1.main<-"/lustre/mnt/cristianl/seNorge2/PREC_hourly/gridded_dataset"
-dir.in.RR1.idi.main<-"/lustre/mnt/cristianl/seNorge2_addInfo/PREC_hourly/gridded_dataset"
-#/lustre/mnt/cristianl/seNorge2_addInfo/PREC_hourly/gridded_dataset/201407/seNorge_v2test_PREC_grid_normIDI_2014070715_2014070715.nc
 # Read command line arguments
 arguments <- commandArgs()
 arguments
@@ -19,7 +18,7 @@ config_par<-arguments[5]
 if (length(arguments)!=5) 
   ext<-error_exit(paste("Error in command line arguments: \n",
   " R --vanilla yyyy.mm.dd configFILE configPAR \n",sep=""))
-# [] define/check paths
+# define/check paths
 if (!file.exists(config_file)) 
   ext<-error_exit("Fatal Error: configuration file not found")
 source(config_file)
@@ -92,9 +91,6 @@ mm<-substr(yyyy.mm.dd,6,7)
 dd<-substr(yyyy.mm.dd,9,10)
 yyyymm<-paste(yyyy,mm,sep="")
 yyyymmdd<-paste(yyyy,mm,dd,sep="")
-#
-dir.in.RR<-paste(dir.in.RR.main,"/",yyyymm,sep="")
-file.RR<-paste(dir.in.RR,"/seNorge_v2test_PREC_grid_",yyyymmdd,"_",yyyymmdd,".nc",sep="")
 # set Time variables
 end.string<-paste(yyyy.mm.dd,".06",sep="")
 end<-strptime(end.string,"%Y.%m.%d.%H","UTC")
@@ -108,232 +104,204 @@ yyyymmddhh.v<-paste(formatC(timeseq$year+1900,width=4,flag="0"),
                     formatC(timeseq$hour,width=2,flag="0"),sep="")
 print(timeseq)
 print(yyyymmddhh.v)
+nt<-length(yyyymmddhh.v)
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# [] Grid
+# CRS Coordinate Reference System
+r.orog.FG<-raster(filenamedem)
+nx.FG<-ncol(r.orog.FG)
+ny.FG<-nrow(r.orog.FG)
+dx.FG<-xres(r.orog.FG)
+dy.FG<-yres(r.orog.FG)
+area.1cell.FG<-dx.FG*dy.FG/(1000*1000) # Area Km**2
+# 4 borders point (SW corner (xmn,ymn); NE corner (xmx,ymx))
+xmn.FG<-xmin(r.orog.FG)
+xmx.FG<-xmax(r.orog.FG)
+ymn.FG<-ymin(r.orog.FG)
+ymx.FG<-ymax(r.orog.FG)
+# extract all the cell values: zvalues[1] contains the orog[1,1] value
+# Raster: cell numbers start at 1 in the upper left corner,
+# and increase from left to right, and then from top to bottom
+zvalues.FG<-getValues(r.orog.FG)
+storage.mode(zvalues.FG)<-"numeric"
+xy.FG<-xyFromCell(r.orog.FG,1:ncell(r.orog.FG))
+x.FG<-sort(unique(xy.FG[,1]))
+y.FG<-sort(unique(xy.FG[,2]),decreasing=T)
+mask.FG<-which(!is.na(zvalues.FG))
+zgrid<-zvalues.FG[mask.FG]
+xgrid<-xy.FG[mask.FG,1]
+ygrid<-xy.FG[mask.FG,2]
+Lgrid.FG<-length(mask.FG)
+# clean memory
+rm(zvalues.FG)
+# debug info
+print("grid parameters")
+print(paste("nx ny dx dy",as.integer(nx.FG),as.integer(ny.FG),round(dx.FG,2),round(dy.FG,2)))
+print(paste("xmn xmx ymn ymx",round(xmn.FG,2),round(xmx.FG,2),round(ymn.FG,2),round(ymx.FG,2)))
+print(paste("Lgrid.FG",as.integer(Lgrid.FG)))
+#..............................................................................
 # input directories
 # daily precipitation data
-path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
-path2input.1d.main.stn<-paste(path2output.main,"/station_dataset",sep="")
-path2input.1d.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2input.1d.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
-path2input.1d.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
-path2input.1d.add.eve<-paste(path2output.add,"/event_dataset",sep="")
-in.1d.file.stn<- paste(path2input.1d.main.stn,"/",yyyymm,
+d.path.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
+d.path.main.stn<-paste(d.path.main,"/station_dataset",sep="")
+d.path.main.grd<-paste(d.path.main,"/gridded_dataset",sep="")
+d.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
+d.path.add.grd<-paste(d.path.add,"/gridded_dataset",sep="")
+d.path.add.eve<-paste(d.path.add,"/event_dataset",sep="")
+d.file.stn<- paste(d.path.main.stn,"/",yyyymm,
                        "/seNorge_v2_0_PREC1d_station_",
                        yyyymmdd,"_",yyyymmdd,".txt",sep="")
-in.1d.file.eve<- paste(path2input.1d.add.eve,"/",yyyymm.b,
+d.file.eve<- paste(d.path.add.eve,"/",yyyymm,
                        "/seNorge_v2_0_PREC1d_event_",
                        yyyymmdd,"_",yyyymmdd,".txt",sep="")
-in.1d.file.grd.ana<- paste(path2input.1d.main.grd,"/",yyyymm.b,
+d.file.grd<- paste(d.path.main.grd,"/",yyyymm,
                            "/seNorge_v2_0_PREC1d_grid_",
                            yyyymmdd,"_",yyyymmdd,".nc",sep="")
-in.1d.file.grd.idi<- paste(path2input.1d.add.grd,"/",yyyymm.b,
+d.file.idi<- paste(d.path.add.grd,"/",yyyymm,
                            "/seNorge_v2_0_PREC1d_grid_normIDI_",
                            yyyymmdd,"_",yyyymmdd,".nc",sep="")
+d.file.check<-file.exists(d.file.grd)
 # hourly precipitation data
-path2input.1h.main<-paste(main.path.output,"/seNorge2/PREC1h",sep="")
-path2input.1h.main.stn<-paste(path2output.main,"/station_dataset",sep="")
-path2input.1h.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2input.1h.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1h",sep="")
-path2input.1h.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
-path2input.1h.add.eve<-paste(path2output.add,"/event_dataset",sep="")
-#in.1h.file.stn<- paste(path2input.1h.main.stn,"/",yyyymm,
-#                       "/seNorge_v2_0_PREC1h_station_",
-#                       yyyymmdd,"_",yyyymmdd,".txt",sep="")
-#in.1h.file.eve<- paste(path2input.1h.add.eve,"/",yyyymm.b,
-#                       "/seNorge_v2_0_PREC1h_event_",
-#                       yyyymmdd,"_",yyyymmdd,".txt",sep="")
-#in.1h.file.grd.ana<- paste(path2input.1h.main.grd,"/",yyyymm.b,
-#                           "/seNorge_v2_0_PREC1h_grid_",
-#                           yyyymmdd,"_",yyyymmdd,".nc",sep="")
-#in.1h.file.grd.idi<- paste(path2input.1h.add.grd,"/",yyyymm.b,
-#                           "/seNorge_v2_0_PREC1h_grid_normIDI_",
-#                           yyyymmdd,"_",yyyymmdd,".nc",sep="")
-in.1h.files.grd.ana<-vector()
-in.1h.files.grd.ana<-paste(path2input.1h.main.grd,"/",yyyymm.v,
-                           "/seNorge_v2_0_PREC1h_grid_",
+hrt.path.main<-paste(main.path.output,"/seNorge2/PREC1hRT",sep="")
+hrt.path.main.stn<-paste(hrt.path.main,"/station_dataset",sep="")
+hrt.path.main.grd<-paste(hrt.path.main,"/gridded_dataset",sep="")
+hrt.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1hRT",sep="")
+hrt.path.add.grd<-paste(hrt.path.add,"/gridded_dataset",sep="")
+hrt.path.add.eve<-paste(hrt.path.add,"/event_dataset",sep="")
+hrt.files.grd<-vector()
+hrt.files.grd<-paste(hrt.path.main.grd,"/",yyyymm.v,
+                           "/seNorge_v2_0_PREC1hRT_grid_",
                            yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
-files.check<-file.exists(in.1h.files.grd.ana)
-i<-0
-for (file.RR1 in files.RR1) {
-  i<-i+1
-  print(file.RR1)
-  xa.RR1.i<-raster(file.RR1)
-  projection(xa.RR1.i)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-  val.RR1<-extract(xa.RR1.i,1:ncell(xa.RR1.i))
-#  indx1<-which(val.RR1<0.1)
-  indx2<-which(is.na(val.RR1))
-  print("before")
-#  xa.RR1.filt<-focal(xa.RR1,w=gf)
-  xa.RR1.i.filt<-focal(xa.RR1.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
-  xa.RR1.i.filt[indx2]<-NA
-#  xa.RR1.filt[indx1]<-0
-  projection(xa.RR1.i.filt)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-  print("after")
-  rnc<-writeRaster(xa.RR1.i.filt,filename=paste("./seNorge_v2test_filt",yyyymmddhh.v[i],".nc",sep=""),format="CDF",overwrite=TRUE)
-  if (i==1) {
-    xa.RR1.sum<-xa.RR1.i.filt
-    projection(xa.RR1.sum)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-    xa.RR1<-xa.RR1.i.filt
-    xa.RR1.orig<-xa.RR1.i
-  } else {
-    xa.RR1.sum<-xa.RR1.sum+xa.RR1.i.filt
-    xa.RR1<-stack(xa.RR1,xa.RR1.i.filt)
-    xa.RR1.orig<-stack(xa.RR1.orig,xa.RR1.i)
-  }
-}
-
-
-
-
-# hourly precipitation data
+hrt.files.check<-file.exists(hrt.files.grd)
+#..............................................................................
 # output directories
+# hourly precipitation data
 dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
 dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
-path2output.main<-paste(main.path.output,"/seNorge2/PREC1h",sep="")
-path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
-path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1h",sep="")
-path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
-path2output.add.eve<-paste(path2output.add,"/event_dataset",sep="")
-if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
-if (!(file.exists(path2output.main.stn))) dir.create(path2output.main.stn,showWarnings=F) 
-if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWarnings=F) 
-if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
-if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
-if (!(file.exists(path2output.add.eve)))  dir.create(path2output.add.eve,showWarnings=F) 
-# Setup output files 
-dir.create(paste(path2output.main.stn,"/",yyyymm.b,sep=""),showWarnings=F)
-dir.create(paste(path2output.main.grd,"/",yyyymm.b,sep=""),showWarnings=F)
-dir.create(paste(path2output.add.grd,"/",yyyymm.b,sep=""),showWarnings=F)
-dir.create(paste(path2output.add.eve,"/",yyyymm.b,sep=""),showWarnings=F)
-out.file.stn<- paste(path2output.main.stn,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1h_station_",
-                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
-out.file.eve<- paste(path2output.add.eve,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1h_event_",
-                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
-out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1h_grid_",
-                         yyyymmdd.b,"_",yyyymmdd.e,".nc",sep="")
-out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1h_grid_normIDI_",
-                         yyyymmdd.b,"_",yyyymmdd.e,".nc",sep="")
-#
-print("Output files:")
-print("analysis on the grid (netcdf)")
-print(out.file.grd.ana)
-print("event-normalized idi on the grid (netcdf)")
-print(out.file.grd.idi)
-print("station outputs (text)")
-print(out.file.stn)
-print("event outputs (text)")
-print(out.file.eve)
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-
-
-
-
-
-#
-print(files.RR1)
-print(files.RR1.check)
-
-xa.RR<-raster(file.RR)
-projection(xa.RR)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-val.RR<-extract(xa.RR,1:ncell(xa.RR))
-indx.RR.noNA<-which(!is.na(val.RR))
-indx.RR.no0<-which(val.RR>=0.1)
-#
+h.path.main<-paste(main.path.output,"/seNorge2/PREC1h",sep="")
+h.path.main.stn<-paste(h.path.main,"/station_dataset",sep="")
+h.path.main.grd<-paste(h.path.main,"/gridded_dataset",sep="")
+h.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1h",sep="")
+h.path.add.grd<-paste(h.path.add,"/gridded_dataset",sep="")
+h.path.add.eve<-paste(h.path.add,"/event_dataset",sep="")
+if (!(file.exists(h.path.main)))     dir.create(h.path.main,showWarnings=F) 
+if (!(file.exists(h.path.main.stn))) dir.create(h.path.main.stn,showWarnings=F) 
+if (!(file.exists(h.path.main.grd))) dir.create(h.path.main.grd,showWarnings=F) 
+if (!(file.exists(h.path.add)))      dir.create(h.path.add,showWarnings=F) 
+if (!(file.exists(h.path.add.grd)))  dir.create(h.path.add.grd,showWarnings=F) 
+if (!(file.exists(h.path.add.eve)))  dir.create(h.path.add.eve,showWarnings=F) 
+# Setup output files
+for (i in 1:length(yyyymm.v)) {
+  dir.create(paste(h.path.main.stn,"/",yyyymm.v[i],sep=""),showWarnings=F)
+  dir.create(paste(h.path.main.grd,"/",yyyymm.v[i],sep=""),showWarnings=F)
+  dir.create(paste(h.path.add.grd,"/",yyyymm.v[i],sep=""),showWarnings=F)
+  dir.create(paste(h.path.add.eve,"/",yyyymm.v[i],sep=""),showWarnings=F)
+}
+h.files.stn<- paste(h.path.main.stn,"/",yyyymm.v,
+                    "/seNorge_v2_0_PREC1h_station_",
+                    yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+h.files.eve<- paste(h.path.add.eve,"/",yyyymm.v,
+                    "/seNorge_v2_0_PREC1h_event_",
+                    yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+h.files.grd<- paste(h.path.main.grd,"/",yyyymm.v,
+                    "/seNorge_v2_0_PREC1h_grid_",
+                    yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+h.files.idi<- paste(h.path.add.grd,"/",yyyymm.v,
+                    "/seNorge_v2_0_PREC1h_grid_normIDI_",
+                    yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+#..............................................................................
+print("Input files:")
+print("PREC1d:")
+print(cbind(d.file.grd,d.file.check))
+print("PREC1hRT:")
+print(cbind(hrt.files.grd,hrt.files.check))
+print("PREC1h Output files:")
+print("PREC1h analysis on the grid (netcdf)")
+print(h.files.grd)
+print("PREC1h event-normalized idi on the grid (netcdf)")
+print(h.files.idi)
+print("PREC1h station outputs (text)")
+print(h.files.stn)
+print("PREC1h event outputs (text)")
+print(h.files.eve)
+#..............................................................................
+# daily precipitation: open/read/close netcdf file
+nc<-open.ncdf(d.file.grd)
+data<-get.var.ncdf(nc)
+#aux<-att.get.ncdf(nc,"UTM_Zone_33","proj4")
+#projstr<-aux$value
+#dx<-nc$dim$X$vals[2]-nc$dim$X$vals[1]
+#ex.xmin<-min(nc$dim$X$vals)-dx/2
+#ex.xmax<-max(nc$dim$X$vals)+dx/2
+#dy<-nc$dim$Y$vals[2]-nc$dim$Y$vals[1]
+#ex.ymin<-min(nc$dim$Y$vals)-dy/2
+#ex.ymax<-max(nc$dim$Y$vals)+dy/2
+#nx<-nc$dim$X$len
+#ny<-nc$dim$Y$len
+close.ncdf(nc)
+d.ra<-raster(ncol=nx.FG, nrow=ny.FG,
+             xmn=xmn.FG, xmx=xmx.FG,
+             ymn=ymn.FG, ymx=ymx.FG,
+             crs=proj4.utm33)
+d.ra[]<-NA
+d.ra[]<-t(data)
+#d.xa<-extract(d.ra,1:ncell(d.ra))
+#d.indx.xa.noNA<-which(!is.na(d.xa))
+#d.indx.xa.no0<-which(d.xa>=0.1)
+#..............................................................................
+# cycle: filter the sub-daily precipitation field; 
+#        obtain the daily accumulated prec field from sub-daily prec fields
+# create raster hrt.ra.i
+hrt.ra.i<-d.ra
+projection(hrt.ra.i)<-proj4.utm33
 i<-0
-for (file.RR1 in files.RR1) {
+for (hrt.file in hrt.files.grd) {
   i<-i+1
-  print(file.RR1)
-  xa.RR1.i<-raster(file.RR1)
-  projection(xa.RR1.i)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-  val.RR1<-extract(xa.RR1.i,1:ncell(xa.RR1.i))
-#  indx1<-which(val.RR1<0.1)
-  indx2<-which(is.na(val.RR1))
-  print("before")
-#  xa.RR1.filt<-focal(xa.RR1,w=gf)
-  xa.RR1.i.filt<-focal(xa.RR1.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
-  xa.RR1.i.filt[indx2]<-NA
-#  xa.RR1.filt[indx1]<-0
-  projection(xa.RR1.i.filt)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-  print("after")
-  rnc<-writeRaster(xa.RR1.i.filt,filename=paste("./seNorge_v2test_filt",yyyymmddhh.v[i],".nc",sep=""),format="CDF",overwrite=TRUE)
+  print(hrt.file)
+  hrt.ra.i[]<-NA
+# sub-daily precipitation: open/read/close netcdf file
+  nc<-open.ncdf(hrt.file)
+  data<-get.var.ncdf(nc)
+  close.ncdf(nc)
+  hrt.ra.i[]<-t(data)
+  hrt.ra.i.filt<-focal(hrt.ra.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
+  projection(hrt.ra.i.filt)<-proj4.utm33
   if (i==1) {
-    xa.RR1.sum<-xa.RR1.i.filt
-    projection(xa.RR1.sum)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-    xa.RR1<-xa.RR1.i.filt
-    xa.RR1.orig<-xa.RR1.i
+    hrt.ra.sum<-hrt.ra.i.filt
+    hrt.ra.filt<-hrt.ra.i.filt
+    projection(hrt.ra.sum)<-proj4.utm33
+    projection(hrt.ra.filt)<-proj4.utm33
+#    hrt.ra.orig<-hrt.ra.i
   } else {
-    xa.RR1.sum<-xa.RR1.sum+xa.RR1.i.filt
-    xa.RR1<-stack(xa.RR1,xa.RR1.i.filt)
-    xa.RR1.orig<-stack(xa.RR1.orig,xa.RR1.i)
+    hrt.ra.sum<-hrt.ra.sum+hrt.ra.i.filt
+    hrt.ra.filt<-stack(hrt.ra.filt,hrt.ra.i.filt)
+#    hrt.ra.orig<-stack(hrt.ra.orig,hrt.ra.i)
   }
 }
-#
-#xa.RR1<-lapply(seq(files.RR1),function(i) {raster(files.RR1[i]) })
-#xa.RR1.stack<-stack(xa.RR1)
-#projection(xa.RR1.stack)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-#rg.xa.RR1<-focal(xa.RR1.stack,w=gf)
-#print(rg.xa.RR1)
-#xa.RR1.sum<-sum(xa.RR1.stack)
-
-#val.RR1.sum<-extract(xa.RR1.sum,1:ncell(xa.RR1.sum))
-#indx.weird<-which(val.RR>=0.1 & val.RR1.sum<0.1)
-#val.RR1.sum[indx.weird]<-(-1)
-#
-#xa.RR1.idi<-lapply(seq(files.RR1.idi),function(i) {raster(files.RR1.idi[i]) })
-#xa.RR1.idi.stack<-stack(xa.RR1.idi)
-#projection(xa.RR1.idi.stack)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-#xa.RR1.idi.sum<-sum(xa.RR1.idi.stack)
-#val.RR1.idi.sum<-extract(xa.RR1.idi.sum,1:ncell(xa.RR1.idi.sum))
-#
-rnc<-writeRaster(xa.RR,filename=paste("./seNorge_v2test_grid_RRsum.nc",sep=""),format="CDF",overwrite=TRUE)
-rnc<-writeRaster(xa.RR1.sum,filename=paste("./seNorge_v2test_grid_RR1sum.nc",sep=""),format="CDF",overwrite=TRUE)
-xa.RR1.dis<-xa.RR*xa.RR1/xa.RR1.sum
-rnc<-writeRaster(xa.RR1.dis,filename=paste("./seNorge_v2test_grid_RR1d.nc",sep=""),format="CDF",overwrite=TRUE)
-rnc<-writeRaster(xa.RR1.orig,filename=paste("./seNorge_v2test_grid_RR1o.nc",sep=""),format="CDF",overwrite=TRUE)
-q()
-#rnc<-writeRaster(xa.RR1.idi.sum,filename=paste("./seNorge_v2test_grid_RR1idisum.nc",sep=""),format="CDF",overwrite=TRUE)
-rm(xa.RR1,xa.RR1.stack)
-#val.RR1.dis<-vector(length=ncell(xa.RR))
-#val.RR1.dis[]<-NA
-i<-0
-for (file.RR1 in files.RR1) {
-  i<-i+1
-  print(file.RR1)
-  xa.RR1<-raster(file.RR1)
-  val.RR1<-extract(xa.RR1,1:ncell(xa.RR1))
-  val.RR1.dis[indx.RR.noNA]<-0
-  val.RR1.dis[indx.RR.no0]<-val.RR[indx.RR.no0] * val.RR1[indx.RR.no0] / val.RR1.sum[indx.RR.no0]
-  val.RR1.dis[indx.weird]<-val.RR[indx.weird] / 24
-  xa.RR1[indx.RR.noNA]<-round(val.RR1.dis[indx.RR.noNA],2)
-  rnc<-writeRaster(xa.RR1,filename=paste("./seNorge_v2test_grid_",yyyymmddhh.v[i],".nc",sep=""),format="CDF",overwrite=TRUE)
+# Disaggregate daily precipitation according to sub-daily fraction
+h.ra<-d.ra*hrt.ra.filt/hrt.ra.sum
+# Output Session
+for (i in 1:nt) {
+  b2r<-raster(h.ra,layer=i)
+  projection(b2r)<-proj4.utm33
+  h.xa<-extract(b2r,1:ncell(b2r))
+  h.xa[mask.FG][is.na(h.xa[mask.FG])]<-0
+  b2r[mask.FG]<-h.xa[mask.FG]
+  nogrid.ncout(file.name=h.files.grd[i],
+               grid=t(as.matrix(b2r)),
+               x=x.FG,y=y.FG,grid.type=grid.type,
+               times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+               prod.date=prod.date,
+               proj4.string=proj4.utm33,
+               var.name=xa.var.name,
+               var.longname=xa.var.longname,
+               var.unit=xa.var.unit,
+               var.mv=xa.var.mv,
+               var.version=xa.var.version,
+               times.unit=xa.times.unit,
+               times.ref=xa.times.ref,
+               reference=xa.reference,
+               source.string=xa.source.nc)
 }
-
-q()
-
-#dir.in.stat<-"/vol/klimagrid/test/temp_cristianl/SpInt_TEMP_daily/stationpoints"
-i<-0
-fnames.tot<-vector()
-dir<-paste(dir.in.grid,"/",yyyymm,"/",sep="")
-fname.aux<-paste("seNorge_v2test_TEMP_grid_",yyyymm,"*.nc",sep="")
-fnames.xa<-list.files(dir,pattern=glob2rx(fname.aux),recursive=T)
-for (f in 1:length(fnames.xa)) {
-  i<-i+1
-  fnames.tot[i]<-paste(dir,fnames.xa[f],sep="")
-}
-print(fnames.tot) 
-x<-raster(fnames.tot[1])
-# read input data into raster format
-xa.day<-lapply(seq(fnames.tot),function(i) {raster(fnames.tot[i]) })
-print(xa.day) 
-xa.day.stack<-stack(xa.day)
-projection(xa.day.stack)<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-# 
-xa.month<-mean(xa.day.stack)
-rnc<-writeRaster(xa.month,filename=paste(dir.out,"/seNorge_v2test_TEMPdaily_grid_",yyyymm,".nc",sep=""),format="CDF",overwrite=TRUE)
-#   
+# Exit with success
 quit(status=0)
