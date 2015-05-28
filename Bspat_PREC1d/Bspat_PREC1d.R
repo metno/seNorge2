@@ -613,18 +613,18 @@ while (L.yo.ok>0) {
     print("no rain over the whole domain")
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     cat(paste(yyyy.b,mm.b,dd.b,nday,
-              round(VecS[stn.output],0),
-              round(VecX[stn.output],0),
-              round(VecY[stn.output],0),
-              round(VecZ[stn.output],0),
+              formatC(VecS[stn.output],format="f",digits=0),
+              formatC(VecX[stn.output],format="f",digits=0),
+              formatC(VecY[stn.output],format="f",digits=0),
+              formatC(VecZ[stn.output],format="f",digits=0),
               rep(NA,n.stn.output), #eve.lab
-              round(yo[stn.output],1),
+              formatC(yo[stn.output],format="f",digits=1),
               rep(NA,n.stn.output), #yb
               rep(0,n.stn.output), #ya
               rep(NA,n.stn.output), #yav
               rep(NA,n.stn.output), #yidi.eve
               rep(NA,n.stn.output), #yidiv.eve
-              round(ydqc.flag[stn.output],0),
+              formatC(ydqc.flag[stn.output],format="f",digits=0),
               "\n",sep=";"),file=out.file.stn,append=T)
     # Figures
     r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
@@ -632,20 +632,22 @@ while (L.yo.ok>0) {
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
     r.aux.FG[mask.FG]<-round(xa.FG,1)
-    nogrid.ncout(grid=t(as.matrix(r.aux.FG)),
-                 x=x.FG,y=y.FG,grid.type=grid.type,
-                 file.name=out.file.grd.ana,
-                 var.name=var.name.xa,
-                 var.longname=var.longname.xa,
-                 var.unit=var.unit.xa,
-                 var.mv=var.mv.xa,
-                 var.version=var.version.xa,
-                 times=c(paste(yyyymmdd.b,"0000",sep="")),times.unit=times.unit.xa,
-                 times.ref=times.ref.xa,
-                 prod.date=prod.date,
-                 reference=reference.xa,
-                 proj4.string="+proj=utm +zone=33 +ellps=WGS84",
-                 source.string=source.nc)
+    nogrid.ncout(file.name=out.file.grd.ana,
+             grid=t(as.matrix(r.aux.FG)),
+             x=x.FG,y=y.FG,grid.type=grid.type,
+             times=c(paste(yyyymmdd.b,"0000",sep="")),
+             prod.date=prod.date,
+             proj4.string=proj4.utm33,
+             var.name=xa.var.name,
+             var.longname=xa.var.longname,
+             var.unit=xa.var.unit,
+             var.mv=xa.var.mv,
+             var.version=xa.var.version,
+             times.unit=xa.times.unit,
+             times.ref=xa.times.ref,
+             reference=xa.reference,
+             source.string=xa.source.nc)
+    print("Success exit")
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   } # end case of no-rain over the whole domain
@@ -1981,4 +1983,5 @@ if (xa.flag.write) {
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Success: exit!
+print("Success exit")
 quit(status=0)
