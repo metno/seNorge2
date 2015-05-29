@@ -62,7 +62,7 @@ function trim()
   YYYYend=${DATEEND:0:4}
   MMend=${DATEEND:5:2}
   DDend=${DATEEND:8:2}
-  HHend=${DATESTART:11:2}
+  HHend=${DATEEND:11:2}
   SECbeg=`date +%s -d "$YYYYbeg-$MMbeg-$DDbeg $HHbeg:00:00"`
   SECend=`date +%s -d "$YYYYend-$MMend-$DDend $HHend:00:00"`
 #------------------------------------------------------------------------------
