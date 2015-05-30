@@ -9,6 +9,11 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   proj4.wgs84<-"+proj=longlat +datum=WGS84"
   proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
   proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+  #
+  lat.mn<-50.
+  lat.mx<-82.
+  lon.mn<-0.
+  lon.mx<-40.
 #------------------------------------------------------------------------------
 # Read Station Information 
   myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
@@ -43,7 +48,9 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   lat_dec<-suppressWarnings(as.numeric(stataux$LAT_DEC))
   lon_dec<-suppressWarnings(as.numeric(stataux$LON_DEC))
   z<-suppressWarnings(as.numeric(stataux$AMSL))
-  indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) & lon_dec>0 & lon_dec<85 )
+  indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) & 
+               lon_dec>lon.mn & lon_dec<lon.mx & 
+               lat_dec>lat.mn & lat_dec<lat.mx)
 # second step: the location must be in Norway or on the border (lee than max.Km)
 #  intermediate step: transformation in Km-coordinates ETRS_LAEA, which has a transformation 
 #    less problematic than UTM33

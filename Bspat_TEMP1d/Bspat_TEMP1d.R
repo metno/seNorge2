@@ -38,11 +38,11 @@ proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +to
 max.Km.stnINdomain<-300
 #-----------------------------------------------------------------------------
 # [] Setup OI parameters
-sig2o<-3.0
+sig2o<-1.3
 eps2<-0.5
 Dh<-60
 Dz<-600
-T2<-20
+T2<-15
 # Background - parameters
 Dh.b<-70.
 eps2.b<-0.5
