@@ -1,18 +1,18 @@
 #!/bin/bash
 #===============================================================================
-# <seNorge2_PREC1hRT.sh>
+# <seNorge2_PREC1h.sh>
 #
 # DESCRIPTION:
 # ===========
-# Spatial Interpolation of hourly accumulated precipitation (Real-Time mode).
+# Spatial Interpolation of hourly accumulated precipitation.
 #
 # COMMAND LINE:
 # =============
-#  >seNorge2_PREC1hRT.sh -s yyyy.mm.dd.hh  (date start)
-#                        -e yyyy.mm.dd.hh  (date end)
-#                        -c config.file (configuration file)
-#                        -p config.par  (parameter name in configuration file)
-#                        -l log.directory (log directory for Bspat)
+#  >seNorge2_PREC1h.sh -s yyyy.mm.dd  (date start)
+#                      -e yyyy.mm.dd  (date end)
+#                      -c config.file (configuration file)
+#                      -p config.par  (parameter name in configuration file)
+#                      -l log.directory (log directory for Bspat)
 #===============================================================================
 function trim()
 {
@@ -32,7 +32,7 @@ function trim()
   flag_c=0
   flag_p=0
   flag_l=0
-  while getopts "s:e:c:p:l:b:o:" Option
+  while getopts "s:e:c:p:l:" Option
   do
     case $Option in
     s ) flag_s=1
@@ -50,10 +50,6 @@ function trim()
     l ) flag_l=1
     LOGDIR=$OPTARG
     ;;
-    b ) BLACKL=$OPTARG 
-    ;;
-    o ) ERROBS=$OPTARG 
-    ;;
     * ) echo " not recognized Option ";;
     esac
   done
@@ -62,11 +58,11 @@ function trim()
   YYYYbeg=${DATESTART:0:4}
   MMbeg=${DATESTART:5:2}
   DDbeg=${DATESTART:8:2}
-  HHbeg=${DATESTART:11:2}
+  HHbeg=01
   YYYYend=${DATEEND:0:4}
   MMend=${DATEEND:5:2}
   DDend=${DATEEND:8:2}
-  HHend=${DATEEND:11:2}
+  HHend=23
   SECbeg=`date +%s -d "$YYYYbeg-$MMbeg-$DDbeg $HHbeg:00:00"`
   SECend=`date +%s -d "$YYYYend-$MMend-$DDend $HHend:00:00"`
 #------------------------------------------------------------------------------
@@ -105,7 +101,7 @@ function trim()
   MAINDIR=${MAINDIR:1:-1}
 #------------------------------------------------------------------------------
 # log
-  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
+  echo "seNorge2_PREC1h.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
   vis="vis-m1"
@@ -115,13 +111,13 @@ function trim()
   fi
 #------------------------------------------------------------------------------
 # Variables
-  Bspat=$MAINDIR/Bspat_PREC1hRT/Bspat_PREC1hRT.R
+  Bspat=$MAINDIR/Bspat_PREC1h/Bspat_PREC1h.R
 #  BLACKL=$MAINDIR/etc/blacklists/seNorge2_PREC1h_blacklist.txt
 #  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_PREC1h_suspect_observations.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
-#  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
+#  echo "seNorge2_PREC1h.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
 #  find $OUTDIR/ -mtime +1 -exec rm -vf {} \;
 #-----------------------------------------------------
 # Statistical Interpolation 
@@ -129,14 +125,14 @@ function trim()
   SECcur=$SECbeg
   while (( "$SECcur" <= "$SECend" )) 
   do
-    DATEcur=`date --date="1970-01-01 $SECcur sec UTC" +%Y.%m.%d.%H`
+    DATEcur=`date --date="1970-01-01 $SECcur sec UTC" +%Y.%m.%d`
     echo "================================================================================"
-    echo "`date +%Y-%m-%d" "%H:%M` > $R --vanilla $DATEcur $DATEcur $BLACKL $ERROBS $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1hRT_$DATEcur_$DATEcur.log 2>&1"
-    $R --vanilla $DATEcur $DATEcur $BLACKL $ERROBS $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1hRT_$DATEcur_$DATEcur.log 2>&1
-    SECcur=$(( SECcur+3600 ))
+    echo "`date +%Y-%m-%d" "%H:%M` > $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1h_$DATEcur_$DATEcur.log 2>&1"
+    $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1h_$DATEcur_$DATEcur.log 2>&1
+    SECcur=$(( SECcur+86400 ))
   done
 #--------------------------
 # Exit 
 #--------------------------
-  echo "seNorge2_PREC1hRT.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
+  echo "seNorge2_PREC1h.sh "`date +%Y-%m-%d" "%H:%M`" > success!"
   exit 0

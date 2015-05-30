@@ -410,7 +410,6 @@ for (i in 1:nt) {
   # accumulate prec for subsequent elaboration
   hrt.yasum<-hrt.yasum+hrt.ya[,i]
   hrt.yavsum<-hrt.yavsum+hrt.yav[,i]
-  if (i==2) break
 }
 if (exists("hrt.ra.i.filt")) rm(hrt.ra.i.filt)
 #..............................................................................
@@ -454,7 +453,6 @@ for (i in 1:nt) {
 #            formatC(h.hrt.dqcflag[,i],format="f",digits=0),
 #            formatC(h.d.dqcflag,format="f",digits=0),
 #            "\n",sep=";"),file="deb",append=T)
-  if (i==2) break
 }
 rm(hrt.ya,hrt.yav)
 #..............................................................................
@@ -575,6 +573,21 @@ for (i in 1:nt) {
   maxrain.yo.eve<-vector(mode="numeric",length=n.eve)
   maxrain.ya.eve<-vector(mode="numeric",length=n.eve)
   maxrain.yav.eve<-vector(mode="numeric",length=n.eve)
+  # cv -> cross-validated
+  cv.rel.eve.all<-vector(mode="numeric",length=n.eve)
+  cv.bias.eve.all<-vector(mode="numeric",length=n.eve)
+  cv.rmse.eve.all<-vector(mode="numeric",length=n.eve)
+  cv.made.eve.all<-vector(mode="numeric",length=n.eve)
+  cv.rel.eve.q50<-vector(mode="numeric",length=n.eve)
+  cv.bias.eve.q50<-vector(mode="numeric",length=n.eve)
+  cv.rmse.eve.q50<-vector(mode="numeric",length=n.eve)
+  cv.made.eve.q50<-vector(mode="numeric",length=n.eve)
+  cv.rel.eve.q75<-vector(mode="numeric",length=n.eve)
+  cv.bias.eve.q75<-vector(mode="numeric",length=n.eve)
+  cv.rmse.eve.q75<-vector(mode="numeric",length=n.eve)
+  cv.made.eve.q75<-vector(mode="numeric",length=n.eve)
+  n.q50<-vector(mode="numeric",length=n.eve)
+  n.q75<-vector(mode="numeric",length=n.eve)
   n.y.eve[]<-NA
   area.eve[]<-NA
   volume.eve[]<-NA
@@ -583,6 +596,20 @@ for (i in 1:nt) {
   maxrain.yo.eve[]<-NA
   maxrain.ya.eve[]<-NA
   maxrain.yav.eve[]<-NA
+  cv.rel.eve.all[]<-NA
+  cv.bias.eve.all[]<-NA
+  cv.rmse.eve.all[]<-NA
+  cv.made.eve.all[]<-NA
+  cv.rel.eve.q50[]<-NA
+  cv.bias.eve.q50[]<-NA
+  cv.rmse.eve.q50[]<-NA
+  cv.made.eve.q50[]<-NA
+  cv.rel.eve.q75[]<-NA
+  cv.bias.eve.q75[]<-NA
+  cv.rmse.eve.q75[]<-NA
+  cv.made.eve.q75[]<-NA
+  n.q50[]<-NA
+  n.q75[]<-NA
 #  meanidi.x.eve<-vector(mode="numeric",length=n.eve)
 #  meanidi.x.eve<-vector(mode="numeric",length=n.eve)
 #  meanidi.y.eve<-vector(mode="numeric",length=n.eve)
@@ -719,7 +746,6 @@ for (i in 1:nt) {
                times.ref=xa.times.ref,
                reference=xa.reference,
                source.string=xa.source.nc)
-  if (i==2) break
 }
 #..............................................................................
 # Exit with success
