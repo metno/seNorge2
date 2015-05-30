@@ -1,4 +1,4 @@
-# --~- Bspat_PREC1hRT.R -~--
+# --~- Bspat_PREC1d.R -~--
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
@@ -21,17 +21,17 @@
 # @@@@ in the code marks output sessions
 # directory tree:
 # +analysis/prediction at gridpoints (FG)
-# | seNorge2->PREC1hRT->gridded_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_grid_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2->PREC1d->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_grid_"yyyymmdd.b"_"yyyymmdd.e".txt
 # +analysis/prediction at station locations
-# | seNorge2->PREC1hRT->station_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_station_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2->PREC1d->station_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_station_"yyyymmdd.b"_"yyyymmdd.e".txt
 # +IDI Integral Data Influence
-# | seNorge2_addInfo->PREC1hRT->gridded_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_grid_normIDI_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2_addInfo->PREC1d->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_grid_normIDI_"yyyymmdd.b"_"yyyymmdd.e".txt
 # +additional informations on events
-# | seNorge2_addInfo->PREC1hRT->event_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_event_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2_addInfo->PREC1d->event_dataset->yyyymm
+# | seNorge_v2_0_PREC1d_event_"yyyymmdd.b"_"yyyymmdd.e".txt
 #
 # 1. analysis/prediction at station locations
 # see the output sessione marked with  
@@ -259,8 +259,8 @@ source(paste(path2lib.com,"/getStationData.R",sep=""))
 print(testmode)
 if (testmode) {
   print("TESTMODE TESTMODE TESTMODE")
-  if (file.exists(paste(main.path,"/Bspat_PREC1hRT/testbed",sep=""))) {
-    testbed<-paste(main.path,"/Bspat_PREC1hRT/testbed",sep="")
+  if (file.exists(paste(main.path,"/Bspat_PREC1d/testbed",sep=""))) {
+    testbed<-paste(main.path,"/Bspat_PREC1d/testbed",sep="")
     station.info<-paste(testbed,"/station_data.csv",sep="")
     observed.data<-paste(testbed,"/observed_data.csv",sep="")
   } else {
@@ -272,7 +272,7 @@ grid.type <- "utm33"
 prod.date <- substr(Sys.time(),1,10)
 xa.source.nc<-"daily precipitation from station data"
 xa.var.version <- "1.0"
-xa.pname<-"PREC1hRT"
+xa.pname<-"PREC1d"
 for (p in 1:length(ncout.spec.list)) {
   if (ncout.spec.list[[p]]$pname==xa.pname) break
 }
@@ -319,8 +319,8 @@ start.string<-paste(date.b.string,sep="")
 end.string<-paste(date.e.string,sep="")
 start.string.day<-paste(substr(start.string,1,10),".01",sep="")
 end.string.day  <-paste(substr(end.string,1,10),".24",sep="")
-start <- strptime(start.string,"%Y.%m.%d.%H","UTC")
-end <- strptime(end.string,"%Y.%m.%d.%H","UTC")
+start <- strptime(start.string,"%Y.%m.%d","UTC")
+end <- strptime(end.string,"%Y.%m.%d","UTC")
 timeseq<-as.POSIXlt(seq(as.POSIXlt(start),as.POSIXlt(end),by="1 hour"),"UTC")
 nhour<-length(timeseq)
 start.day <- strptime(start.string.day,"%Y.%m.%d.%H","UTC")
@@ -330,17 +330,15 @@ nday<-length(dayseq)
 yyyy.b<-timeseq$year[1]+1900
 mm.b<-timeseq$mon[1]+1
 dd.b<-timeseq$mday[1]
-hh.b<-timeseq$hour[1]
 yyyy.e<-timeseq$year[nhour]+1900
 mm.e<-timeseq$mon[nhour]+1
 dd.e<-timeseq$mday[nhour]
-hh.e<-timeseq$hour[nhour]
 date.b<-paste(dd.b,".",mm.b,".",yyyy.b,sep="")
 date.e<-paste(dd.e,".",mm.e,".",yyyy.e,sep="")
-yyyymmddhh.b<-paste(yyyy.b,formatC(mm.b,width=2,flag="0"),formatC(dd.b,width=2,flag="0"),formatC(hh.b,width=2,flag="0"),sep="")
+yyyymmdd.b<-paste(yyyy.b,formatC(mm.b,width=2,flag="0"),formatC(dd.b,width=2,flag="0"),sep="")
 yyyymm.b<-paste(yyyy.b,formatC(mm.b,width=2,flag="0"),sep="")
 datestring.b<-paste(yyyy.b,".",mm.b,".",dd.b," ",sep="")
-yyyymmddhh.e<-paste(yyyy.e,formatC(mm.e,width=2,flag="0"),formatC(dd.e,width=2,flag="0"),formatC(hh.e,width=2,flag="0"),sep="")
+yyyymmdd.e<-paste(yyyy.e,formatC(mm.e,width=2,flag="0"),formatC(dd.e,width=2,flag="0"),sep="")
 yyyymm.e<-paste(yyyy.e,formatC(mm.e,width=2,flag="0"),sep="")
 datestring.e<-paste(yyyy.e,".",mm.e,".",dd.e," ",sep="")
 print(timeseq)
@@ -350,10 +348,10 @@ print(nday)
 # output directories
 dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
 dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
-path2output.main<-paste(main.path.output,"/seNorge2/PREC1hRT",sep="")
+path2output.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
 path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
 path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1hRT",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
 path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 path2output.add.eve<-paste(path2output.add,"/event_dataset",sep="")
 if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
@@ -368,17 +366,17 @@ dir.create(paste(path2output.main.grd,"/",yyyymm.b,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm.b,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.eve,"/",yyyymm.b,sep=""),showWarnings=F)
 out.file.stn<- paste(path2output.main.stn,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1hRT_station_",
-                     yyyymmddhh.b,"_",yyyymmddhh.e,".txt",sep="")
+                     "/seNorge_v2_0_PREC1d_station_",
+                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
 out.file.eve<- paste(path2output.add.eve,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1hRT_event_",
-                     yyyymmddhh.b,"_",yyyymmddhh.e,".txt",sep="")
+                     "/seNorge_v2_0_PREC1d_event_",
+                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1hRT_grid_",
-                         yyyymmddhh.b,"_",yyyymmddhh.e,".nc",sep="")
+                         "/seNorge_v2_0_PREC1d_grid_",
+                         yyyymmdd.b,"_",yyyymmdd.e,".nc",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1hRT_grid_normIDI_",
-                         yyyymmddhh.b,"_",yyyymmddhh.e,".nc",sep="")
+                         "/seNorge_v2_0_PREC1d_grid_normIDI_",
+                         yyyymmdd.b,"_",yyyymmdd.e,".nc",sep="")
 #
 print("Output files:")
 print("analysis on the grid (netcdf)")
@@ -392,11 +390,11 @@ print(out.file.eve)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # HEADER HEADER HEADER HEADER HEADER HEADER HEADER HEADER
 # define header for the station data output file
-cat(paste("year","month","day","hour","nhour","stid",
+cat(paste("year","month","day","nday","stid",
           "x","y","z","eve.lab","yo",
           "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
           file=out.file.stn,append=F)
-cat(paste("year","month","day","hour","nhour","eve.lab","nobs",
+cat(paste("year","month","day","nday","eve.lab","nobs",
           "area","volume",
           "mean.idi.x","mean.idi.y","mean.idiv.y",
           "mean.rain","max.rain.x",
@@ -541,41 +539,20 @@ yo[]<-NA
 ydqc.flag[]<-NA
 # cycle over days to get data from KDVH
 if (!testmode) {
-  if (nhour==1) {
-    data<-getStationData(var="RR_1", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+  if (nday==1) {
+    data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
                          to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
-                         h=hh.b,
                          qa=NULL, statlist=stations, outside.Norway=T,
                          err.file=file_errobs, blist=file_blacklist,
                          val.min.allowed=yo.dqc.plausible.min,
                          val.max.allowed=yo.dqc.plausible.max,verbose=T)
   } else {
-    for (d in 1:nday) {
-      yyyy.d<-dayseq$year[d]+1900
-      mm.d<-dayseq$mon[d]+1
-      dd.d<-dayseq$mday[d]
-      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon+1)==mm.d & timeseq$mday==dd.d)
-      hh.d<-timeseq$hour[aux]
-      data.tmp<-getStationData(var="RR_1", from.yyyy=yyyy.d, from.mm=mm.d, from.dd=dd.d,
-                               to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
-                               h=hh.d,
-                               qa=NULL, statlist=stations, outside.Norway=T,
-                               err.file=file_errobs, blist=file_blacklist, 
-                               val.min.allowed=yo.dqc.plausible.min, 
-                               val.max.allowed=yo.dqc.plausible.max,fun="sum",verbose=T)
-      if (d==1) {
-        data<-data.tmp
-      } else {
-        if (any(data$stnr!=data.tmp$stnr)) print("differenti")
-        data$ntime[1:L.y.tot]<-data$ntime[1:L.y.tot]+length(hh.d)
-        data$nvalue[1:L.y.tot]<-data$nvalue[1:L.y.tot]+data.tmp$nvalue[1:L.y.tot]
-        data$value[1:L.y.tot]<-data$value[1:L.y.tot]+data.tmp$value[1:L.y.tot]
-        data$KDVHflag[data.tmp$KDVHflag==100]<-100
-        data$err.ext[data.tmp$err.ext]<-T
-        data$blist[data.tmp$blist]<-T
-        data$plausible[!data.tmp$plausible]<-F
-      }
-    }
+    data<-getStationData(var="RR", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+                         to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+                         qa=NULL, statlist=stations, outside.Norway=T,
+                         err.file=file_errobs, blist=file_blacklist, 
+                         val.min.allowed=yo.dqc.plausible.min, 
+                         val.max.allowed=yo.dqc.plausible.max,fun="sum",verbose=T)
   }
 } else {
   data<-read.csv(file=observed.data)
@@ -635,7 +612,7 @@ while (L.yo.ok>0) {
   if (L.yo.ok.wet==0) {
     print("no rain over the whole domain")
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
+    cat(paste(yyyy.b,mm.b,dd.b,nday,
               formatC(VecS[stn.output],format="f",digits=0),
               formatC(VecX[stn.output],format="f",digits=0),
               formatC(VecY[stn.output],format="f",digits=0),
@@ -656,20 +633,20 @@ while (L.yo.ok>0) {
     xa.FG[]<-0
     r.aux.FG[mask.FG]<-round(xa.FG,1)
     nogrid.ncout(file.name=out.file.grd.ana,
-                 grid=t(as.matrix(r.aux.FG)),
-                 x=x.FG,y=y.FG,grid.type=grid.type,
-                 times=c(paste(yyyymmddhh.b,"00",sep="")),
-                 prod.date=prod.date,
-                 proj4.string=proj4.utm33,
-                 var.name=xa.var.name,
-                 var.longname=xa.var.longname,
-                 var.unit=xa.var.unit,
-                 var.mv=xa.var.mv,
-                 var.version=xa.var.version,
-                 times.unit=xa.times.unit,
-                 times.ref=xa.times.ref,
-                 reference=xa.reference,
-                 source.string=xa.source.nc)
+             grid=t(as.matrix(r.aux.FG)),
+             x=x.FG,y=y.FG,grid.type=grid.type,
+             times=c(paste(yyyymmdd.b,"0000",sep="")),
+             prod.date=prod.date,
+             proj4.string=proj4.utm33,
+             var.name=xa.var.name,
+             var.longname=xa.var.longname,
+             var.unit=xa.var.unit,
+             var.mv=xa.var.mv,
+             var.version=xa.var.version,
+             times.unit=xa.times.unit,
+             times.ref=xa.times.ref,
+             reference=xa.reference,
+             source.string=xa.source.nc)
     print("Success exit")
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1347,11 +1324,10 @@ while (L.yo.ok>0) {
     eve.labels<-NA
     eve.labels<-tmp[aux]
     n.eve<-length(eve.labels)
-    rm(tmp)
   }
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
   rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
-  rm(aux)
+  rm(aux,tmp)
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
@@ -1441,17 +1417,17 @@ while (L.yo.ok>0) {
 # + Ellipsoid hulls
 # ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
   # debug: start
-#  png(file="../../seNorge2_scratch/Bspat_PREC1hRT/elli.png",width=1200,height=1200)
+#  png(file="../../seNorge2_scratch/Bspat_PREC1d/elli.png",width=1200,height=1200)
 #  mx<-as.integer(max(eve.labels,na.rm=T))
 #  cols<-c("gray",rainbow((mx-1)))
-#  plot(r.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
+#  plot(r.eve.CG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
   # debug: end
   for (n in 1:n.eve) {
 #    print(paste("n eve.labels[n]",n,eve.labels[n]))
     xindx.eve.CG<-which(x.eve.CG==eve.labels[n])
     Lgrid.eve<-length(xindx.eve.CG)
 #    print(Lgrid.eve)
-    if (Lgrid.eve<=(min.Dh.seq.allowed)**2.) {
+    if (Lgrid.eve<=(min.Dh.seq.allowed)**2.) { 
       ell.smajor.eve[n] <- 2*min.Dh.seq.allowed
       ell.sminor.eve[n] <- 2*min.Dh.seq.allowed
       ell.smadir.eve[n] <- NA
@@ -1798,7 +1774,7 @@ while (L.yo.ok>0) {
         # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<=Lgrid.eve.FG) {
-          start<-min( i*ndim.FG.iteration+1, Lgrid.eve.FG)
+          start<-i*ndim.FG.iteration+1
           end<-min( (i+1)*ndim.FG.iteration, Lgrid.eve.FG)
           ndimaux.FG<-end-start+1
           # print(paste("start end ndimaux.FG",start,end,ndimaux.FG))
@@ -1915,7 +1891,7 @@ yidiv.eve[is.na(y.eve)]<-NA
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 print("++ Output")
 # Station Points - Write output on file 
-cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
+cat(paste(yyyy.b,mm.b,dd.b,nday,
           formatC(VecS[stn.output],format="f",digits=0),
           formatC(VecX[stn.output],format="f",digits=0),
           formatC(VecY[stn.output],format="f",digits=0),
@@ -1929,7 +1905,7 @@ cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
           formatC(yidiv.eve[stn.output],format="f",digits=4),
           formatC(ydqc.flag[stn.output],format="f",digits=0),
           "\n",sep=";"),file=out.file.stn,append=T)
-cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
+cat(paste(yyyy.b,mm.b,dd.b,nday,
           eve.labels,
           n.y.eve,
           formatC(area.eve,format="f",digits=0),
@@ -1973,7 +1949,7 @@ if (xidi.flag.write) {
   nogrid.ncout(file.name=out.file.grd.idi,
                grid=t(as.matrix(r.aux.FG)),
                x=x.FG,y=y.FG,grid.type=grid.type,
-               times=c(paste(yyyymmddhh.b,"00",sep="")),
+               times=c(paste(yyyymmdd.b,"0000",sep="")),
                prod.date=prod.date,
                proj4.string=proj4.utm33,
                var.name=xidi.var.name,
@@ -1992,7 +1968,7 @@ if (xa.flag.write) {
   nogrid.ncout(file.name=out.file.grd.ana,
                grid=t(as.matrix(r.aux.FG)),
                x=x.FG,y=y.FG,grid.type=grid.type,
-               times=c(paste(yyyymmddhh.b,"00",sep="")),
+               times=c(paste(yyyymmdd.b,"0000",sep="")),
                prod.date=prod.date,
                proj4.string=proj4.utm33,
                var.name=xa.var.name,

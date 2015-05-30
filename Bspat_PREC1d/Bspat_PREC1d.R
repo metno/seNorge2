@@ -1324,10 +1324,11 @@ while (L.yo.ok>0) {
     eve.labels<-NA
     eve.labels<-tmp[aux]
     n.eve<-length(eve.labels)
+    rm(tmp)
   }
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
   rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
-  rm(aux,tmp)
+  rm(aux)
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
@@ -1774,7 +1775,7 @@ while (L.yo.ok>0) {
         # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<=Lgrid.eve.FG) {
-          start<-i*ndim.FG.iteration+1
+          start<-min( i*ndim.FG.iteration+1, Lgrid.eve.FG)
           end<-min( (i+1)*ndim.FG.iteration, Lgrid.eve.FG)
           ndimaux.FG<-end-start+1
           # print(paste("start end ndimaux.FG",start,end,ndimaux.FG))

@@ -1,4 +1,4 @@
-# --~- Bspat_PREC1hRT.R -~--
+# --~- Bspat_PREC3hRT.R -~--
 # Bayesian Spatial Interpolation of daily cumulated precipitation
 #..............................................................................
 # == Command line ==
@@ -21,17 +21,17 @@
 # @@@@ in the code marks output sessions
 # directory tree:
 # +analysis/prediction at gridpoints (FG)
-# | seNorge2->PREC1hRT->gridded_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_grid_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2->PREC3hRT->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC3hRT_grid_"yyyymmddhh.b"_"yyyymmddhh.e".txt
 # +analysis/prediction at station locations
-# | seNorge2->PREC1hRT->station_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_station_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2->PREC3hRT->station_dataset->yyyymm
+# | seNorge_v2_0_PREC3hRT_station_"yyyymmddhh.b"_"yyyymmddhh.e".txt
 # +IDI Integral Data Influence
-# | seNorge2_addInfo->PREC1hRT->gridded_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_grid_normIDI_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2_addInfo->PREC3hRT->gridded_dataset->yyyymm
+# | seNorge_v2_0_PREC3hRT_grid_normIDI_"yyyymmddhh.b"_"yyyymmddhh.e".txt
 # +additional informations on events
-# | seNorge2_addInfo->PREC1hRT->event_dataset->yyyymm
-# | seNorge_v2_0_PREC1hRT_event_"yyyymmddhh.b"_"yyyymmddhh.e".txt
+# | seNorge2_addInfo->PREC3hRT->event_dataset->yyyymm
+# | seNorge_v2_0_PREC3hRT_event_"yyyymmddhh.b"_"yyyymmddhh.e".txt
 #
 # 1. analysis/prediction at station locations
 # see the output sessione marked with  
@@ -259,8 +259,8 @@ source(paste(path2lib.com,"/getStationData.R",sep=""))
 print(testmode)
 if (testmode) {
   print("TESTMODE TESTMODE TESTMODE")
-  if (file.exists(paste(main.path,"/Bspat_PREC1hRT/testbed",sep=""))) {
-    testbed<-paste(main.path,"/Bspat_PREC1hRT/testbed",sep="")
+  if (file.exists(paste(main.path,"/Bspat_PREC3hRT/testbed",sep=""))) {
+    testbed<-paste(main.path,"/Bspat_PREC3hRT/testbed",sep="")
     station.info<-paste(testbed,"/station_data.csv",sep="")
     observed.data<-paste(testbed,"/observed_data.csv",sep="")
   } else {
@@ -272,7 +272,7 @@ grid.type <- "utm33"
 prod.date <- substr(Sys.time(),1,10)
 xa.source.nc<-"daily precipitation from station data"
 xa.var.version <- "1.0"
-xa.pname<-"PREC1hRT"
+xa.pname<-"PREC3hRT"
 for (p in 1:length(ncout.spec.list)) {
   if (ncout.spec.list[[p]]$pname==xa.pname) break
 }
@@ -350,10 +350,10 @@ print(nday)
 # output directories
 dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
 dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
-path2output.main<-paste(main.path.output,"/seNorge2/PREC1hRT",sep="")
+path2output.main<-paste(main.path.output,"/seNorge2/PREC3hRT",sep="")
 path2output.main.stn<-paste(path2output.main,"/station_dataset",sep="")
 path2output.main.grd<-paste(path2output.main,"/gridded_dataset",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1hRT",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_addInfo/PREC3hRT",sep="")
 path2output.add.grd<-paste(path2output.add,"/gridded_dataset",sep="")
 path2output.add.eve<-paste(path2output.add,"/event_dataset",sep="")
 if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
@@ -368,16 +368,16 @@ dir.create(paste(path2output.main.grd,"/",yyyymm.b,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm.b,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.eve,"/",yyyymm.b,sep=""),showWarnings=F)
 out.file.stn<- paste(path2output.main.stn,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1hRT_station_",
+                     "/seNorge_v2_0_PREC3hRT_station_",
                      yyyymmddhh.b,"_",yyyymmddhh.e,".txt",sep="")
 out.file.eve<- paste(path2output.add.eve,"/",yyyymm.b,
-                     "/seNorge_v2_0_PREC1hRT_event_",
+                     "/seNorge_v2_0_PREC3hRT_event_",
                      yyyymmddhh.b,"_",yyyymmddhh.e,".txt",sep="")
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1hRT_grid_",
+                         "/seNorge_v2_0_PREC3hRT_grid_",
                          yyyymmddhh.b,"_",yyyymmddhh.e,".nc",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm.b,
-                         "/seNorge_v2_0_PREC1hRT_grid_normIDI_",
+                         "/seNorge_v2_0_PREC3hRT_grid_normIDI_",
                          yyyymmddhh.b,"_",yyyymmddhh.e,".nc",sep="")
 #
 print("Output files:")
@@ -554,7 +554,7 @@ if (!testmode) {
       yyyy.d<-dayseq$year[d]+1900
       mm.d<-dayseq$mon[d]+1
       dd.d<-dayseq$mday[d]
-      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon+1)==mm.d & timeseq$mday==dd.d)
+      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon[d]+1)==mm.d & timeseq$mday==dd.d)
       hh.d<-timeseq$hour[aux]
       data.tmp<-getStationData(var="RR_1", from.yyyy=yyyy.d, from.mm=mm.d, from.dd=dd.d,
                                to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
@@ -635,19 +635,19 @@ while (L.yo.ok>0) {
   if (L.yo.ok.wet==0) {
     print("no rain over the whole domain")
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
-              formatC(VecS[stn.output],format="f",digits=0),
-              formatC(VecX[stn.output],format="f",digits=0),
-              formatC(VecY[stn.output],format="f",digits=0),
-              formatC(VecZ[stn.output],format="f",digits=0),
+    cat(paste(yyyy.b,mm.b,dd.b,nday,
+              round(VecS[stn.output],0),
+              round(VecX[stn.output],0),
+              round(VecY[stn.output],0),
+              round(VecZ[stn.output],0),
               rep(NA,n.stn.output), #eve.lab
-              formatC(yo[stn.output],format="f",digits=1),
+              round(yo[stn.output],1),
               rep(NA,n.stn.output), #yb
               rep(0,n.stn.output), #ya
               rep(NA,n.stn.output), #yav
               rep(NA,n.stn.output), #yidi.eve
               rep(NA,n.stn.output), #yidiv.eve
-              formatC(ydqc.flag[stn.output],format="f",digits=0),
+              round(ydqc.flag[stn.output],0),
               "\n",sep=";"),file=out.file.stn,append=T)
     # Figures
     r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
@@ -655,22 +655,20 @@ while (L.yo.ok>0) {
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
     r.aux.FG[mask.FG]<-round(xa.FG,1)
-    nogrid.ncout(file.name=out.file.grd.ana,
-                 grid=t(as.matrix(r.aux.FG)),
+    nogrid.ncout(grid=t(as.matrix(r.aux.FG)),
                  x=x.FG,y=y.FG,grid.type=grid.type,
-                 times=c(paste(yyyymmddhh.b,"00",sep="")),
+                 file.name=out.file.grd.ana,
+                 var.name=var.name.xa,
+                 var.longname=var.longname.xa,
+                 var.unit=var.unit.xa,
+                 var.mv=var.mv.xa,
+                 var.version=var.version.xa,
+                 times=c(paste(yyyymmddhh.b,"00",sep="")),times.unit=times.unit.xa,
+                 times.ref=times.ref.xa,
                  prod.date=prod.date,
-                 proj4.string=proj4.utm33,
-                 var.name=xa.var.name,
-                 var.longname=xa.var.longname,
-                 var.unit=xa.var.unit,
-                 var.mv=xa.var.mv,
-                 var.version=xa.var.version,
-                 times.unit=xa.times.unit,
-                 times.ref=xa.times.ref,
-                 reference=xa.reference,
-                 source.string=xa.source.nc)
-    print("Success exit")
+                 reference=reference.xa,
+                 proj4.string="+proj=utm +zone=33 +ellps=WGS84",
+                 source.string=source.nc)
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   } # end case of no-rain over the whole domain
@@ -1308,12 +1306,9 @@ while (L.yo.ok>0) {
   x.dist[]<-NA
   x.eve.FG[]<-NA
   rm.eve<-vector(mode="numeric")
-  firstTime<-TRUE
   for (n in 1:n.eve) {
-    auxx<-which(x.lngb.FG==eve.labels[n])
-    if (length(auxx)==0) next 
     r.aux.FG[]<-NA
-    r.aux.FG[mask.FG[auxx]]<-1
+    r.aux.FG[mask.FG[x.lngb.FG==eve.labels[n]]]<-1
 #    r.edge.FG<-edge(r.aux.FG,type="inner")
     r.edge.FG<-edge(r.aux.FG,type="outer")
     x.edge.FG<-getValues(r.edge.FG)[mask.FG]
@@ -1328,10 +1323,9 @@ while (L.yo.ok>0) {
       r.dist<-distanceFromPoints(r.clu.FG,cbind(xedge.FG,yedge.FG))
       x.dist<-getValues(r.dist)[mask.FG]
       x.dist[NAmask.clu.FG]<-NA
-      if (firstTime) {
+      if (n==1) {
         x.dist.min<-x.dist
-        x.eve.FG[mask.clu.FG]<-eve.labels[n]
-        firstTime<-FALSE
+        x.eve.FG[mask.clu.FG]<-eve.labels[1]
       } else {
         aux<-which(x.dist[mask.clu.FG]<x.dist.min[mask.clu.FG])
         aux<-mask.clu.FG[aux]
@@ -1347,11 +1341,13 @@ while (L.yo.ok>0) {
     eve.labels<-NA
     eve.labels<-tmp[aux]
     n.eve<-length(eve.labels)
-    rm(tmp)
   }
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
   rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
-  rm(aux)
+  rm(aux,tmp)
+#  r.aux.FG[]<-NA
+#  r.aux.FG[mask.FG]<-x.eve.FG
+#  writeRaster(r.aux.FG,file="r.nc", format="CDF", overwrite=TRUE)
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
@@ -1441,7 +1437,7 @@ while (L.yo.ok>0) {
 # + Ellipsoid hulls
 # ellipsoid hulls computation could fail (i.e. small events) and return NAs. 
   # debug: start
-#  png(file="../../seNorge2_scratch/Bspat_PREC1hRT/elli.png",width=1200,height=1200)
+#  png(file="../../seNorge2_scratch/Bspat_PREC3hRT/elli.png",width=1200,height=1200)
 #  mx<-as.integer(max(eve.labels,na.rm=T))
 #  cols<-c("gray",rainbow((mx-1)))
 #  plot(r.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
@@ -1451,12 +1447,6 @@ while (L.yo.ok>0) {
     xindx.eve.CG<-which(x.eve.CG==eve.labels[n])
     Lgrid.eve<-length(xindx.eve.CG)
 #    print(Lgrid.eve)
-    if (Lgrid.eve<=(min.Dh.seq.allowed)**2.) {
-      ell.smajor.eve[n] <- 2*min.Dh.seq.allowed
-      ell.sminor.eve[n] <- 2*min.Dh.seq.allowed
-      ell.smadir.eve[n] <- NA
-      next
-    }
     xy<-cbind(xgrid.CG[xindx.eve.CG],ygrid.CG[xindx.eve.CG])
     ell<-ellipsoidhull(xy)
     ell.locx.eve[n]<-ell$loc[1]
@@ -1490,8 +1480,7 @@ while (L.yo.ok>0) {
   } # end cycle: compute ellipsoid hulls
 # debug: close plot session
 #  dev.off()
-  if (exists("xindx.eve.CG")) rm(xindx.eve.CG)
-  if (exists("eigenval")) rm(xy,ell,eigenval,eigenvec,e)
+  rm(xindx.eve.CG,xy,ell,eigenval,eigenvec,e)
 #------------------------------------------------------------------------------
 # ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  ANALYSIS OVER EVENTS  
 # + Analysis cycle over events 
@@ -1798,7 +1787,7 @@ while (L.yo.ok>0) {
         # analysis on FG is done iteratively (save memory)
         i<-0
         while ((i*ndim.FG.iteration)<=Lgrid.eve.FG) {
-          start<-min( i*ndim.FG.iteration+1, Lgrid.eve.FG)
+          start<-i*ndim.FG.iteration+1
           end<-min( (i+1)*ndim.FG.iteration, Lgrid.eve.FG)
           ndimaux.FG<-end-start+1
           # print(paste("start end ndimaux.FG",start,end,ndimaux.FG))
@@ -2007,5 +1996,4 @@ if (xa.flag.write) {
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Success: exit!
-print("Success exit")
 quit(status=0)
