@@ -18,11 +18,7 @@ ylim.ne<-7900000
 #ylim.sw<-6450000
 #ylim.ne<-7150000
 #
-scale.PREC1hRT<-c(0.1,0.5, 1, 2, 3, 4,
-                  5,  6, 7, 8, 9,
-                 10, 15,20,25,30,
-                 35, 40,45,50,55,
-                 70,90,110,130,100000)
+scale.PREC1hRT<-c(0.05,0.5,3,7,10,15,20,30,40,50,60,100000)
 #==============================================================================
 arguments <- commandArgs()
 arguments
@@ -105,6 +101,11 @@ t2m_29lev.r<-as.numeric(t2m_29lev$V1)
 t2m_29lev.g<-as.numeric(t2m_29lev$V2)
 t2m_29lev.b<-as.numeric(t2m_29lev$V3)
 t2m_29lev.col<-rgb(t2m_29lev.r,t2m_29lev.g,t2m_29lev.b,maxColorValue = 256)
+metnorad<-read.table(file=paste(path2etc.com,"/color_table/METNO_radar.rgb",sep=""),skip=6,stringsAsFactors=F)
+metnorad.r<-as.numeric(metnorad$V1)
+metnorad.g<-as.numeric(metnorad$V2)
+metnorad.b<-as.numeric(metnorad$V3)
+metnorad.col<-rgb(metnorad.r,metnorad.g,metnorad.b,maxColorValue = 256)
 # input directories
 # daily precipitation data
 path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC1hRT",sep="")
@@ -196,7 +197,7 @@ y.data$dqcflag<-as.integer(y.data$dqcflag)
 #year;month;day;nday;stid;x;y;z;eve.lab;yo;yb;ya;yav;yidi;yidiv;dqcflag;
 #------------------------------------------------------------------------------
 # Plot analysis 
-par.PREC1hRT<-list(col.scale=stepseq25.col,scale=scale.PREC1hRT,
+par.PREC1hRT<-list(col.scale=metnorad.col,scale=scale.PREC1hRT,
                    main=paste(yyyy.mm.dd.hh,"PREC1hRT","hourly accumulated precipitation [UTC]"),
                    xlab="",ylab="",
                    xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))

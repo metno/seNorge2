@@ -1,0 +1,681 @@
+ARGUMENT '2015.05.30' __ignored__
+
+ARGUMENT '../etc/config_list.r' __ignored__
+
+ARGUMENT 'pc4424' __ignored__
+
+
+R version 2.14.1 (2011-12-22)
+Copyright (C) 2011 The R Foundation for Statistical Computing
+ISBN 3-900051-07-0
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # --~- Bspat_PREC1h.R  -~--
+> # -----------------------------------------------------------------------------
+> rm(list=ls())
+> # Libraries
+> library(raster)
+> library(ncdf)
+> library(cluster)
+> #-----------------------------------------------------------------------------
+> # + manage fatal error
+> error_exit<-function(str=NULL) {
++   print("Fatal Error:")
++   if (!is.null(str)) print(str)
++   quit(status=1)
++ }
+> # Fixed Parameters
+> proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+> # rain/norain threshold
+> rr.inf<-0.1
+> # DQC thresholds 
+> yo.dqc.plausible.min<-0 # mm/h
+> yo.dqc.plausible.max<-500 # mm/h
+> # definition of Dh sequence - horizontal de-correlation length scale
+> min.Dh.seq.allowed<-10 # Km
+> # evaluation thresholds
+> q50.hourly<-0.4 #mm/h (weak/normal)
+> q75.hourly<-1.0 #mm/h (normal/moderate-strong)
+> q50.daily<-3 #mm/daily (weak/normal)
+> q75.daily<-8 #mm/daily (normal/moderate-strong)
+> #
+> q50<-q50.hourly
+> q75<-q75.hourly
+> #------------------------------------------------------------------------------
+> # Read command line arguments
+> arguments <- commandArgs()
+> arguments
+[1] "/usr/lib/R/bin/exec/R" "--vanilla"             "2015.05.30"           
+[4] "../etc/config_list.r"  "pc4424"               
+> yyyy.mm.dd<-arguments[3]
+> config_file<-arguments[4]
+> config_par<-arguments[5]
+> if (length(arguments)!=5) 
++   ext<-error_exit(paste("Error in command line arguments: \n",
++   " R --vanilla yyyy.mm.dd configFILE configPAR \n",sep=""))
+> # define/check paths
+> if (!file.exists(config_file)) 
++   ext<-error_exit("Fatal Error: configuration file not found")
+> source(config_file)
+> for (p in 1:length(config_list)) {
++   if (config_list[[p]]$pname==config_par) break
++ }
+> if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )  
++   ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
+> main.path<-config_list[[p]]$opt$main.path
+> main.path.output<-config_list[[p]]$opt$main.path.output
+> testmode<-config_list[[p]]$opt$testmode
+> if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
++   ext<-error_exit("Fatal Error: path not found")
+> # geographical information
+> main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
+> filenamedem<-paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep="")
+> filenamedem.CG<-paste(main.path.geoinfo,"/fennodem_utm33.nc",sep="")
+> if (!file.exists(paste(main.path.geoinfo,"/seNorge2_dem_UTM33.nc",sep=""))) 
++   ext<-error_exit(paste("File not found:",main.path.geoinfo,"/seNorge2_dem_UTM33.nc"))
+> if (!file.exists(paste(main.path.geoinfo,"/fennodem_utm33.nc",sep=""))) 
++   ext<-error_exit(paste("File not found:",main.path.geoinfo,"/fennodem_utm33.nc"))
+> # common libs and etcetera
+> path2lib.com<-paste(main.path,"/lib",sep="")
+> path2etc.com<-paste(main.path,"/etc",sep="")
+> if (!file.exists(paste(path2lib.com,"/nogrid.ncout.R",sep=""))) 
++   ext<-error_exit(paste("File not found:",path2lib.com,"/nogrid.ncout.R"))
+> if (!file.exists(paste(path2lib.com,"/ncout.spec.list.r",sep=""))) 
++   ext<-error_exit(paste("File not found:",path2lib.com,"/ncout.spec.list.r"))
+> if (!file.exists(paste(path2lib.com,"/getStationData.R",sep=""))) 
++   ext<-error_exit(paste("File not found:",path2lib.com,"/getStationData.R"))
+> source(paste(path2lib.com,"/nogrid.ncout.R",sep=""))
+> source(paste(path2lib.com,"/ncout.spec.list.r",sep=""))
+> source(paste(path2lib.com,"/getStationData.R",sep=""))
+> # test mode
+> print(testmode)
+[1] FALSE
+> if (testmode) {
++   print("TESTMODE TESTMODE TESTMODE")
++   if (file.exists(paste(main.path,"/Bspat_PREC1h/testbed",sep=""))) {
++     testbed<-paste(main.path,"/Bspat_PREC1h/testbed",sep="")
++     station.info<-paste(testbed,"/station_data.csv",sep="")
++     observed.data<-paste(testbed,"/observed_data.csv",sep="")
++   } else {
++     ext<-error_exit(paste("testbed not found"))
++   }
++ }
+> # netcdf fixed parameters
+> grid.type <- "utm33"
+> prod.date <- substr(Sys.time(),1,10)
+> xa.source.nc<-"hourly precipitation from station data"
+> xa.var.version <- "1.0"
+> xa.pname<-"PREC1h"
+> for (p in 1:length(ncout.spec.list)) {
++   if (ncout.spec.list[[p]]$pname==xa.pname) break
++ }
+> if (p==length(ncout.spec.list) & (ncout.spec.list[[p]]$pname!=xa.pname) ) {
++   xa.flag.write<-F
++ } else {
++   xa.flag.write<-T
++   xa.var.name<-ncout.spec.list[[p]]$opts$var.name
++   xa.var.longname<-ncout.spec.list[[p]]$opts$var.longname
++   xa.var.unit<-ncout.spec.list[[p]]$opts$var.unit
++   xa.var.mv<-as.numeric(ncout.spec.list[[p]]$opts$var.mv)
++   xa.times.unit <-ncout.spec.list[[p]]$opts$t.unit
++   xa.times.ref <-ncout.spec.list[[p]]$opts$t.ref
++   xa.reference <- ncout.spec.list[[p]]$opts$reference
++ }
+> # set Time-related variables
+> yyyy<-substr(yyyy.mm.dd,1,4)
+> mm<-substr(yyyy.mm.dd,6,7)
+> dd<-substr(yyyy.mm.dd,9,10)
+> yyyymm<-paste(yyyy,mm,sep="")
+> yyyymmdd<-paste(yyyy,mm,dd,sep="")
+> # set Time variables
+> end.string<-paste(yyyy.mm.dd,".06",sep="")
+> end<-strptime(end.string,"%Y.%m.%d.%H","UTC")
+> timeseq<-as.POSIXlt(seq(as.POSIXlt(end),length=24,by="-1 hour"),"UTC")
+> timeseq<-rev(timeseq)
+> yyyymm.v<-paste(formatC(timeseq$year+1900,width=4,flag="0"),
++                 formatC(timeseq$mon+1,width=2,flag="0"),sep="")
+> yyyymmddhh.v<-paste(formatC(timeseq$year+1900,width=4,flag="0"),
++                     formatC(timeseq$mon+1,width=2,flag="0"),
++                     formatC(timeseq$mday,width=2,flag="0"),
++                     formatC(timeseq$hour,width=2,flag="0"),sep="")
+> yyyy.v<-formatC(timeseq$year+1900,width=4,flag="0")
+> mm.v<-formatC(timeseq$mon+1,width=2,flag="0")
+> dd.v<-formatC(timeseq$mday,width=2,flag="0")
+> hh.v<-formatC(timeseq$hour,width=2,flag="0")
+> print(timeseq)
+ [1] "2015-05-29 07:00:00 UTC" "2015-05-29 08:00:00 UTC"
+ [3] "2015-05-29 09:00:00 UTC" "2015-05-29 10:00:00 UTC"
+ [5] "2015-05-29 11:00:00 UTC" "2015-05-29 12:00:00 UTC"
+ [7] "2015-05-29 13:00:00 UTC" "2015-05-29 14:00:00 UTC"
+ [9] "2015-05-29 15:00:00 UTC" "2015-05-29 16:00:00 UTC"
+[11] "2015-05-29 17:00:00 UTC" "2015-05-29 18:00:00 UTC"
+[13] "2015-05-29 19:00:00 UTC" "2015-05-29 20:00:00 UTC"
+[15] "2015-05-29 21:00:00 UTC" "2015-05-29 22:00:00 UTC"
+[17] "2015-05-29 23:00:00 UTC" "2015-05-30 00:00:00 UTC"
+[19] "2015-05-30 01:00:00 UTC" "2015-05-30 02:00:00 UTC"
+[21] "2015-05-30 03:00:00 UTC" "2015-05-30 04:00:00 UTC"
+[23] "2015-05-30 05:00:00 UTC" "2015-05-30 06:00:00 UTC"
+> print(yyyymmddhh.v)
+ [1] "2015052907" "2015052908" "2015052909" "2015052910" "2015052911"
+ [6] "2015052912" "2015052913" "2015052914" "2015052915" "2015052916"
+[11] "2015052917" "2015052918" "2015052919" "2015052920" "2015052921"
+[16] "2015052922" "2015052923" "2015053000" "2015053001" "2015053002"
+[21] "2015053003" "2015053004" "2015053005" "2015053006"
+> nt<-length(yyyymmddhh.v)
+> #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+> # [] Grid
+> # CRS Coordinate Reference System
+> r.orog.FG<-raster(filenamedem)
+> nx.FG<-ncol(r.orog.FG)
+> ny.FG<-nrow(r.orog.FG)
+> dx.FG<-xres(r.orog.FG)
+> dy.FG<-yres(r.orog.FG)
+> area.1cell.FG<-dx.FG*dy.FG/(1000*1000) # Area Km**2
+> # 4 borders point (SW corner (xmn,ymn); NE corner (xmx,ymx))
+> xmn.FG<-xmin(r.orog.FG)
+> xmx.FG<-xmax(r.orog.FG)
+> ymn.FG<-ymin(r.orog.FG)
+> ymx.FG<-ymax(r.orog.FG)
+> # extract all the cell values: zvalues[1] contains the orog[1,1] value
+> # Raster: cell numbers start at 1 in the upper left corner,
+> # and increase from left to right, and then from top to bottom
+> zvalues.FG<-getValues(r.orog.FG)
+> storage.mode(zvalues.FG)<-"numeric"
+> xy.FG<-xyFromCell(r.orog.FG,1:ncell(r.orog.FG))
+> x.FG<-sort(unique(xy.FG[,1]))
+> y.FG<-sort(unique(xy.FG[,2]),decreasing=T)
+> mask.FG<-which(!is.na(zvalues.FG))
+> zgrid<-zvalues.FG[mask.FG]
+> xgrid<-xy.FG[mask.FG,1]
+> ygrid<-xy.FG[mask.FG,2]
+> Lgrid.FG<-length(mask.FG)
+> # clean memory
+> rm(zvalues.FG)
+> # debug info
+> print("grid parameters")
+[1] "grid parameters"
+> print(paste("nx ny dx dy",as.integer(nx.FG),as.integer(ny.FG),round(dx.FG,2),round(dy.FG,2)))
+[1] "nx ny dx dy 1195 1550 1000 1000"
+> print(paste("xmn xmx ymn ymx",round(xmn.FG,2),round(xmx.FG,2),round(ymn.FG,2),round(ymx.FG,2)))
+[1] "xmn xmx ymn ymx -75000 1120000 6450000 8e+06"
+> print(paste("Lgrid.FG",as.integer(Lgrid.FG)))
+[1] "Lgrid.FG 606579"
+> #..............................................................................
+> # input directories
+> # daily precipitation data
+> d.path.main<-paste(main.path.output,"/seNorge2/PREC1d",sep="")
+> d.path.main.stn<-paste(d.path.main,"/station_dataset",sep="")
+> d.path.main.grd<-paste(d.path.main,"/gridded_dataset",sep="")
+> d.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1d",sep="")
+> d.path.add.grd<-paste(d.path.add,"/gridded_dataset",sep="")
+> d.path.add.eve<-paste(d.path.add,"/event_dataset",sep="")
+> d.file.stn<- paste(d.path.main.stn,"/",yyyymm,
++                        "/seNorge_v2_0_PREC1d_station_",
++                        yyyymmdd,"_",yyyymmdd,".txt",sep="")
+> d.file.eve<- paste(d.path.add.eve,"/",yyyymm,
++                        "/seNorge_v2_0_PREC1d_event_",
++                        yyyymmdd,"_",yyyymmdd,".txt",sep="")
+> d.file.grd<- paste(d.path.main.grd,"/",yyyymm,
++                            "/seNorge_v2_0_PREC1d_grid_",
++                            yyyymmdd,"_",yyyymmdd,".nc",sep="")
+> d.file.idi<- paste(d.path.add.grd,"/",yyyymm,
++                            "/seNorge_v2_0_PREC1d_grid_normIDI_",
++                            yyyymmdd,"_",yyyymmdd,".nc",sep="")
+> d.file.grd.check<-file.exists(d.file.grd)
+> d.file.stn.check<-file.exists(d.file.stn)
+> # hourly precipitation data
+> hrt.path.main<-paste(main.path.output,"/seNorge2/PREC1hRT",sep="")
+> hrt.path.main.stn<-paste(hrt.path.main,"/station_dataset",sep="")
+> hrt.path.main.grd<-paste(hrt.path.main,"/gridded_dataset",sep="")
+> hrt.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1hRT",sep="")
+> hrt.path.add.grd<-paste(hrt.path.add,"/gridded_dataset",sep="")
+> hrt.path.add.eve<-paste(hrt.path.add,"/event_dataset",sep="")
+> hrt.files.grd<-vector()
+> hrt.files.stn<-vector()
+> hrt.files.grd<-paste(hrt.path.main.grd,"/",yyyymm.v,
++                      "/seNorge_v2_0_PREC1hRT_grid_",
++                      yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+> hrt.files.stn<-paste(hrt.path.main.stn,"/",yyyymm.v,
++                      "/seNorge_v2_0_PREC1hRT_station_",
++                      yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+> hrt.files.grd.check<-file.exists(hrt.files.grd)
+> hrt.files.stn.check<-file.exists(hrt.files.stn)
+> #..............................................................................
+> # check files
+>   if (!d.file.grd.check | !d.file.stn.check) {
++     print("Fatal Error: Error reading daily precipitation files")
++     print(cbind(d.file.grd,d.file.grd.check))
++     print(cbind(d.file.stn,d.file.stn.check))
++     error_exit()
++   }
+>   if (any(!hrt.files.grd.check) | any(!hrt.files.stn.check)) {
++     print("Fatal Error: Error reading sud-daily precipitation files")
++     print(cbind(hrt.files.grd,hrt.files.grd.check))
++     print(cbind(hrt.files.stn,hrt.files.stn.check))
++     error_exit()
++   }
+> #..............................................................................
+> # output directories
+> # hourly precipitation data
+> dir.create(file.path(main.path.output,"seNorge2"), showWarnings = FALSE)
+> dir.create(file.path(main.path.output,"seNorge2_addInfo"), showWarnings = FALSE)
+> h.path.main<-paste(main.path.output,"/seNorge2/PREC1h",sep="")
+> h.path.main.stn<-paste(h.path.main,"/station_dataset",sep="")
+> h.path.main.grd<-paste(h.path.main,"/gridded_dataset",sep="")
+> h.path.add<-paste(main.path.output,"/seNorge2_addInfo/PREC1h",sep="")
+> h.path.add.grd<-paste(h.path.add,"/gridded_dataset",sep="")
+> h.path.add.eve<-paste(h.path.add,"/event_dataset",sep="")
+> if (!(file.exists(h.path.main)))     dir.create(h.path.main,showWarnings=F) 
+> if (!(file.exists(h.path.main.stn))) dir.create(h.path.main.stn,showWarnings=F) 
+> if (!(file.exists(h.path.main.grd))) dir.create(h.path.main.grd,showWarnings=F) 
+> if (!(file.exists(h.path.add)))      dir.create(h.path.add,showWarnings=F) 
+> if (!(file.exists(h.path.add.grd)))  dir.create(h.path.add.grd,showWarnings=F) 
+> if (!(file.exists(h.path.add.eve)))  dir.create(h.path.add.eve,showWarnings=F) 
+> # Setup output files
+> for (i in 1:length(yyyymm.v)) {
++   dir.create(paste(h.path.main.stn,"/",yyyymm.v[i],sep=""),showWarnings=F)
++   dir.create(paste(h.path.main.grd,"/",yyyymm.v[i],sep=""),showWarnings=F)
++   dir.create(paste(h.path.add.grd,"/",yyyymm.v[i],sep=""),showWarnings=F)
++   dir.create(paste(h.path.add.eve,"/",yyyymm.v[i],sep=""),showWarnings=F)
++ }
+> h.files.stn<- paste(h.path.main.stn,"/",yyyymm.v,
++                     "/seNorge_v2_0_PREC1h_station_",
++                     yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+> h.files.eve<- paste(h.path.add.eve,"/",yyyymm.v,
++                     "/seNorge_v2_0_PREC1h_event_",
++                     yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+> h.files.grd<- paste(h.path.main.grd,"/",yyyymm.v,
++                     "/seNorge_v2_0_PREC1h_grid_",
++                     yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+> h.files.idi<- paste(h.path.add.grd,"/",yyyymm.v,
++                     "/seNorge_v2_0_PREC1h_grid_normIDI_",
++                     yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+> #..............................................................................
+> print("Input files:")
+[1] "Input files:"
+> print("PREC1d stations:")
+[1] "PREC1d stations:"
+> print(cbind(d.file.stn,d.file.stn.check))
+     d.file.stn                                                                                       
+[1,] "/disk1/seNorge2/PREC1d/station_dataset/201505/seNorge_v2_0_PREC1d_station_20150530_20150530.txt"
+     d.file.stn.check
+[1,] "TRUE"          
+> print("PREC1d grid:")
+[1] "PREC1d grid:"
+> print(cbind(d.file.grd,d.file.grd.check))
+     d.file.grd                                                                                   
+[1,] "/disk1/seNorge2/PREC1d/gridded_dataset/201505/seNorge_v2_0_PREC1d_grid_20150530_20150530.nc"
+     d.file.grd.check
+[1,] "TRUE"          
+> print("PREC1hRT stations:")
+[1] "PREC1hRT stations:"
+> print(cbind(hrt.files.stn,hrt.files.stn.check))
+      hrt.files.stn                                                                                            
+ [1,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052907_2015052907.txt"
+ [2,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052908_2015052908.txt"
+ [3,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052909_2015052909.txt"
+ [4,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052910_2015052910.txt"
+ [5,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052911_2015052911.txt"
+ [6,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052912_2015052912.txt"
+ [7,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052913_2015052913.txt"
+ [8,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052914_2015052914.txt"
+ [9,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052915_2015052915.txt"
+[10,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052916_2015052916.txt"
+[11,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052917_2015052917.txt"
+[12,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052918_2015052918.txt"
+[13,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052919_2015052919.txt"
+[14,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052920_2015052920.txt"
+[15,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052921_2015052921.txt"
+[16,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052922_2015052922.txt"
+[17,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015052923_2015052923.txt"
+[18,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053000_2015053000.txt"
+[19,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053001_2015053001.txt"
+[20,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053002_2015053002.txt"
+[21,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053003_2015053003.txt"
+[22,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053004_2015053004.txt"
+[23,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053005_2015053005.txt"
+[24,] "/disk1/seNorge2/PREC1hRT/station_dataset/201505/seNorge_v2_0_PREC1hRT_station_2015053006_2015053006.txt"
+      hrt.files.stn.check
+ [1,] "TRUE"             
+ [2,] "TRUE"             
+ [3,] "TRUE"             
+ [4,] "TRUE"             
+ [5,] "TRUE"             
+ [6,] "TRUE"             
+ [7,] "TRUE"             
+ [8,] "TRUE"             
+ [9,] "TRUE"             
+[10,] "TRUE"             
+[11,] "TRUE"             
+[12,] "TRUE"             
+[13,] "TRUE"             
+[14,] "TRUE"             
+[15,] "TRUE"             
+[16,] "TRUE"             
+[17,] "TRUE"             
+[18,] "TRUE"             
+[19,] "TRUE"             
+[20,] "TRUE"             
+[21,] "TRUE"             
+[22,] "TRUE"             
+[23,] "TRUE"             
+[24,] "TRUE"             
+> print("PREC1hRT grid:")
+[1] "PREC1hRT grid:"
+> print(cbind(hrt.files.grd,hrt.files.grd.check))
+      hrt.files.grd                                                                                        
+ [1,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052907_2015052907.nc"
+ [2,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052908_2015052908.nc"
+ [3,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052909_2015052909.nc"
+ [4,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052910_2015052910.nc"
+ [5,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052911_2015052911.nc"
+ [6,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052912_2015052912.nc"
+ [7,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052913_2015052913.nc"
+ [8,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052914_2015052914.nc"
+ [9,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052915_2015052915.nc"
+[10,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052916_2015052916.nc"
+[11,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052917_2015052917.nc"
+[12,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052918_2015052918.nc"
+[13,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052919_2015052919.nc"
+[14,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052920_2015052920.nc"
+[15,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052921_2015052921.nc"
+[16,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052922_2015052922.nc"
+[17,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052923_2015052923.nc"
+[18,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053000_2015053000.nc"
+[19,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053001_2015053001.nc"
+[20,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053002_2015053002.nc"
+[21,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053003_2015053003.nc"
+[22,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053004_2015053004.nc"
+[23,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053005_2015053005.nc"
+[24,] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015053006_2015053006.nc"
+      hrt.files.grd.check
+ [1,] "TRUE"             
+ [2,] "TRUE"             
+ [3,] "TRUE"             
+ [4,] "TRUE"             
+ [5,] "TRUE"             
+ [6,] "TRUE"             
+ [7,] "TRUE"             
+ [8,] "TRUE"             
+ [9,] "TRUE"             
+[10,] "TRUE"             
+[11,] "TRUE"             
+[12,] "TRUE"             
+[13,] "TRUE"             
+[14,] "TRUE"             
+[15,] "TRUE"             
+[16,] "TRUE"             
+[17,] "TRUE"             
+[18,] "TRUE"             
+[19,] "TRUE"             
+[20,] "TRUE"             
+[21,] "TRUE"             
+[22,] "TRUE"             
+[23,] "TRUE"             
+[24,] "TRUE"             
+> print("PREC1h Output files:")
+[1] "PREC1h Output files:"
+> print("PREC1h analysis on the grid (netcdf)")
+[1] "PREC1h analysis on the grid (netcdf)"
+> print(h.files.grd)
+ [1] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052907_2015052907.nc"
+ [2] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052908_2015052908.nc"
+ [3] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052909_2015052909.nc"
+ [4] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052910_2015052910.nc"
+ [5] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052911_2015052911.nc"
+ [6] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052912_2015052912.nc"
+ [7] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052913_2015052913.nc"
+ [8] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052914_2015052914.nc"
+ [9] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052915_2015052915.nc"
+[10] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052916_2015052916.nc"
+[11] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052917_2015052917.nc"
+[12] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052918_2015052918.nc"
+[13] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052919_2015052919.nc"
+[14] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052920_2015052920.nc"
+[15] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052921_2015052921.nc"
+[16] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052922_2015052922.nc"
+[17] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015052923_2015052923.nc"
+[18] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053000_2015053000.nc"
+[19] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053001_2015053001.nc"
+[20] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053002_2015053002.nc"
+[21] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053003_2015053003.nc"
+[22] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053004_2015053004.nc"
+[23] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053005_2015053005.nc"
+[24] "/disk1/seNorge2/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_2015053006_2015053006.nc"
+> print("PREC1h event-normalized idi on the grid (netcdf)")
+[1] "PREC1h event-normalized idi on the grid (netcdf)"
+> print(h.files.idi)
+ [1] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052907_2015052907.nc"
+ [2] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052908_2015052908.nc"
+ [3] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052909_2015052909.nc"
+ [4] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052910_2015052910.nc"
+ [5] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052911_2015052911.nc"
+ [6] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052912_2015052912.nc"
+ [7] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052913_2015052913.nc"
+ [8] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052914_2015052914.nc"
+ [9] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052915_2015052915.nc"
+[10] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052916_2015052916.nc"
+[11] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052917_2015052917.nc"
+[12] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052918_2015052918.nc"
+[13] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052919_2015052919.nc"
+[14] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052920_2015052920.nc"
+[15] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052921_2015052921.nc"
+[16] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052922_2015052922.nc"
+[17] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015052923_2015052923.nc"
+[18] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053000_2015053000.nc"
+[19] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053001_2015053001.nc"
+[20] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053002_2015053002.nc"
+[21] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053003_2015053003.nc"
+[22] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053004_2015053004.nc"
+[23] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053005_2015053005.nc"
+[24] "/disk1/seNorge2_addInfo/PREC1h/gridded_dataset/201505/seNorge_v2_0_PREC1h_grid_normIDI_2015053006_2015053006.nc"
+> print("PREC1h station outputs (text)")
+[1] "PREC1h station outputs (text)"
+> print(h.files.stn)
+ [1] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052907_2015052907.txt"
+ [2] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052908_2015052908.txt"
+ [3] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052909_2015052909.txt"
+ [4] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052910_2015052910.txt"
+ [5] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052911_2015052911.txt"
+ [6] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052912_2015052912.txt"
+ [7] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052913_2015052913.txt"
+ [8] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052914_2015052914.txt"
+ [9] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052915_2015052915.txt"
+[10] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052916_2015052916.txt"
+[11] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052917_2015052917.txt"
+[12] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052918_2015052918.txt"
+[13] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052919_2015052919.txt"
+[14] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052920_2015052920.txt"
+[15] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052921_2015052921.txt"
+[16] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052922_2015052922.txt"
+[17] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015052923_2015052923.txt"
+[18] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053000_2015053000.txt"
+[19] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053001_2015053001.txt"
+[20] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053002_2015053002.txt"
+[21] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053003_2015053003.txt"
+[22] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053004_2015053004.txt"
+[23] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053005_2015053005.txt"
+[24] "/disk1/seNorge2/PREC1h/station_dataset/201505/seNorge_v2_0_PREC1h_station_2015053006_2015053006.txt"
+> print("PREC1h event outputs (text)")
+[1] "PREC1h event outputs (text)"
+> print(h.files.eve)
+ [1] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052907_2015052907.txt"
+ [2] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052908_2015052908.txt"
+ [3] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052909_2015052909.txt"
+ [4] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052910_2015052910.txt"
+ [5] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052911_2015052911.txt"
+ [6] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052912_2015052912.txt"
+ [7] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052913_2015052913.txt"
+ [8] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052914_2015052914.txt"
+ [9] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052915_2015052915.txt"
+[10] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052916_2015052916.txt"
+[11] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052917_2015052917.txt"
+[12] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052918_2015052918.txt"
+[13] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052919_2015052919.txt"
+[14] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052920_2015052920.txt"
+[15] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052921_2015052921.txt"
+[16] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052922_2015052922.txt"
+[17] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015052923_2015052923.txt"
+[18] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053000_2015053000.txt"
+[19] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053001_2015053001.txt"
+[20] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053002_2015053002.txt"
+[21] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053003_2015053003.txt"
+[22] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053004_2015053004.txt"
+[23] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053005_2015053005.txt"
+[24] "/disk1/seNorge2_addInfo/PREC1h/event_dataset/201505/seNorge_v2_0_PREC1h_event_2015053006_2015053006.txt"
+> #..............................................................................
+> # -- read daily prec at station locations --
+> #csv:year,month,day,nday,stid,x,y,z,eve.lab,yo,yb,ya,yav,yidi,yidiv,dqcflag
+> d.y<-read.csv(file=d.file.stn,header=T,sep=";",strip.white=T,stringsAsFactors=F)
+> d.y$ya<-as.numeric(d.y$ya)
+> d.y$yav<-as.numeric(d.y$yav)
+> d.nstn<-length(d.y$stid)
+> #print("daily prec at station locations")
+> #print(d.y)
+> #..............................................................................
+> # -- read daily precipitation on the grid --
+> # open/read/close netcdf file
+> nc<-open.ncdf(d.file.grd)
+> data<-get.var.ncdf(nc)
+> close.ncdf(nc)
+[[1]]
+[1] 65536
+
+> # to raster format
+> d.ra<-raster(ncol=nx.FG, nrow=ny.FG,xmn=xmn.FG, xmx=xmx.FG,
++              ymn=ymn.FG, ymx=ymx.FG,crs=proj4.utm33)
+> d.ra[]<-NA
+> d.ra[]<-t(data)
+> rm(data)
+> # points without (cv)analysis: get them from the grid (nearest neighbour)
+> #  daily analysis/predicted value is NA -> 
+> #  daily value used for time disaggregation comes from the grid 
+> #  (h.d.dqcflag=1000 is the marker)
+> # + keep daily dqc info
+> h.d.dqcflag<-vector(length=d.nstn,mode="numeric")
+> h.d.dqcflag[]<-d.y$dqcflag
+> ya.aux<-extract(d.ra,cbind(d.y$x,d.y$y),na.rm=T)
+> indx<-which( is.na(d.y$ya) & (!is.na(ya.aux)))
+> if (length(indx)>0) {
++   d.y$ya[indx]<-ya.aux[indx]
++   d.y$yav[indx]<-ya.aux[indx]
++   h.d.dqcflag[indx]<-1000
++ }
+> #..............................................................................
+> # -- preliminary operations for time disaggregation --
+> # create raster hrt.ra.i
+> hrt.ra.i<-d.ra
+> projection(hrt.ra.i)<-proj4.utm33
+> hrt.ra.i[]<-NA
+> # define matrices used in elaborations
+> h.yo<-matrix(ncol=nt,nrow=d.nstn)
+> h.hrt.dqcflag<-matrix(ncol=nt,nrow=d.nstn)
+> h.h.dqcflag<-matrix(ncol=nt,nrow=d.nstn)
+> hrt.ya<-matrix(ncol=nt,nrow=d.nstn)
+> hrt.yav<-matrix(ncol=nt,nrow=d.nstn)
+> hrt.yasum<-vector(length=d.nstn,mode="numeric")
+> hrt.yavsum<-vector(length=d.nstn,mode="numeric")
+> #hrt.yidi<-matrix(ncol=nt,nrow=d.nstn)
+> #hrt.yidiv<-matrix(ncol=nt,nrow=d.nstn)
+> #hrt.eve.lab<-matrix(ncol=nt,nrow=d.nstn)
+> h.yo[]<-NA
+> h.hrt.dqcflag[]<-NA
+> h.h.dqcflag[]<-NA
+> hrt.ya[]<-NA
+> hrt.yav[]<-NA
+> #hrt.yidi[]<-NA
+> #hrt.yidiv[]<-NA
+> #hrt.eve.lab[]<-NA
+> hrt.yasum[]<-0
+> hrt.yavsum[]<-0
+> hrt.nhour<-NA
+> for (i in 1:nt) {
++   # -- sub-daily prec on the grid --
++   hrt.file<-hrt.files.grd[i]
++   print(hrt.files.grd[i])
++   # read sub-daily gridded data: open/read/close netcdf file
++   nc<-open.ncdf(hrt.file)
++   data<-get.var.ncdf(nc)
++   close.ncdf(nc)
++   # filter the field 
++   # note: the significant local signal is supposed to be in the more reliable 
++   #       daily prec field, which is not filtered
++   hrt.ra.i[]<-NA
++   hrt.ra.i[]<-t(data)
++   rm(data)
++   hrt.ra.i.filt<-focal(hrt.ra.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
++   projection(hrt.ra.i.filt)<-proj4.utm33
++   # accumulate/store prec fields for subsequent elaboration
++   if (i==1) {
++     hrt.ra.sum<-hrt.ra.i.filt
++     hrt.ra.filt<-hrt.ra.i.filt
++     projection(hrt.ra.sum)<-proj4.utm33
++     projection(hrt.ra.filt)<-proj4.utm33
++ #    hrt.ra.orig<-hrt.ra.i
++   } else {
++     hrt.ra.sum<-hrt.ra.sum+hrt.ra.i.filt
++     hrt.ra.filt<-stack(hrt.ra.filt,hrt.ra.i.filt)
++ #    hrt.ra.orig<-stack(hrt.ra.orig,hrt.ra.i)
++   }
++   # -- sub-daily prec at station locations --
++   #csv: year,month,day,hour,nhour,stid,x,y,z,eve.lab,yo,yb,ya,yav,yidi,yidiv,dqcflag
++   # read sub-daily station data
++   hrt.y<-read.csv(file=hrt.files.stn[i],header=T,sep=";",strip.white=T,stringsAsFactors=F)
++   # set hrt.nhour, used for output
++   if (is.na(hrt.nhour)) hrt.nhour<-as.numeric(hrt.y$nhour[1])
++   # store prec for subsequent elaboration
++   #  match sub-daily station info with daily station info
++   #  note: final output is ordered according to daily station info
++   match<-match(d.y$stid,hrt.y$stid)
++   h.yo[,i]<-as.numeric(hrt.y$yo[match])
++   hrt.ya[,i]<-as.numeric(hrt.y$ya[match])
++   hrt.yav[,i]<-as.numeric(hrt.y$yav[match])
++ #  hrt.yidi[,i]<-hrt.y$yidi[match]
++ #  hrt.yidiv[,i]<-hrt.y$yidiv[match]
++ # keep sub-daily dqc info
++   h.hrt.dqcflag[,i]<-as.numeric(hrt.y$dqcflag[match])
++   h.h.dqcflag[,i]<-as.numeric(hrt.y$dqcflag[match])
++ #  print(cbind(d.y$stid,d.y$yo,d.y$ya,d.y$dqcflag,h.yo[,i],hrt.ya[,i],h.hrt.dqcflag[,i]))
++ # points without (cv)analysis: get them from the grid (nearest neighbour)
++ # h.hrt.dqcflag=1000 is the marker
++   ya.aux<-extract(hrt.ra.i,cbind(d.y$x,d.y$y),na.rm=T)
++   indx<-which( is.na(hrt.ya[,i]) & (!is.na(ya.aux)) )
++   if (length(indx)>0) {
++     hrt.ya[indx,i]<-ya.aux[indx]
++     hrt.yav[indx,i]<-ya.aux[indx]
++     h.hrt.dqcflag[indx,i]<-1000
++     h.h.dqcflag[indx,i]<-1000
++   }
++   # get final sub-daily dqc flag
++   # which is equal to h.hrt.dqcflag except that it icorporate info on the daily dqc
++   # h.h.dqcflag=2000 -> daily observed value is flagged as suspect -> 
++   #                     not used in the spatial interpolation -> 
++   #                     not used for time disaggregation -> however...
++   #                     daily value used for time disaggregation comes from prediction at station location
++   #                     (which is not expected to be close to the "bad" observed value)
++   # h.h.dqcflag=3000 -> daily predicted value is NA -> 
++   #                     daily value used for time disaggregation comes from the grid 
++   indx<-which( !is.na(h.h.dqcflag[,i]) & !is.na(h.d.dqcflag) & (h.h.dqcflag[,i]<=0 & h.d.dqcflag>0 & h.d.dqcflag!=1000) )
++   h.h.dqcflag[indx,i]<-2000
++   indx<-which( !is.na(h.h.dqcflag[,i]) & !is.na(h.d.dqcflag) & (h.h.dqcflag[,i]<=0 & h.d.dqcflag>0 & h.d.dqcflag==1000) )
++   h.h.dqcflag[indx,i]<-3000
++   # accumulate prec for subsequent elaboration
++   hrt.yasum<-hrt.yasum+hrt.ya[,i]
++   hrt.yavsum<-hrt.yavsum+hrt.yav[,i]
++   if (i==2) break
++ }
+[1] "/disk1/seNorge2/PREC1hRT/gridded_dataset/201505/seNorge_v2_0_PREC1hRT_grid_2015052907_2015052907.nc"

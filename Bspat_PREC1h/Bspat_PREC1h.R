@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 rm(list=ls())
 # Libraries
+library(igraph)
 library(raster)
 library(ncdf)
 library(cluster)
@@ -276,10 +277,12 @@ print(h.files.eve)
 #..............................................................................
 # -- read daily prec at station locations --
 #csv:year,month,day,nday,stid,x,y,z,eve.lab,yo,yb,ya,yav,yidi,yidiv,dqcflag
-d.y<-read.csv(file=d.file.stn,header=T,sep=";")
+d.y<-read.csv(file=d.file.stn,header=T,sep=";",strip.white=T,stringsAsFactors=F)
+d.y$ya<-as.numeric(d.y$ya)
+d.y$yav<-as.numeric(d.y$yav)
 d.nstn<-length(d.y$stid)
-print("daily prec at station locations")
-print(d.y)
+#print("daily prec at station locations")
+#print(d.y)
 #..............................................................................
 # -- read daily precipitation on the grid --
 # open/read/close netcdf file
@@ -291,9 +294,12 @@ d.ra<-raster(ncol=nx.FG, nrow=ny.FG,xmn=xmn.FG, xmx=xmx.FG,
              ymn=ymn.FG, ymx=ymx.FG,crs=proj4.utm33)
 d.ra[]<-NA
 d.ra[]<-t(data)
+rm(data)
 # points without (cv)analysis: get them from the grid (nearest neighbour)
-# h.d.dqcflag=1000 is the marker
-# keep daily dqc info
+#  daily analysis/predicted value is NA -> 
+#  daily value used for time disaggregation comes from the grid 
+#  (h.d.dqcflag=1000 is the marker)
+# + keep daily dqc info
 h.d.dqcflag<-vector(length=d.nstn,mode="numeric")
 h.d.dqcflag[]<-d.y$dqcflag
 ya.aux<-extract(d.ra,cbind(d.y$x,d.y$y),na.rm=T)
@@ -334,6 +340,7 @@ hrt.nhour<-NA
 for (i in 1:nt) {
   # -- sub-daily prec on the grid --
   hrt.file<-hrt.files.grd[i]
+  print(hrt.files.grd[i])
   # read sub-daily gridded data: open/read/close netcdf file
   nc<-open.ncdf(hrt.file)
   data<-get.var.ncdf(nc)
@@ -343,6 +350,7 @@ for (i in 1:nt) {
   #       daily prec field, which is not filtered
   hrt.ra.i[]<-NA
   hrt.ra.i[]<-t(data)
+  rm(data)
   hrt.ra.i.filt<-focal(hrt.ra.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
   projection(hrt.ra.i.filt)<-proj4.utm33
   # accumulate/store prec fields for subsequent elaboration
@@ -360,21 +368,21 @@ for (i in 1:nt) {
   # -- sub-daily prec at station locations --
   #csv: year,month,day,hour,nhour,stid,x,y,z,eve.lab,yo,yb,ya,yav,yidi,yidiv,dqcflag
   # read sub-daily station data
-  hrt.y<-read.csv(file=hrt.files.stn[i],header=T,sep=";")
+  hrt.y<-read.csv(file=hrt.files.stn[i],header=T,sep=";",strip.white=T,stringsAsFactors=F)
   # set hrt.nhour, used for output
-  if (is.na(hrt.nhour)) hrt.nhour<-hrt.y$nhour[1]
+  if (is.na(hrt.nhour)) hrt.nhour<-as.numeric(hrt.y$nhour[1])
   # store prec for subsequent elaboration
   #  match sub-daily station info with daily station info
   #  note: final output is ordered according to daily station info
   match<-match(d.y$stid,hrt.y$stid)
-  h.yo[,i]<-hrt.y$yo[match]
-  hrt.ya[,i]<-hrt.y$ya[match]
-  hrt.yav[,i]<-hrt.y$yav[match]
+  h.yo[,i]<-as.numeric(hrt.y$yo[match])
+  hrt.ya[,i]<-as.numeric(hrt.y$ya[match])
+  hrt.yav[,i]<-as.numeric(hrt.y$yav[match])
 #  hrt.yidi[,i]<-hrt.y$yidi[match]
 #  hrt.yidiv[,i]<-hrt.y$yidiv[match]
 # keep sub-daily dqc info
-  h.hrt.dqcflag[,i]<-hrt.y$dqcflag[match]
-  h.h.dqcflag[,i]<-hrt.y$dqcflag[match]
+  h.hrt.dqcflag[,i]<-as.numeric(hrt.y$dqcflag[match])
+  h.h.dqcflag[,i]<-as.numeric(hrt.y$dqcflag[match])
 #  print(cbind(d.y$stid,d.y$yo,d.y$ya,d.y$dqcflag,h.yo[,i],hrt.ya[,i],h.hrt.dqcflag[,i]))
 # points without (cv)analysis: get them from the grid (nearest neighbour)
 # h.hrt.dqcflag=1000 is the marker
@@ -402,27 +410,57 @@ for (i in 1:nt) {
   # accumulate prec for subsequent elaboration
   hrt.yasum<-hrt.yasum+hrt.ya[,i]
   hrt.yavsum<-hrt.yavsum+hrt.yav[,i]
+  if (i==2) break
 }
+if (exists("hrt.ra.i.filt")) rm(hrt.ra.i.filt)
 #..............................................................................
 # -- Disaggregate daily precipitation according to sub-daily fractions --
 # grid
 h.ra<- d.ra * hrt.ra.filt/hrt.ra.sum
+rm(hrt.ra.filt,hrt.ra.sum,d.ra)
 # stations
 h.ya<-matrix(ncol=nt,nrow=d.nstn)
 h.yav<-matrix(ncol=nt,nrow=d.nstn)
 h.ya[]<-NA
 h.yav[]<-NA
+# DEBUG
+#cat(paste("year","month","day","hour","nhour","stid",
+#          "x","y","z","yo",
+#          "h.ya","h.yav",
+#          "hrt.ya","hrt.yav",
+#          "d.ya","d.yav",
+#          "h.h.dqcflag","h.hrt.dqcflag","h.d.dqcflag","\n",sep=";"),
+#          file="deb",append=F)
 for (i in 1:nt) {
   h.ya[,i]<- d.y$ya * hrt.ya[,i]/hrt.yasum
   indx<-which(d.y$ya==0 | hrt.yasum==0 | hrt.ya[,i]==0)
-  h.ya[indx,i]<-0.
+  if (length(indx)>0) h.ya[indx,i]<-0.
   h.yav[,i]<- d.y$yav * hrt.yav[,i]/hrt.yavsum
   indx<-which(d.y$yav==0 | hrt.yavsum==0 | hrt.yav[,i]==0)
-  h.yav[indx,i]<-0.
+  if (length(indx)>0) h.yav[indx,i]<-0.
+#  cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
+#            formatC(d.y$stid,format="f",digits=0),
+#            formatC(d.y$x,format="f",digits=0),
+#            formatC(d.y$y,format="f",digits=0),
+#            formatC(d.y$z,format="f",digits=0),
+#            formatC(h.yo[,i],format="f",digits=1),
+#            formatC(h.ya[,i],format="f",digits=2),
+#            formatC(h.yav[,i],format="f",digits=2),
+#            formatC(hrt.ya[,i],format="f",digits=2),
+#            formatC(hrt.yav[,i],format="f",digits=2),
+#            formatC(d.y$ya,format="f",digits=2),
+#            formatC(d.y$yav,format="f",digits=2),
+#            formatC(h.h.dqcflag[,i],format="f",digits=0),
+#            formatC(h.hrt.dqcflag[,i],format="f",digits=0),
+#            formatC(h.d.dqcflag,format="f",digits=0),
+#            "\n",sep=";"),file="deb",append=T)
+  if (i==2) break
 }
+rm(hrt.ya,hrt.yav)
 #..............................................................................
 # -- Diagnostic and Output Session --
 for (i in 1:nt) {
+  print(i)
   # write header for the station/event data output files
   cat(paste("year","month","day","hour","nhour","stid",
             "x","y","z","eve.lab","yo",
@@ -443,17 +481,20 @@ for (i in 1:nt) {
             "\n",sep=";"),
             file=h.files.eve[i],append=F)
   # brick to raster (b2r), i.e. extract one single layer
+  print(".")
   b2r<-raster(h.ra,layer=i)
   projection(b2r)<-proj4.utm33
   h.xa<-extract(b2r,1:ncell(b2r))
   h.xa[mask.FG][is.na(h.xa[mask.FG])]<-0
   b2r[mask.FG]<-h.xa[mask.FG]
   # Detect clumps (patches) of connected cells. Each clump gets a unique ID.
+  print("..")
   h.reve<-clump(b2r,directions=8,gaps=F)
   h.xeve<-getValues(h.reve)[mask.FG]
 #  mask.clu.FG<-which(!is.na(h.xeve))
 #  NAmask.clu.FG<-which(is.na(h.xeve))
   # events labeling
+  print("...")
   f.lab<-freq(h.reve)
   aux<-which(!is.na(f.lab[,1]))
   eve.labels<-f.lab[aux,1]
@@ -463,6 +504,7 @@ for (i in 1:nt) {
   h.y.eve<-extract(h.reve,cbind(d.y$x,d.y$y),na.rm=T)
 #  rnc<-writeRaster(h.reve,filename=paste("clump.nc",sep=""),format="CDF",overwrite=TRUE)
   # ell -> ellipse
+  print("....")
   ell.locx.eve<-vector(mode="numeric",length=n.eve)
   ell.locy.eve<-vector(mode="numeric",length=n.eve)
   ell.smajor.eve<-vector(mode="numeric",length=n.eve)
@@ -479,7 +521,7 @@ for (i in 1:nt) {
 #  plot(r.eve.FG,breaks=seq(0.5,(mx+0.5),by=1),col=cols)
   # debug: end
   for (n in 1:n.eve) {
-#    print(paste("n eve.labels[n]",n,eve.labels[n]))
+    print(paste("ell.. n eve.labels[n]",n,eve.labels[n]))
     xindx.eve<-which(h.xeve==eve.labels[n])
     Lgrid.eve<-length(xindx.eve)
 #    print(Lgrid.eve)
@@ -534,7 +576,6 @@ for (i in 1:nt) {
   maxrain.ya.eve<-vector(mode="numeric",length=n.eve)
   maxrain.yav.eve<-vector(mode="numeric",length=n.eve)
   n.y.eve[]<-NA
-  n.ya.eve[]<-NA
   area.eve[]<-NA
   volume.eve[]<-NA
   meanrain.eve[]<-NA
@@ -549,13 +590,14 @@ for (i in 1:nt) {
 #  meanidiv.y.eve.q50<-vector(mode="numeric",length=n.eve)
 #  meanidiv.y.eve.q75<-vector(mode="numeric",length=n.eve)
   for (n in 1:n.eve) {
+    print(paste("event-stat.. n eve.labels[n]",n,eve.labels[n]))
     # be sure to use valid sub-daily (hrt) observations
     yo.ok.wet<-h.hrt.dqcflag[,i]<=0 & !is.na(h.yo[,i]) & h.yo[,i]>=rr.inf
     yindx<-which(h.y.eve==eve.labels[n] & yo.ok.wet)
     n.y.eve[n]<-length(yindx)
     if (n.y.eve[n]==0) next
     xindx.eve.FG<-which(h.xeve==eve.labels[n])
-    Lgrid.eve.FG<-length(xindx.eve)
+    Lgrid.eve.FG<-length(xindx.eve.FG)
     area.eve[n]<-Lgrid.eve.FG*area.1cell.FG # Area Km**2
     volume.eve[n]<-sum(h.xa[xindx.eve.FG])
 #    meanidi.x.eve[n]<-mean(xidi.FG[xindx.eve.FG])
@@ -607,6 +649,7 @@ for (i in 1:nt) {
     }
   }
 # Station Points - Write output on file 
+  print("out1")
   cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
             formatC(d.y$stid,format="f",digits=0),
             formatC(d.y$x,format="f",digits=0),
@@ -622,6 +665,7 @@ for (i in 1:nt) {
             formatC(h.h.dqcflag[,i],format="f",digits=0),
             "\n",sep=";"),file=h.files.stn[i],append=T)
 # Precipitation Events - Write output on file 
+  print("out2")
   cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
             eve.labels,
             n.y.eve,
@@ -659,6 +703,7 @@ for (i in 1:nt) {
             NA, # idi.norm.fac
             "\n",sep=";"),file=h.files.eve[i],append=T)
 # Analysis on the Grid 
+  print("out3")
   nogrid.ncout(file.name=h.files.grd[i],
                grid=t(as.matrix(b2r)),
                x=x.FG,y=y.FG,grid.type=grid.type,
@@ -674,6 +719,7 @@ for (i in 1:nt) {
                times.ref=xa.times.ref,
                reference=xa.reference,
                source.string=xa.source.nc)
+  if (i==2) break
 }
 #..............................................................................
 # Exit with success
