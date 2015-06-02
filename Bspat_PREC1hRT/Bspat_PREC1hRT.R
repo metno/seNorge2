@@ -1352,6 +1352,49 @@ while (L.yo.ok>0) {
   rm(r.lngb.FG,x.lngb.FG,r.aux.CG,r.CGtoFG,r.clu.FG)
   rm(f.lab,f.lab.val,f.lab.n,x.CGtoFG)
   rm(aux)
+# NO-RAIN OVER THE WHOLE DOMAIN
+  if (n.eve==0) {
+    print("no rain over the whole domain")
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    cat(paste(yyyy.b,mm.b,dd.b,hh.b,nhour,
+              formatC(VecS[stn.output],format="f",digits=0),
+              formatC(VecX[stn.output],format="f",digits=0),
+              formatC(VecY[stn.output],format="f",digits=0),
+              formatC(VecZ[stn.output],format="f",digits=0),
+              rep(NA,n.stn.output), #eve.lab
+              formatC(yo[stn.output],format="f",digits=1),
+              rep(NA,n.stn.output), #yb
+              rep(0,n.stn.output), #ya
+              rep(NA,n.stn.output), #yav
+              rep(NA,n.stn.output), #yidi.eve
+              rep(NA,n.stn.output), #yidiv.eve
+              formatC(ydqc.flag[stn.output],format="f",digits=0),
+              "\n",sep=";"),file=out.file.stn,append=T)
+    # Figures
+    r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
+                  ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
+    xa.FG<-vector(mode="numeric",length=Lgrid.FG)
+    xa.FG[]<-0
+    r.aux.FG[mask.FG]<-round(xa.FG,1)
+    nogrid.ncout(file.name=out.file.grd.ana,
+                 grid=t(as.matrix(r.aux.FG)),
+                 x=x.FG,y=y.FG,grid.type=grid.type,
+                 times=c(paste(yyyymmddhh.b,"00",sep="")),
+                 prod.date=prod.date,
+                 proj4.string=proj4.utm33,
+                 var.name=xa.var.name,
+                 var.longname=xa.var.longname,
+                 var.unit=xa.var.unit,
+                 var.mv=xa.var.mv,
+                 var.version=xa.var.version,
+                 times.unit=xa.times.unit,
+                 times.ref=xa.times.ref,
+                 reference=xa.reference,
+                 source.string=xa.source.nc)
+    print("Success exit")
+    quit(status=0)
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  } # end case of no-rain over the whole domain
 #------------------------------------------------------------------------------
 # ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS ANALYSIS
 # [] Analysis
