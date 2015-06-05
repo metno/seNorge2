@@ -1,4 +1,4 @@
-# << vedo_PREC3hRT.R >>
+# << vedo_PREC3h.R >>
 # Create maps for 3-hourly accumulated precipitation.
 #==============================================================================
 rm(list=ls())
@@ -18,7 +18,7 @@ ylim.ne<-7900000
 #ylim.sw<-6450000
 #ylim.ne<-7150000
 #
-scale.PREC3hRT<-c(0.05,0.5,3,7,10,15,20,30,40,50,60,100000)
+scale.PREC3h<-c(0.05,0.5,3,7,10,15,20,30,40,50,60,100000)
 #==============================================================================
 # read command line
 arguments <- commandArgs()
@@ -112,29 +112,29 @@ metnorad.b<-as.numeric(metnorad$V3)
 metnorad.col<-rgb(metnorad.r,metnorad.g,metnorad.b,maxColorValue = 256)
 # input directories
 # daily precipitation data
-path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC3hRT",sep="")
+path2input.1d.main<-paste(main.path.output,"/seNorge2/PREC3h",sep="")
 path2input.1d.main.stn<-paste(path2input.1d.main,"/station_dataset",sep="")
 path2input.1d.main.grd<-paste(path2input.1d.main,"/gridded_dataset",sep="")
-path2input.1d.add<-paste(main.path.output,"/seNorge2_addInfo/PREC3hRT",sep="")
+path2input.1d.add<-paste(main.path.output,"/seNorge2_addInfo/PREC3h",sep="")
 path2input.1d.add.grd<-paste(path2input.1d.add,"/gridded_dataset",sep="")
 path2input.1d.add.eve<-paste(path2input.1d.add,"/event_dataset",sep="")
 in.1d.file.stn<- paste(path2input.1d.main.stn,"/",yyyymm1,
-                       "/seNorge_v2_0_PREC3hRT_station_",
+                       "/seNorge_v2_0_PREC3h_station_",
                        yyyymmddhh1,"_",yyyymmddhh2,".txt",sep="")
 in.1d.file.eve<- paste(path2input.1d.add.eve,"/",yyyymm1,
-                       "/seNorge_v2_0_PREC3hRT_event_",
+                       "/seNorge_v2_0_PREC3h_event_",
                        yyyymmddhh1,"_",yyyymmddhh2,".txt",sep="")
 in.1d.file.grd.ana<- paste(path2input.1d.main.grd,"/",yyyymm1,
-                           "/seNorge_v2_0_PREC3hRT_grid_",
+                           "/seNorge_v2_0_PREC3h_grid_",
                            yyyymmddhh1,"_",yyyymmddhh2,".nc",sep="")
 in.1d.file.grd.idi<- paste(path2input.1d.add.grd,"/",yyyymm1,
-                           "/seNorge_v2_0_PREC3hRT_grid_normIDI_",
+                           "/seNorge_v2_0_PREC3h_grid_normIDI_",
                            yyyymmddhh1,"_",yyyymmddhh2,".nc",sep="")
 # output directories
 dir.create(file.path(main.path.output,"seNorge2_scratch"), showWarnings = FALSE)
-path2output.main<-paste(main.path.output,"/seNorge2_scratch/PREC3hRT",sep="")
+path2output.main<-paste(main.path.output,"/seNorge2_scratch/PREC3h",sep="")
 path2output.main.grd<-paste(path2output.main,"/PREC",sep="")
-path2output.add<-paste(main.path.output,"/seNorge2_scratch/PREC3hRT",sep="")
+path2output.add<-paste(main.path.output,"/seNorge2_scratch/PREC3h",sep="")
 path2output.add.grd<-paste(path2output.add,"/IDI",sep="")
 if (!(file.exists(path2output.main)))     dir.create(path2output.main,showWarnings=F) 
 if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWarnings=F) 
@@ -144,10 +144,10 @@ if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWar
 dir.create(paste(path2output.main.grd,"/",yyyymm1,sep=""),showWarnings=F)
 dir.create(paste(path2output.add.grd,"/",yyyymm1,sep=""),showWarnings=F)
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm1,
-                         "/seNorge_v2_0_PREC3hRT_grid_",
+                         "/seNorge_v2_0_PREC3h_grid_",
                          yyyymmddhh1,"_",yyyymmddhh2,".png",sep="")
 out.file.grd.idi<- paste(path2output.add.grd,"/",yyyymm1,
-                         "/seNorge_v2_0_PREC3hRT_grid_normIDI_",
+                         "/seNorge_v2_0_PREC3h_grid_normIDI_",
                          yyyymmddhh1,"_",yyyymmddhh2,".png",sep="")
 #
 print("Output files:")
@@ -193,8 +193,8 @@ y.data$dqcflag<-as.integer(y.data$dqcflag)
 #year;month;day;nday;stid;x;y;z;eve.lab;yo;yb;ya;yav;yidi;yidiv;dqcflag;
 #------------------------------------------------------------------------------
 # Plot analysis 
-par.PREC3hRT<-list(col.scale=metnorad.col,scale=scale.PREC3hRT,
-                   main=paste(yyyy.mm.dd.hh1,yyyy.mm.dd.hh2,"PREC3hRT","3-hourly accumulated precipitation [UTC]"),
+par.PREC3h<-list(col.scale=metnorad.col,scale=scale.PREC3h,
+                   main=paste(yyyy.mm.dd.hh1,yyyy.mm.dd.hh2,"PREC3h","3-hourly accumulated precipitation [UTC]"),
                    xlab="",ylab="",
                    xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
 #
@@ -203,10 +203,10 @@ aux<-PRECplot(namefileout=out.file.grd.ana,
               r.data=r,
               orog=orog,
               bound=borders,
-              par=par.PREC3hRT)
+              par=par.PREC3h)
 # Plot IDI
-scale.PREC3hRT.IDI<-seq(0,110,length=257)
-scale.PREC3hRT.IDI[length(scale.PREC3hRT.IDI)]<-1000
+scale.PREC3h.IDI<-seq(0,110,length=257)
+scale.PREC3h.IDI[length(scale.PREC3h.IDI)]<-1000
 #
 r[]<-NA
 # put data on raster variable (t=transpose)
@@ -214,8 +214,8 @@ r[]<-t(data.idi)
 data.idi<-extract(r,1:ncell(r))
 aux<-which(data.idi==0)
 r[aux]<-rep(NA,length(aux))
-par.PREC3hRT.IDI<-list(col.scale=banded.col,scale=scale.PREC3hRT.IDI,
-                 main=paste(yyyy.mm.dd.hh1,yyyy.mm.dd.hh2,"PREC3hRT/IDI","3-hourly accumulated precipitation [UTC]",sep=" - "),
+par.PREC3h.IDI<-list(col.scale=banded.col,scale=scale.PREC3h.IDI,
+                 main=paste(yyyy.mm.dd.hh1,yyyy.mm.dd.hh2,"PREC3h/IDI","3-hourly accumulated precipitation [UTC]",sep=" - "),
                  xlab="",ylab="",
                  xl=c(xlim.sw,xlim.ne),yl=c(ylim.sw,ylim.ne))
 #
@@ -224,7 +224,7 @@ plot<-PRECplot.IDI(namefileout=out.file.grd.idi,
                    r.data=r,
                    orog=orog,
                    bound=borders,
-                   par=par.PREC3hRT.IDI)
+                   par=par.PREC3h.IDI)
 #------------------------------------------------------------------------------
 # Exit
 quit(status=0)
