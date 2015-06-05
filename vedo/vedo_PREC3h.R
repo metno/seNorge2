@@ -142,7 +142,7 @@ if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWa
 #if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
 # Setup output files 
 dir.create(paste(path2output.main.grd,"/",yyyymm1,sep=""),showWarnings=F)
-dir.create(paste(path2output.add.grd,"/",yyyymm1,sep=""),showWarnings=F)
+#dir.create(paste(path2output.add.grd,"/",yyyymm1,sep=""),showWarnings=F)
 out.file.grd.ana<- paste(path2output.main.grd,"/",yyyymm1,
                          "/seNorge_v2_0_PREC3h_grid_",
                          yyyymmddhh1,"_",yyyymmddhh2,".png",sep="")
