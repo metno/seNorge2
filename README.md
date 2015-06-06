@@ -23,38 +23,33 @@ seNorge v 2.0 Outputs:
 Installation:
 -------------
 1. following libraries must be installed on your system:
-  * gdal-bin
-  * proj-bin
-  * libgdal1-dev
-  * libproj-dev
-  * netcdf-bin
-  * libnetcdf-dev
-  * netcdf-bin
+ * gdal-bin
+ * proj-bin
+ * libgdal1-dev
+ * libproj-dev
+ * netcdf-bin
+ * libnetcdf-dev
+ * netcdf-bin
 
 2. get the following packages from r-cran repository:
-  * sp_1.0-9.tar.gz
-  * raster_2.1-25.tar.gz
-  * rgdal_0.8-9.tar.gz
-  * tripack_1.3-6.tar.gz
-  * ncdf_1.6.6.tar.gz
-  * igraph_0.7.1.tar.gz
+ * sp_1.0-9.tar.gz
+ * raster_2.1-25.tar.gz
+ * rgdal_0.8-9.tar.gz
+ * tripack_1.3-6.tar.gz
+ * ncdf_1.6.6.tar.gz
+ * igraph_0.7.1.tar.gz
 
 3. create directories (DIR1 should be any directory path on your system):
-
-.. code-block:: bash
-
-mkdir DIR1/log
-mkdir DIR1/projects
-mkdir DIR1/scripts
-mkdir DIR1/seNorge2
-mkdir DIR1/seNorge2_addInfo
-mkdir DIR1/seNorge2_scratch
+ * mkdir DIR1/log
+ * mkdir DIR1/projects
+ * mkdir DIR1/scripts
+ * mkdir DIR1/seNorge2
+ * mkdir DIR1/seNorge2_addInfo
+ * mkdir DIR1/seNorge2_scratch
 
 4. clone git hub repository (let's say you've done it under directory DIR2)
 
 5. Edit/Create config file (in a standard installation should be DIR2/seNorge2/etc/config_list.r):
-
-.. code-block:: bash
 
 list( pname="your name here (let's call it NAMECONF)",
   opt = alist(
@@ -69,18 +64,10 @@ testmode=FALSE get the data from MET Norway's Climate Database
 Running the programs (examples):
 --------------------------------
 1. PREC1hRT from 2012.01.01.04 (yyyy.mm.dd.hh, UTC) to 2012.01.01.06:
-
-.. code-block:: bash
-
-DIR2/seNorge2/script/seNorge2_PREC1hRT.sh -s 2012.01.01.04 -e 2012.01.01.06 -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
+> DIR2/seNorge2/script/seNorge2_PREC1hRT.sh -s 2012.01.01.04 -e 2012.01.01.06 -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
 
 2. PREC3hRT from today at O1 UTC to O3 UTC:
-
-.. code-block:: bash
-
-DIR2/seNorge2/script/seNorge2_PREC3hRT_just3h.sh -s `date +\%Y.\%m.\%d`.01 -e `date +\%Y.\%m.\%d`.03 -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
+> DIR2/seNorge2/script/seNorge2_PREC3hRT_just3h.sh -s `date +\%Y.\%m.\%d`.01 -e `date +\%Y.\%m.\%d`.03 -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
 
 3. PREC1d for today:
-
-.. code-block:: bash
-DIR2/seNorge2/script/seNorge2_PREC1d.sh -s `date +\%Y.\%m.\%d` -e `date +\%Y.\%m.\%d` -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
+> DIR2/seNorge2/script/seNorge2_PREC1d.sh -s `date +\%Y.\%m.\%d` -e `date +\%Y.\%m.\%d` -c DIR2/seNorge2/etc/config_list.r -p NAMECONF -l DIR1/log
