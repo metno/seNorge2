@@ -4,7 +4,9 @@ Spatial Interpolation of in-situ observations
 The objective is to create Temperature and Precipitation high-resolution (1Km) gridded datasets for the Norwegian mainland using observation from the KDVH (Climate Database).
 The spatial interpolation method is based on Bayesian statical interpolation and the resulting gridded datasets constitutes the seNorge v 2.0 beta dataset.
 
-Note that it is possible for observations affected by gross measurement errors to enter the spatial interpolation procedure.
+Notes:
+1. Input data are retrieved from MET Norway Climate Database.
+2. it is possible for observations affected by gross measurement errors to enter the spatial interpolation procedure.
 
 seNorge v 2.0 Outputs:
 ----------------------
@@ -18,17 +20,49 @@ seNorge v 2.0 Outputs:
 * PREC3hRT: Amount of precipitation in 3 hour (for real-time applications); 00-03, 03-06, 06-09, …, 21-00; unit mm
 * PREC3h: Amount of precipitation in 3 hour (consistent with the daily total of precipitation); unit mm
 
-Copyright and license
----------------------
-Copyright (C) 2015 MET Norway. seNorge2 is licensed under `GPL
-version 2 <https://github.com/metno/gridpp/blob/master/LICENSE>`_ or (at
-your option) any later version.
+Installation:
+-------------
+1. following libraries must be installed on your system:
+* gdal-bin
+* proj-bin
+* libgdal1-dev
+* libproj-dev
+* netcdf-bin
+* libnetcdf-dev
+* netcdf-bin
 
-Contact
--------
-| MET Norway
-| Postboks 43 Blindern
-| NO-0313 OSLO
-|
-| Website: http://met.no/
-| E-mail: `post@met.no <mailto:post@met.no>`_
+2. get the following packages from r-cran repository:
+* sp_1.0-9.tar.gz
+* raster_2.1-25.tar.gz
+* rgdal_0.8-9.tar.gz
+* tripack_1.3-6.tar.gz
+* ncdf_1.6.6.tar.gz
+* igraph_0.7.1.tar.gz
+
+3. create directories (DIR1 should be any directory path on your system):
+.. code-block:: bash
+mkdir DIR1/log
+mkdir DIR1/projects
+mkdir DIR1/scripts
+mkdir DIR1/seNorge2
+mkdir DIR1/seNorge2_addInfo
+mkdir DIR1/seNorge2_scratch
+
+4. clone git hub repository (let's say you've done it under directory DIR2)
+
+5. Edit/Create config file (in a standard installation should be DIR2/seNorge2/etc/config_list.r):
+
+.. code-block:: bash
+
+list( pname="your name here",
+  opt = alist(
+  main.path=DIR2,
+  main.path.output=DIR1,
+  testmode=FALSE)
+),
+
+testmode=FALSE get the data from MET Norway's Climate Database
+
+
+Running the programs:
+---------------------
