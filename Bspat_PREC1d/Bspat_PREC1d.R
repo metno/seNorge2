@@ -478,11 +478,14 @@ if (!testmode) {
 } else {
   stations.tmp<-read.csv(file=station.info)
 }
-# check if in CG
 n.tmp<-length(stations.tmp$stnr)
-aux<-extract(r.orog.CG,cbind(stations.tmp$x,stations.tmp$y),na.rm=T)
 stn.out.CG<-vector(length=n.tmp)
 stn.out.CG[1:n.tmp]<-F
+# avoid duplicates
+dup.indx<-which(duplicated(cbind(stations.tmp$x,stations.tmp$y)))
+if (length(dup.indx)>0) stn.out.CG[dup.indx]<-T
+# check if in CG
+aux<-extract(r.orog.CG,cbind(stations.tmp$x,stations.tmp$y),na.rm=T)
 stn.out.CG[which(is.na(aux))]<-T
 # definitive station list
 L.y.tot<-length(which(!stn.out.CG))
