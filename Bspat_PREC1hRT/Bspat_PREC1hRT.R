@@ -673,6 +673,21 @@ while (L.yo.ok>0) {
                  times.ref=xa.times.ref,
                  reference=xa.reference,
                  source.string=xa.source.nc)
+    nogrid.ncout(file.name=out.file.grd.idi,
+                 grid=t(as.matrix(r.aux.FG)),
+                 x=x.FG,y=y.FG,grid.type=grid.type,
+                 times=c(paste(yyyymmddhh.b,"00",sep="")),
+                 prod.date=prod.date,
+                 proj4.string=proj4.utm33,
+                 var.name=xidi.var.name,
+                 var.longname=xidi.var.longname,
+                 var.unit=xidi.var.unit,
+                 var.mv=xidi.var.mv,
+                 var.version=xidi.var.version,
+                 times.unit=xidi.times.unit,
+                 times.ref=xidi.times.ref,
+                 reference=xidi.reference,
+                 source.string=xidi.source.nc)
     print("Success exit")
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
