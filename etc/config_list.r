@@ -26,6 +26,13 @@ config_list <- alist(
                        main.path.output="/home/cristianl",
                        testmode=FALSE)
          ),
+     
+     list( pname="vis-m1-PRECh",
+           opt = alist(
+                       main.path="/home/cristianl/projects/seNorge2",
+                       main.path.output="/lustre/mnt/cristianl",
+                       testmode=FALSE)
+         ),
 
      list( pname="dev-vm230",
            opt = alist(
