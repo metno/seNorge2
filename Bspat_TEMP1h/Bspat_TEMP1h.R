@@ -826,21 +826,45 @@ for (b in yb.h.pos) {
   ide.b<-matrix(data=0,ncol=Lsubsample.vec[b],nrow=Lsubsample.vec[b])
   ide.b[row(ide.b)==col(ide.b)]<-1
   InvD.b<-solve(D.b[VecS.set.pos[b,1:Lsubsample.vec[b]],VecS.set.pos[b,1:Lsubsample.vec[b]]],ide.b)
-# G matrix
-  Disth.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-  G.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
-  Disth.b<-(outer(ygrid[xindx],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.+
-            outer(xgrid[xindx],VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.)**0.5/1000.
-  G.b<-exp(-0.5*(Disth.b/Dh.b)**2.)
-  rm(Disth.b)
-#  compute analysis/idi over grid 
-  K.b<-tcrossprod(G.b,InvD.b)
+#
   xbweights.set[,b.aux]<-0
-  xbweights.set[xindx,b.aux]<-rowSums(K.b)
-  xindx1<-which(xbweights.set[,b.aux]>0.05)
+  ndim<-10000
+  i<-0
+  while ((i*ndim)<Lgrid.b) {
+    start<-i*ndim+1
+    end<-(i+1)*ndim
+    if (end>Lgrid.b) {
+      end<-Lgrid.b
+    }
+    ndimaux<-end-start+1
+    print(paste(round(i),round(start,0),round(end,0),round(Lgrid,0)))
+    aux<-matrix(ncol=Lsubsample.vec[b],nrow=ndimaux,data=0.)
+    G.b<-matrix(ncol=Lsubsample.vec[b],nrow=ndimaux,data=0.)
+    aux<-(outer(ygrid[xindx[start:end]],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2. +
+          outer(xgrid[xindx[start:end]],VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.)**0.5/1000.
+    G.b<-exp(-0.5*(aux/Dh)**2.)
+    rm(aux)
+    K.b<-tcrossprod(G.b,InvD.b)
+    rm(G.b)
+    xbweights.set[xindx[start:end],b.aux]<-rowSums(K.b)
+    rm(K.b)
+    i<-i+1
+  }
+# G matrix
+#  Disth.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
+#  G.b<-matrix(ncol=Lsubsample.vec[b],nrow=Lgrid.b,data=0.)
+#  Disth.b<-(outer(ygrid[xindx],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.+
+#            outer(xgrid[xindx],VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2.)**0.5/1000.
+#  G.b<-exp(-0.5*(Disth.b/Dh.b)**2.)
+#  rm(Disth.b)
+##  compute analysis/idi over grid 
+#  K.b<-tcrossprod(G.b,InvD.b)
+#  xbweights.set[,b.aux]<-0
+#  xbweights.set[xindx,b.aux]<-rowSums(K.b)
+  xindx1<-which(xbweights.set[,b.aux]>0.0005)
   Lgrid.b1<-length(xindx1)
   print(paste(b.aux,"/",LBAKh," ",VecS[b]," ",Lgrid.b,"-->",Lgrid.b1,"/",Lgrid,"\n",sep=""))
-  rm(G.b,K.b)
+#  rm(G.b,K.b)
   if (yb.param[b,12]==0) {
     # 1.mean(z)[m];2.NA;3.mean(yo)[C];4.gamma[C/m];5.NA
     # 6. alpha[C/m];7.NA;8.Beta[C/m];9NA
