@@ -42,12 +42,20 @@ Dh<-60
 Dz<-600
 T2<-15
 # Background - parameters
+cutoff.par<-4
+z.range.min<-50
+nstat.min<-5
+nstat.min.inv<-20
 Dh.b<-70.
 eps2.b<-0.5
 Lsubsample<-50
 Lsubsample.max<-50
-Lsubsample.DHmax<-200
+#Lsubsample.DHmax<-200
+Lsubsample.DHmax<-150
 Lsubsample.vec<-vector()
+#
+weight.min.b<-0.00005
+weight.min.a<-0.0005
 #
 print("ANALYSIS and DQC parameters")
 print(paste("EPS2 Dh[Km] Dz[m] > ", round(eps2,3),
@@ -255,11 +263,21 @@ rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
 #    obtained from lat,lon. Furthermore, the location must be in Norway or on
 #    the border (less than max.Km.stnINdomain)
 # 2. stations in CG
+file.tmp<-paste("/lustre/mnt/cristianl/seNorge2/TEMP1h_old/station_dataset/",yyyymm,"/seNorge_v2_0_TEMP1h_station_",yyyymmddhh,".txt",sep="")
+flag.filetmp<-F
+if (file.exists(file.tmp)){
+  stations<-read.csv(file=file.tmp,header=T,sep=";")
+  names(stations)<-c("year","month","day","hour","stnr","x","y","z","yo","yb","ya","yav","yidi","yidiv","dqcflag","X")
+  snum<-length(stations$x)
+  if (snum>10) flag.filetmp<-T
+}
+if (!flag.filetmp){
 if (!testmode) {
   stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
                                max.Km=max.Km.stnINdomain)
 } else {
   stations<-read.csv(file=station.info)
+}
 }
 LOBS<-length(stations$stnr)
 print(LOBS)
@@ -324,6 +342,7 @@ r <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
 r[]<-NA
 # get data from KDVH
+if (!flag.filetmp){
 if (!testmode) {
 data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd, h=h,
                      to.yyyy=yyyy, to.mm=mm, to.dd=dd,
@@ -334,6 +353,9 @@ data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd, h=h,
 }
 print(data)
 yo<-as.numeric(data$value)
+} else {
+yo<-as.numeric(stations$yo)
+}
 yo.h.pos<-which(!is.na(yo))
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
@@ -357,8 +379,9 @@ yb.h.pos<-vector()
 b.inc<-0
 for (b in yo.h.pos) {
   if (b.inc>0) {
-    finoa<-as.integer(Lsubsample.max*1/4)
-    if (VecY[b]<7750000 & VecZ[b]<800) finoa<-as.integer(Lsubsample.max*2/4)
+#    finoa<-as.integer(Lsubsample.max*1/4)
+#    if (VecY[b]<7750000 & VecZ[b]<800) finoa<-as.integer(Lsubsample.max*2/4)
+    finoa<-as.integer(Lsubsample.max*1/5)
     if (VecY[b]<7100000 & VecZ[b]<800) finoa<-as.integer(Lsubsample.max*3/4)
     if (VecS[b]%in%VecS.set[yb.h.pos[1:b.inc],2:finoa]) next
   }
@@ -369,7 +392,7 @@ for (b in yo.h.pos) {
   aux<-Lsubsample.max
   if (Disth[b,close2b.au1[Lsubsample.max]]>Lsubsample.DHmax) 
     aux<-max(which(Disth[b,close2b.au1]<=Lsubsample.DHmax))
-  if (aux<10) next
+  if (aux<nstat.min) next
   Lsubsample.vec[b]<-aux
   close2b<-close2b.au1[1:Lsubsample.vec[b]]
   b.inc<-b.inc+1
@@ -389,6 +412,10 @@ for (b in yo.h.pos) {
   VecS.set[b,1:Lsubsample.vec[b]]<-VecS[close2b]
   VecS.set.pos[b,1:Lsubsample.vec[b]]<-close2b
   yo.b<-yo[close2b]
+#
+  z.range<-max(VecZ.b)-min(VecZ.b)
+  z.range.90<-round((quantile(VecZ.b,probs=0.9)-quantile(VecZ.b,probs=0.1)),0)
+  flag.only0<-(z.range.90<=z.range.min | Lsubsample.vec[b]<nstat.min.inv)
 # NOTE: this is D.b! not D...
   ide.b<-matrix(data=0,ncol=Lsubsample.vec[b],nrow=Lsubsample.vec[b])
   ide.b[row(ide.b)==col(ide.b)]=1
@@ -489,8 +516,12 @@ for (b in yo.h.pos) {
 #      dev.off()
 # DEBUG stop      
 # Best background
-  aux<-order(c(J0,J1,J2))
-  best<-aux[1]-1
+  if (flag.only0) {
+    best<-0
+  } else {
+    aux<-order(c(J0,J1,J2))
+    best<-aux[1]-1
+  }
   if (best==0) {
     yb.set[,b]<-yb.set0[]
     yb.param[b,]<-c(yb.param0,0)
@@ -510,8 +541,10 @@ for (b in yo.h.pos) {
   if (best==0) zero.str<-"+0."
   if (best==1) uno.str<-"+1."
   if (best==2) due.str<-"+2."
-  print(paste("@@",b.inc,". id pos Zmn/x DisthMAX / J0 J1 J2 / #stn:",VecS[b],b,
+  print(paste("@@",b.inc,". id pos Zmn/x (Zrange) [Z.q90-Z.q10] DisthMAX / J0 J1 J2 / #stn:",VecS[b],b,
                            round(min(VecZ.b),0),round(max(VecZ.b),0),
+                           paste("(",z.range,")",sep=""),
+                           paste("[",z.range.90,"]",sep=""),
                            round(Disth[b,close2b[Lsubsample.vec[b]]],0),"/",
                            round(J0,0),round(J1,0),round(J2,0),"/",Lsubsample.vec[b]))
   print(paste(zero.str,"alpha beta gamma:",round(yb.param0[6],6),round(yb.param0[8],6),round(yb.param0[4],4)))
@@ -540,7 +573,7 @@ for (b in yo.h.pos) {
   rm(K.b,W.b)
 } # end cycle LOBSt
 LBAKh<-b.inc
-print(paste("# stations used in background elaborations=",LBAKh))
+print(paste("# stations used in background elaborations (as reference station)=",LBAKh))
 # At this point I've this 5 outputs
 # 1. yb.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
 # 2. ybweights.set<-matrix(data=NA,ncol=btimes,nrow=LOBSt)
@@ -583,6 +616,10 @@ while (TRUE) {
         VecS.set[b,1:Lsubsample.vec[b]]<-VecS[close2b]
         VecS.set.pos[b,1:Lsubsample.vec[b]]<-close2b
         yo.b<-yo[close2b]
+#
+        z.range<-max(VecZ.b)-min(VecZ.b)
+        z.range.90<-round((quantile(VecZ.b,probs=0.9)-quantile(VecZ.b,probs=0.1)),0)
+        flag.only0<-(z.range.90<=z.range.min | Lsubsample.vec[b]<nstat.min.inv)
 # NOTE: this is D.b! not D...
         ide.b<-matrix(data=0,ncol=Lsubsample.vec[b],nrow=Lsubsample.vec[b])
         ide.b[row(ide.b)==col(ide.b)]<-1
@@ -689,8 +726,12 @@ while (TRUE) {
 #            dev.off()
 # DEBUG stop
 # Best background
-        aux<-order(c(J0,J1,J2))
-        best<-aux[1]-1
+        if (flag.only0) {
+          best<-0
+        } else {
+          aux<-order(c(J0,J1,J2))
+          best<-aux[1]-1
+        }
         if (best==0) {
           yb.set[,b]<-yb.set0[]
           yb.param[b,]<-c(yb.param0,0)
@@ -710,8 +751,10 @@ while (TRUE) {
         if (best==0) zero.str<-"*0."
         if (best==1) uno.str<-"*1."
         if (best==2) due.str<-"*2."
-        print(paste("@@",isct,". id pos Zmn/x DisthMAX / J0 J1 J2 / #stn:",VecS[b],b,
+        print(paste("@@",isct,". id pos Zmn/x (Zrange) [Z.q90-Z.q10] DisthMAX / J0 J1 J2 / #stn:",VecS[b],b,
                                  round(min(VecZ.b),0),round(max(VecZ.b),0),
+                                 paste("(",z.range,")",sep=""),
+                                 paste("[",z.range.90,"]",sep=""),
                                  round(Disth[b,close2b[Lsubsample.vec[b]]],0),"/",
                                  round(J0,0),round(J1,0),round(J2,0),"/",Lsubsample.vec[b]))
         print(paste(zero.str,"alpha beta gamma:",round(yb.param0[6],6),round(yb.param0[8],6),round(yb.param0[4],4)))
@@ -815,8 +858,10 @@ print("++ Grid - Background elaborations\n")
 print("#/tot stnid #grid.points/#grid.points.tot")
 for (b in yb.h.pos) {
   b.aux<-b.aux+1
-  xindx<-which( (xgrid-min(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-3*Dh.b*1000) & (xgrid-max(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<(3*Dh.b*1000) &
-                (ygrid-min(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-3*Dh.b*1000) & (ygrid-max(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<(3*Dh.b*1000) )
+  xindx<-which( (xgrid-min(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-cutoff.par*Dh.b*1000) & 
+                (xgrid-max(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<( cutoff.par*Dh.b*1000) &
+                (ygrid-min(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))>(-cutoff.par*Dh.b*1000) & 
+                (ygrid-max(VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]]))<( cutoff.par*Dh.b*1000) )
   Lgrid.b<-length(xindx)
   if (Lgrid.b==0) {
     xb.set[,b.aux]<-0
@@ -837,7 +882,7 @@ for (b in yb.h.pos) {
       end<-Lgrid.b
     }
     ndimaux<-end-start+1
-    print(paste(round(i),round(start,0),round(end,0),round(Lgrid,0)))
+#    print(paste(round(i),round(start,0),round(end,0),round(Lgrid,0)))
     aux<-matrix(ncol=Lsubsample.vec[b],nrow=ndimaux,data=0.)
     G.b<-matrix(ncol=Lsubsample.vec[b],nrow=ndimaux,data=0.)
     aux<-(outer(ygrid[xindx[start:end]],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],FUN="-")**2. +
@@ -861,7 +906,7 @@ for (b in yb.h.pos) {
 #  K.b<-tcrossprod(G.b,InvD.b)
 #  xbweights.set[,b.aux]<-0
 #  xbweights.set[xindx,b.aux]<-rowSums(K.b)
-  xindx1<-which(xbweights.set[,b.aux]>0.0005)
+  xindx1<-which(xbweights.set[,b.aux]>weight.min.b)
   Lgrid.b1<-length(xindx1)
   print(paste(b.aux,"/",LBAKh," ",VecS[b]," ",Lgrid.b,"-->",Lgrid.b1,"/",Lgrid,"\n",sep=""))
 #  rm(G.b,K.b)
@@ -916,6 +961,16 @@ for (b in yb.h.pos) {
        (yb.param[b,7]*(xgrid[xindx1[aux.bw]]-yb.param[b,10])+yb.param[b,9]*(ygrid[xindx1[aux.bw]]-yb.param[b,11]))*(h1-zgrid[xindx1[aux.bw]]) ) / yb.param[b,2]
     rm(aux.ab,aux.bl,aux.bw)
   }
+# DEBUG start
+#  png(file=paste("proX_",b.aux,"_",VecS[VecS.set.pos[b,1:Lsubsample.vec[b]]],".png",sep=""),width=1200,height=1200)
+#  plot(xb.set[xindx1,b.aux],zgrid[xindx1],pch=19,col="black",cex=2.5)
+#  points(yo[VecS.set.pos[b,1:Lsubsample.vec[b]]],VecZ[VecS.set.pos[b,1:Lsubsample.vec[b]]],pch=19,col="red",cex=2.5)
+#  dev.off()
+#  png(file=paste("stn_",b.aux,"_",VecS[VecS.set.pos[b,1:Lsubsample.vec[b]]],".png",sep=""),width=1200,height=1200)
+#  plot(VecX[yo.h.pos],VecY[yo.h.pos],pch=19,col="black",cex=2.5)
+#  points(VecX[VecS.set.pos[b,1:Lsubsample.vec[b]]],VecY[VecS.set.pos[b,1:Lsubsample.vec[b]]],pch=19,col="red",cex=2.5)
+#  dev.off()
+# DEBUG end
 }
 xbweights.norm<-xbweights.set/rowSums(xbweights.set)
 # DEBUG start
@@ -975,16 +1030,20 @@ while ((i*ndim)<Lgrid) {
   auxz<-abs(outer(zgrid[start:end],VecZ[yo.OKh.pos],FUN="-"))
   G<-exp(-0.5*(aux/Dh)**2.-0.5*(auxz/Dz)**2.)
   rm(aux,auxz)
-#  Gt<-exp(-0.5*(aux/Dh)**2.)
-#  K<-G%*%InvD
-  K<-tcrossprod(G,InvD)
-  rm(G)
-#  xa[start:end]<-xb[start:end]+K%*%(yo[yo.OKh.pos]-yb[yo.OKh.pos])
-  xa[start:end]<-xb[start:end]+tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
+#
+  Gmax.stn<-apply(G,MARGIN=2,FUN=max)
+  indx.sgnf<-which(Gmax.stn>weight.min.a)
+  K<-tcrossprod(G[,indx.sgnf],InvD[indx.sgnf,indx.sgnf])
+  rm(G,Gmax.stn)
+  d.sgnf<-yo[yo.OKh.pos][indx.sgnf]-yb[yo.OKh.pos][indx.sgnf]
+  xa[start:end]<-xb[start:end]+tcrossprod(K,t(d.sgnf))
+#
+#  K<-tcrossprod(G,InvD)
+#  rm(G)
+#  xa[start:end]<-xb[start:end]+tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
   xidi[start:end]<-rowSums(K)
-#  Disth[start:end,1:Linfo] <-aux[1:ndimaux,1:Linfo]
-  rm(K)
-#  print("finito conti")
+  rm(K,indx.sgnf)
+#  rm(K)
   i<-i+1
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
