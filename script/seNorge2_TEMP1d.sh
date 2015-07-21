@@ -112,8 +112,8 @@ function trim()
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
-#  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
-#  find $OUTDIR/ -mtime +1 -exec rm -vf {} \;
+  echo "seNorge2_TEMP1d.sh "`date +%Y-%m-%d" "%H:%M`" > clean directories"
+  find $OUTDIR/ -mtime +1 -exec rm -vf {} \;
 #-----------------------------------------------------
 # Statistical Interpolation 
 #-----------------------------------------------------
