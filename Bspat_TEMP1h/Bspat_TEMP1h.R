@@ -1011,6 +1011,9 @@ print("++ Grid - Analysis and IDI elaborations\n")
 print("# gridpoint.start gridpoint.end gridpoint.total\n")
 #to.write <- file("aux.bin", "wb")
 #to.read<-file("aux.bin", "rb")
+t.d<-t(yo[yo.OKh.pos]-yb[yo.OKh.pos])
+Inv.d<-tcrossprod(InvD,t.d)
+Inv.1<-rowSums(InvD)
 while ((i*ndim)<Lgrid) {
   start<-i*ndim+1
   end<-(i+1)*ndim
@@ -1033,17 +1036,17 @@ while ((i*ndim)<Lgrid) {
 #
   Gmax.stn<-apply(G,MARGIN=2,FUN=max)
   indx.sgnf<-which(Gmax.stn>weight.min.a)
-  K<-tcrossprod(G[,indx.sgnf],InvD[indx.sgnf,indx.sgnf])
+  if (length(indx.sgnf)==0) {
+    dxa<-rep(0,ndimaux)
+    dxidi<-rep(0,ndimaux)
+  } else {
+    dxa<-tcrossprod(G[,indx.sgnf],t(Inv.d[indx.sgnf]))
+    dxidi<-tcrossprod(G[,indx.sgnf],t(Inv.1[indx.sgnf]))
+  }
   rm(G,Gmax.stn)
-  d.sgnf<-yo[yo.OKh.pos][indx.sgnf]-yb[yo.OKh.pos][indx.sgnf]
-  xa[start:end]<-xb[start:end]+tcrossprod(K,t(d.sgnf))
-#
-#  K<-tcrossprod(G,InvD)
-#  rm(G)
-#  xa[start:end]<-xb[start:end]+tcrossprod(K,t(yo[yo.OKh.pos]-yb[yo.OKh.pos]))
-  xidi[start:end]<-rowSums(K)
-  rm(K,indx.sgnf)
-#  rm(K)
+  xa[start:end]<-xb[start:end]+dxa
+  xidi[start:end]<-dxidi
+  rm(dxa,dxidi,indx.sgnf)
   i<-i+1
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
