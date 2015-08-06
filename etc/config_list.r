@@ -13,6 +13,13 @@ config_list <- alist(
                        testmode=FALSE)
          ),
 
+     list( pname="pc4424.1",
+           opt = alist(
+                       main.path="/home/cristianl/projects/seNorge2",
+                       main.path.output="/disk1",
+                       testmode=FALSE)
+         ),
+
      list( pname="pc4424.test",
            opt = alist(
                        main.path="/disk1/projects/seNorge2",
