@@ -509,6 +509,42 @@ for (i in 1:nt) {
   eve.labels<-f.lab[aux,1]
   eve.labels.n<-f.lab[aux,2]
   n.eve<-length(eve.labels)
+  if (n.eve==0) {
+# Station Points - Write output on file 
+    print("out1")
+    cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
+              formatC(d.y$stid,format="f",digits=0),
+              formatC(d.y$x,format="f",digits=0),
+              formatC(d.y$y,format="f",digits=0),
+              formatC(d.y$z,format="f",digits=0),
+              0,
+              formatC(h.yo[,i],format="f",digits=1),
+              NA, #yb
+              formatC(h.ya[,i],format="f",digits=2),
+              formatC(h.yav[,i],format="f",digits=2),
+              NA, #yidi
+              NA, #yidiv
+              formatC(h.h.dqcflag[,i],format="f",digits=0),
+              "\n",sep=";"),file=h.files.stn[i],append=T)
+# Analysis on the Grid 
+    print("out3")
+    nogrid.ncout(file.name=h.files.grd[i],
+                 grid=t(as.matrix(b2r)),
+                 x=x.FG,y=y.FG,grid.type=grid.type,
+                 times=c(paste(yyyymmddhh1.v[i],"00",sep="")),
+                 prod.date=prod.date,
+                 proj4.string=proj4.utm33,
+                 var.name=xa.var.name,
+                 var.longname=xa.var.longname,
+                 var.unit=xa.var.unit,
+                 var.mv=xa.var.mv,
+                 var.version=xa.var.version,
+                 times.unit=xa.times.unit,
+                 times.ref=xa.times.ref,
+                 reference=xa.reference,
+                 source.string=xa.source.nc)
+    next
+  }
   # event labels for station points
   h.y.eve<-extract(h.reve,cbind(d.y$x,d.y$y),na.rm=T)
 #  rnc<-writeRaster(h.reve,filename=paste("clump.nc",sep=""),format="CDF",overwrite=TRUE)
