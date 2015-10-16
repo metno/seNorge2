@@ -395,6 +395,7 @@ if (!testmode) {
   data<-read.csv(file=observed.data)
 }
 yo<-as.numeric(data$value)
+yo[which(VecS %in% c(42550,42600))]<-NA
 yo.h.pos<-which(!is.na(yo))
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 

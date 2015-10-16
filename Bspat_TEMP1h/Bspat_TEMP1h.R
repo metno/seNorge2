@@ -496,6 +496,7 @@ for (b in yo.h.pos) {
                            yb.param0[8]*(VecY-yb.param0[11])+
                            yb.param0[4]* VecZ
   J0<-sum((yb.set0[close2b]-yo.b)**2.)
+  if (!flag.only0) { 
 # Background 1  
   back1.flag<-T
   par.aux<-c(mean(VecZ.b),50,yb.param0[3],
@@ -572,6 +573,7 @@ for (b in yo.h.pos) {
     back2.flag<-F
     J2<-J0+1
   }
+  }
 # DEBUG start      
 #      png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
 #      plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,
@@ -585,6 +587,8 @@ for (b in yo.h.pos) {
 # DEBUG stop      
 # Best background
   if (flag.only0) {
+    J1<-NA
+    J2<-NA
     best<-0
   } else {
     aux<-order(c(J0,J1,J2))
@@ -616,14 +620,16 @@ for (b in yo.h.pos) {
                            round(Disth[b,close2b[Lsubsample.vec[b]]],0),"/",
                            round(J0,0),round(J1,0),round(J2,0),"/",Lsubsample.vec[b]))
   print(paste(zero.str,"alpha beta gamma:",round(yb.param0[6],6),round(yb.param0[8],6),round(yb.param0[4],4)))
-  print(paste(uno.str,"zinv dz tinv aA aB bA bB ga gb:",
-        round(yb.param1[1],1), round(yb.param1[2],0), round(yb.param1[3],1),
-        round(yb.param1[6],6), round(yb.param1[7],6), round(yb.param1[8],6),
-        round(yb.param1[9],6), round(yb.param1[4],4), round(yb.param1[5],4)))
-  print(paste(due.str,"h0 h1-h0 t0 a aA aB bA bB gamma:",
-        round(yb.param2[1],1), round(yb.param2[2],0), round(yb.param2[3],1),
-        round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
-        round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
+  if (!flag.only0) {
+    print(paste(uno.str,"zinv dz tinv aA aB bA bB ga gb:",
+          round(yb.param1[1],1), round(yb.param1[2],0), round(yb.param1[3],1),
+          round(yb.param1[6],6), round(yb.param1[7],6), round(yb.param1[8],6),
+          round(yb.param1[9],6), round(yb.param1[4],4), round(yb.param1[5],4)))
+    print(paste(due.str,"h0 h1-h0 t0 a aA aB bA bB gamma:",
+          round(yb.param2[1],1), round(yb.param2[2],0), round(yb.param2[3],1),
+          round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
+          round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
+  }
 # DEBUG stop
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset
@@ -700,6 +706,7 @@ while (TRUE) {
                                  yb.param0[8]*(VecY-yb.param0[11])+
                                  yb.param0[4]*VecZ
         J0<-sum((yb.set0[close2b]-yo.b)**2.)
+        if (!flag.only0) { 
 # Background 1  
         back1.flag<-T
         if (!is.na(yb.param1.mat[b,11])) {
@@ -784,6 +791,7 @@ while (TRUE) {
           back2.flag<-F
           J2<-J0+1
         }
+        }
 # DEBUG start
 #            png(file=paste("pro_",VecS[b],".png",sep=""),width=1200,height=1200)
 #            plot(yo.b,VecZ.b,pch=19,col="black",cex=2.5,xlim=c(min(c(yo.b,yb.set0[close2b],yb.set1[close2b],yb.set2[close2b])),
@@ -795,6 +803,8 @@ while (TRUE) {
 # DEBUG stop
 # Best background
         if (flag.only0) {
+          J1<-NA
+          J2<-NA
           best<-0
         } else {
           aux<-order(c(J0,J1,J2))
@@ -826,14 +836,16 @@ while (TRUE) {
                                  round(Disth[b,close2b[Lsubsample.vec[b]]],0),"/",
                                  round(J0,0),round(J1,0),round(J2,0),"/",Lsubsample.vec[b]))
         print(paste(zero.str,"alpha beta gamma:",round(yb.param0[6],6),round(yb.param0[8],6),round(yb.param0[4],4)))
-        print(paste(uno.str,"zinv dz tinv aA aB bA bB ga gb:",
-              round(yb.param1[1],1), round(yb.param1[2],0), round(yb.param1[3],1),
-              round(yb.param1[6],6), round(yb.param1[7],6), round(yb.param1[8],6),
-              round(yb.param1[9],6), round(yb.param1[4],4), round(yb.param1[5],4)))
-        print(paste(due.str,"h0 h1-h0 t0 a aA aB bA bB gamma:",
-              round(yb.param2[1],1), round(yb.param2[2],0), round(yb.param2[3],1),
-              round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
-              round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
+        if (!flag.only0) {
+          print(paste(uno.str,"zinv dz tinv aA aB bA bB ga gb:",
+                round(yb.param1[1],1), round(yb.param1[2],0), round(yb.param1[3],1),
+                round(yb.param1[6],6), round(yb.param1[7],6), round(yb.param1[8],6),
+                round(yb.param1[9],6), round(yb.param1[4],4), round(yb.param1[5],4)))
+          print(paste(due.str,"h0 h1-h0 t0 a aA aB bA bB gamma:",
+                round(yb.param2[1],1), round(yb.param2[2],0), round(yb.param2[3],1),
+                round(yb.param2[5],6), round(yb.param2[6],6), round(yb.param2[7],6),
+                round(yb.param2[8],6), round(yb.param2[9],6), round(yb.param2[4],4)))
+        }
 # DEBUG stop
 # G1 is LOBStOK x Lsubsample matrix to interpolate the Lsubsample values
 # on the whole LOBStOK station dataset

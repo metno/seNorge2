@@ -746,6 +746,8 @@ XYZinv_step1<-function(param,b_x,b_y,b_z,b_yo) {
 # 1.zinv[m];2.dz[m];3.Tinv[C];4.gammaAbove[C/m];5.gammaBelow[C]
 # 6. alphaAbove[C/m];7.AlphaBelow[C/m];8.BetaAbove[C/m];9BetaBelow[C/m]
   param.out<-vector(mode="numeric",length=11)
+print(param)
+print(paste(b_x,b_y,b_z,b_yo,"\n"))
 #------------------------------------------------------------------------------
 # Alpha and Beta limit C/m -> 0.00008 C/m = 8 C/100Km
   ABlim<-0.00008
@@ -768,25 +770,24 @@ XYZinv_step1<-function(param,b_x,b_y,b_z,b_yo) {
     return(param.out)
   }
 #
-  if (param[1]>=z.q80) param[1]<-(z.q80-dz.aux)
-  if (param[1]<=z.q20) param[1]<-(z.q20+dz.aux)
+  if (param[1]<=z.q20 | param[1]>=z.q80) param[1]<-(z.q80+z.q20)/2
   if (param[2]<=par2.inflim | param[2]>=par2.suplim)  param[2]<-par2.def 
   if (param[4]<=gamma.inflim | param[4]>=gamma.suplim)  param[4]<-gamma.def 
   if (param[5]<=gamma.bl.inflim | param[5]>=gamma.bl.suplim)  param[5]<-gamma.def
-  if (abs(param[6])>=ABlim)  param[6]<-0 
-  if (abs(param[7])>=ABlim)  param[7]<-0 
-  if (abs(param[8])>=ABlim)  param[8]<-0 
-  if (abs(param[9])>=ABlim)  param[9]<-0 
-#  print(paste("zinv dz tinv gA gB aA aB bA bB:",
-#    round(param[1],1),
-#    round(param[2],0),
-#    round(param[3],1),
-#    round(param[4],6),
-#    round(param[5],6),
-#    round(param[6],6),
-#    round(param[7],6),
-#    round(param[8],6),
-#    round(param[9],6)))
+  if (abs(param[6])>=ABlim)  param[6]<-0.00000000001 
+  if (abs(param[7])>=ABlim)  param[7]<-0.00000000001
+  if (abs(param[8])>=ABlim)  param[8]<-0.00000000001
+  if (abs(param[9])>=ABlim)  param[9]<-0.00000000001
+  print(paste("zinv dz tinv gA gB aA aB bA bB:",
+    round(param[1],1),
+    round(param[2],0),
+    round(param[3],1),
+    round(param[4],6),
+    round(param[5],6),
+    round(param[6],6),
+    round(param[7],6),
+    round(param[8],6),
+    round(param[9],6)))
 # constrOptim; package:stats
 # The feasible region is defined by ‘ui %*% param - ci >= 0’. The
 # starting value must be in the interior of the feasible region, but
@@ -795,25 +796,35 @@ XYZinv_step1<-function(param,b_x,b_y,b_z,b_yo) {
 #       (-1 0 0 ...) * par - (-suplim) --> par <= suplim
   ui<-matrix(ncol=9,nrow=16,data=NA)
   ci<-vector(length=16)
-  ui[1,]<-c(1,0,0,0,0,0,0,0,0)
-  ui[2,]<-c(-1,0,0,0,0,0,0,0,0)
-  ui[3,]<-c(0,-1,0,0,0,0,0,0,0)
-  ui[4,]<-c(0 ,1,0,0,0,0,0,0,0)
-  ui[5,]<-c(0,0,0,0,0,-1,0,0,0)
-  ui[6,]<-c(0,0,0,0,0,0,-1,0,0)
-  ui[7,]<-c(0,0,0,0,0,0,0,-1,0)
-  ui[8,]<-c(0,0,0,0,0,0,0,0,-1)
-  ui[9,]<-c(0,0,0,0,0, 1,0,0,0)
-  ui[10,]<-c(0,0,0,0,0,0, 1,0,0)
-  ui[11,]<-c(0,0,0,0,0,0,0, 1,0)
-  ui[12,]<-c(0,0,0,0,0,0,0,0,1)
-  ui[13,]<-c(0,0,0, 1,0,0,0,0,0)
-  ui[14,]<-c(0,0,0,-1,0,0,0,0,0)
-  ui[15,]<-c(0,0,0,0,1,0,0,0,0)
-  ui[16,]<-c(0,0,0,0,-1,0,0,0,0)
+  ui[1,]<- c( 1, 0, 0, 0, 0, 0, 0, 0, 0)
+  ui[2,]<- c(-1, 0, 0, 0, 0, 0, 0, 0, 0)
+  ui[3,]<- c( 0,-1, 0, 0, 0, 0, 0, 0, 0)
+  ui[4,]<- c( 0, 1, 0, 0, 0, 0, 0, 0, 0)
+  ui[5,]<- c( 0, 0, 0, 0, 0,-1, 0, 0, 0)
+  ui[6,]<- c( 0, 0, 0, 0, 0, 0,-1, 0, 0)
+  ui[7,]<- c( 0, 0, 0, 0, 0, 0, 0,-1, 0)
+  ui[8,]<- c( 0, 0, 0, 0, 0, 0, 0, 0,-1)
+  ui[9,]<- c( 0, 0, 0, 0, 0, 1, 0, 0, 0)
+  ui[10,]<-c( 0, 0, 0, 0, 0, 0, 1, 0, 0)
+  ui[11,]<-c( 0, 0, 0, 0, 0, 0, 0, 1, 0)
+  ui[12,]<-c( 0, 0, 0, 0, 0, 0, 0, 0, 1)
+  ui[13,]<-c( 0, 0, 0, 1, 0, 0, 0, 0, 0)
+  ui[14,]<-c( 0, 0, 0,-1, 0, 0, 0, 0, 0)
+  ui[15,]<-c( 0, 0, 0, 0, 1, 0, 0, 0, 0)
+  ui[16,]<-c( 0, 0, 0, 0,-1, 0, 0, 0, 0)
   ci[1:16]<-c(z.q20,-z.q80,-par2.suplim,par2.inflim,
               -ABlim,-ABlim,-ABlim,-ABlim,-ABlim,-ABlim,-ABlim,-ABlim,
               gamma.inflim,-gamma.suplim,gamma.bl.inflim,-gamma.bl.suplim)
+  print(paste("param1 min max val",round(z.q20,1),round(z.q80,1),round(param[1],1),(param[1]>=z.q20 & param[1]<=z.q80)))
+  print(paste("param2 min max val",round(par2.inflim,1),round(par2.suplim,1),round(param[2],1),(param[2]>=par2.inflim & param[2]<=par2.suplim)))
+  print(paste("param3 min max val",round(param[3],1)))
+  print(paste("param4 min max val",round(gamma.inflim,6),round(gamma.suplim,6),round(param[4],6),(param[4]>=gamma.inflim & param[4]<=gamma.suplim)))
+  print(paste("param5 min max val",round(gamma.bl.inflim,6),round(gamma.bl.suplim,6),round(param[5],6),(param[5]>=gamma.bl.inflim & param[5]<=gamma.bl.suplim)))
+  print(paste("param6 min max val",round(-ABlim,6),round(ABlim,6),round(param[6],6),(param[6]>=-ABlim & param[6]<=ABlim)))
+  print(paste("param7 min max val",round(-ABlim,6),round(ABlim,6),round(param[7],6),(param[7]>=-ABlim & param[7]<=ABlim)))
+  print(paste("param8 min max val",round(-ABlim,6),round(ABlim,6),round(param[8],6),(param[8]>=-ABlim & param[8]<=ABlim)))
+  print(paste("param9 min max val",round(-ABlim,6),round(ABlim,6),round(param[9],6),(param[9]>=-ABlim & param[9]<=ABlim)))
+#  print(ci)
   opt<-constrOptim(param,NonLinVertProf_1,grad=NULL, ui=ui, ci=ci, mu = 1e-04, 
                    control=list(parscale=c(1000,100,50,0.01,0.01,0.0001,0.0001,0.0001,0.0001),
                    ndeps=c(.01,.01,.01,0.01,0.01,0.01,0.01,0.01,0.01),

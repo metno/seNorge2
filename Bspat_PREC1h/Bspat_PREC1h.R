@@ -506,7 +506,7 @@ for (i in 1:nt) {
               formatC(d.y$x,format="f",digits=0),
               formatC(d.y$y,format="f",digits=0),
               formatC(d.y$z,format="f",digits=0),
-              formatC(h.y.eve,format="f",digits=0),
+              NA,
               formatC(h.yo[,i],format="f",digits=1),
               NA, #yb
               formatC(h.ya[,i],format="f",digits=2),

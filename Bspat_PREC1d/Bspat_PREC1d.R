@@ -50,18 +50,42 @@
 # yav => Cross-Validated (CV) analysis [mm]
 # yidi => Integral Data Influence (IDI) (accumulated and normalized)
 # yidiv => CV IDI (accumulated and normalized)
-# dqcflag => Data Quality Control (DQC) Flag
+# dqcflag => experimental data quality control flag used in seNorge2
+#List of values:
 #   NA  observation is NA
-#   -1  missing DQC info
-#   0   good observation
-#   100 bad  observation: KDVH flag > 2 | observation not good in external DQC | 
-#                         observed value not plausible | station in blacklist/s  
-#                         # available observations != # time steps (in case of accumulation) 
-#   200 bad  observation: dry-station surrounded only by wet-stations (close enough)
-#   300 bad  observation: wet-stations surrounded only by dry-stations (close enough)
-#   400 bad  observation: dry observation is (1) not included in a dry area
-#                         (2) is in Norway 
-#   500 bad  observation: wet observation is (1) not included in an event (2) in Norway
+#   -1  missing DQC info (it happens usually for stations outside Norway, where a human-based DQC is not available)
+#   0   good observation (Norwegian stations -or more generally stations within the MET Norway human-based DQC- where a human-based DQC is available)
+#   100 bad  observation. (according to MET judgement, so it's a human-based judgment)
+#   200 bad  observation. dry-station which is: (1) in a data dense area and (2) surrounded by wet-stations only (automatic DQC)
+#   300 bad  observation. wet-stations which is: (1) in a data dense area and (2) surrounded by dry-stations only (automatic DQC)
+#   400 bad  observation. dry observation which is: (1) not included in a dry area and (2) is in Norway
+#   500 bad  observation. wet observation which is: is (1) not included in a precipitation event (2) is in Norway
+#Note: all the observations flagged as "bad" are not used in the spatial interpolation procedure, so they are not used for the prediction.
+#
+#Note on dqcflag="0".
+#==> Includes those observations having quality level in the MET Norway Climate database equal to:
+#0: Original value is checked and found OK. User value: OK
+#1: Value is controlled and corrected, or value is missing and interpolated. User value: OK
+#2: Original value is not checked. User value: LU (slightly suspect)
+#==> Excludes those observations having quality level in the MET Norway Climate database equal to:
+#3: Reserved for later use
+#4: Original value is slightly suspect (not corrected). User value: LU (slightly suspect)
+#5: Original value is highly suspect (not corrected). User value: SU (highly suspect)
+#6: Original value is checked and corrected automatically, or original value is missing and interpolated automatically. User value: SU (highly suspect)
+#7: Original value is erroneous (i.e. rejected, not corrected). User value: FE (erroneous)
+#(for the definition of quality levels, see http://metklim.met.no/klima/metadata/qualityflags)
+#
+#Note on dqcflag="100"
+#==> Includes those observations having quality level in the MET Norway Climate database equal to:
+#3: Reserved for later use
+#4: Original value is slightly suspect (not corrected). User value: LU (slightly suspect)
+#5: Original value is highly suspect (not corrected). User value: SU (highly suspect)
+#6: Original value is checked and corrected automatically, or original value is missing and interpolated automatically. User value: SU (highly suspect)
+#7: Original value is erroneous (i.e. rejected, not corrected). User value: FE (erroneous)
+#(for the definition of quality levels, see http://metklim.met.no/klima/metadata/qualityflags)
+#==> Includes an experimental personal judgement from Cristian Lussana about the obsevation quality for this particular application 
+#    (it should be useful in particular for those observations having a quality level =2 in the MET Norway Climate database).
+# Details: observation not good in external DQC|observed value not plausible|station in blacklist/s|available observations != # time steps(in case of accumulation) 
 #
 # 2. additional informations on events
 # see the output sessione marked with  
