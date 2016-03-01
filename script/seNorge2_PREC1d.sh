@@ -112,7 +112,7 @@ function trim()
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PREC1d/Bspat_PREC1d.R
-  BLACKL=$MAINDIR/etc/blacklists/seNorge2_PREC1d_blacklist.txt
+  BLACKL=/home/cristianl/blacklist/seNorge2_PREC1d_blacklist.txt
   ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_PREC1d_suspect_observations.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
