@@ -176,7 +176,7 @@ ncout.spec.list <- alist(
                        t.unit = "H",
                        var.name = "temperature",
                        var.longname = "air temperature",
-                       var.unit = "Celsius degrees",
+                       var.unit = "Celsius",
 #                       var.mv = -999.99,
                        var.mv = "-999.99",
 #                       reference = paste("",sep=""))
@@ -190,7 +190,7 @@ ncout.spec.list <- alist(
                        t.unit = "H",
                        var.name = "temperature",
                        var.longname = "air temperature",
-                       var.unit = "Celsius degrees",
+                       var.unit = "Celsius",
 #                       var.mv = -999.99,
                        var.mv = "-999.99",
 #                       reference = paste("",sep=""))
@@ -204,7 +204,7 @@ ncout.spec.list <- alist(
                        t.unit = "D",
                        var.name = "mean_temperature",
                        var.longname = "daily mean temperature",
-                       var.unit = "Celsius degrees",
+                       var.unit = "Celsius",
 #                       var.mv = -999.99,
                        var.mv = "-999.99",
 #                       reference = paste("",sep=""))
@@ -218,7 +218,7 @@ ncout.spec.list <- alist(
                        t.unit = "D",
                        var.name = "mean_temperature",
                        var.longname = "daily mean temperature",
-                       var.unit = "Celsius degrees",
+                       var.unit = "Celsius",
 #                       var.mv = -999.99,
                        var.mv = "-999.99",
 #                       reference = paste("",sep=""))
@@ -232,7 +232,7 @@ ncout.spec.list <- alist(
                        t.unit = "D",
                        var.name = "mean_temperature",
                        var.longname = "daily mean temperature",
-                       var.unit = "Celsius degrees",
+                       var.unit = "Celsius",
 #                       var.mv = -999.99,
                        var.mv = "-999.99",
 #                       reference = paste("",sep=""))
