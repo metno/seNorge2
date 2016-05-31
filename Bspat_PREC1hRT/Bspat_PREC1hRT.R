@@ -284,7 +284,8 @@ sector.angle<-360/n.sector
 yo.dqc.plausible.min<-0 # mm/h
 yo.dqc.plausible.max<-500 # mm/h
 # triangulation based chacks (flags=200 or 300)
-DQC.min.dist.allowed<-20 #Km
+#DQC.min.dist.allowed<-20 #Km
+DQC.min.dist.allowed<-60 #Km # 2016.05.31
 # evaluation thresholds
 q50.hourly<-0.4 #mm/h (weak/normal)
 q75.hourly<-1.0 #mm/h (normal/moderate-strong)
