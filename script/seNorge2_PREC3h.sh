@@ -23,7 +23,12 @@ function trim()
     echo -n "$var";
 }
 # whereis R?
-  R=/usr/bin/R
+  module load R/R-3.2.1-met
+#  R=/usr/bin/R
+  R=R
+# Variables
+  export R_LIBS=/home/senorge2/projects/share/rpackages
+  echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments
 #----------------------------
@@ -104,11 +109,11 @@ function trim()
   echo "seNorge2_PREC3h.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
-  vis="vis-m1"
-  if [ "$CONFIG_PAR" == "$vis" ]; then
-    export R_LIBS=/home/cristianl/programs/spatial_interpolation/lib/rpacks
-    echo $R_LIBS
-  fi
+#  vis="vis-m1"
+#  if [ "$CONFIG_PAR" == "$vis" ]; then
+#    export R_LIBS=/home/cristianl/programs/spatial_interpolation/lib/rpacks
+#    echo $R_LIBS
+#  fi
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PREC3h/Bspat_PREC3h.R
@@ -129,6 +134,7 @@ function trim()
     echo "================================================================================"
     echo "`date +%Y-%m-%d" "%H:%M` > $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC3h_$DATEcur_$DATEcur.log 2>&1"
     $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC3h_$DATEcur_$DATEcur.log 2>&1
+    echo status=$?
     SECcur=$(( SECcur+86400 ))
   done
 #--------------------------

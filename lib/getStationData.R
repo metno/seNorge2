@@ -1,64 +1,137 @@
 # get station metadata from KDVH
 getStationMetadata<-function(from.year,to.year,max.Km)
 # interaction with KDVH using ULRIC
-# from/to format => yyyy 
+# from/to.year format => yyyy 
 {
   require(raster)
   require(rgdal)
+  #
+  file.statauxNO<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NorwegianStations.txt" 
+  file.stataux<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NotNorwegianStations.txt" 
   # CRS strings
   proj4.wgs84<-"+proj=longlat +datum=WGS84"
   proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
   proj4.utm33<-"+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
-  #
-  lat.mn<-50.
-  lat.mx<-82.
-  lon.mn<-0.
-  lon.mx<-40.
+  # domain definition
+  lat.mn<-54.
+  lat.mx<-72.
+  lon.mn<-2.
+  lon.mx<-33.
 #------------------------------------------------------------------------------
 # Read Station Information 
-  myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
-                 "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
-                 "&fy=",from.year,"&ty=",to.year,sep="")
+# Fylke code
+# 1 ØSTFOLD, 2 AKERSHUS, 3 OSLO, 4 HEDMARK, 5 OPPLAND, 6 BUSKERUD, 7 VESTFOLD, 
+# 8 TELEMARK, 9 AUST-AGDER, 10 VEST-AGDER, 11 ROGALAND, 12 HORDALAND, 
+# 14 SOGN OG FJORDANE, 15 MØRE OG ROMSDAL, 16 SØR-TRØNDELAG, 
+# 17 NORD-TRØNDELAG, 18 NORDLAND, 19 TROMS, 20 FINNMARK,
+#  myurlno <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
+#                   "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
+#                   "&fy=",from.year,"&ty=",to.year,
+#                   "&cnr=1&cnr=2&cnr=3&cnr=4&cnr=5&cnr=6&cnr=7&cnr=8&cnr=9",
+#                   "&cnr=10&cnr=11&cnr=12&cnr=14&cnr=15&cnr=16&cnr=17",
+#                   "&cnr=18&cnr=19&cnr=20&cnr=13",sep="")
+#  myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
+#                 "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
+#                 "&fy=",from.year,"&ty=",to.year,sep="")
+# Read files and not make a query to the database because of the problem in getting
+#  the data from KDVH.
   o.cont<-1
   while (o.cont<=10) {
+    statauxNO<-NULL
     stataux<-NULL
-#    try(stataux <-read.table(myurl, header = TRUE,  sep = ";",
-    try(stataux <-read.csv(myurl, header = TRUE,  sep = ";",
-                             stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-                             encoding = "UTF-8", quote = "",na.string=-999))
-# stataux column names
+#    try(statauxNO <-read.table(myurlno, header = TRUE,  sep = ";",
+#                             stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
+#                             encoding = "UTF-8", quote = "",na.strings="NA",
+#                             strip.white=T))
+    if (file.exists(file.statauxNO)) {
+      statauxNO <-read.table(file=file.statauxNO,
+                             header=TRUE,sep=";",
+                             stringsAsFactors=FALSE,na.strings="NA",strip.white=T,
+                             fileEncoding="ISO-8859-1",encoding="UTF-8",quote="")
+    }
+    if (file.exists(file.stataux)) {
+      stataux   <-read.table(file=file.stataux,
+                             header=TRUE,sep=";",
+                             stringsAsFactors=FALSE,fileEncoding="ISO-8859-1",
+                             encoding="UTF-8",quote="",na.strings="NA",
+                             strip.white=T)
+    }
+# column names
 # DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
-    if (length(stataux)<10) {
-      print("exit with error in command:")
-          print(myurl)
-          o.cont<-o.cont+1
-          Sys.sleep(5)
+    if (is.null(statauxNO) | is.null(stataux)) {
+      print("Fatal error: KDVH Station Metadata files not found")
+      print(paste("    Norwegian stations file = ",file.statauxNO))
+      print(paste("Not Norwegian stations file = ",file.stataux))
+      o.cont<-o.cont+1
+      Sys.sleep(round(runif(1)*10))
+      print(warnings())
+    } else if (nrow(stataux)<10 | nrow(statauxNO)<10) {
+      print("Fatal error: KDVH Station Metadata files found but empty")
+      print(paste("    Norwegian stations file = ",file.statauxNO,"number of rows=",nrow(statauxNO)))
+      print(paste("Not Norwegian stations file = ",file.stataux,"number of rows=",nrow(stataux)))
+      o.cont<-o.cont+1
+      Sys.sleep(round(runif(1)*10))
+      print(warnings())
     } else {
       break
     }
   }
   if (o.cont>10) {
-    print("Fatal Error in command:")
-    print(myurl)
-    print(stataux)
+    print("Fatal Error: Can't read the KDVH metadata files")
+    print(paste("    Norwegian stations file = ",file.statauxNO))
+#    print("@@statauxNO")
+#    print(statauxNO)
+    print(paste("Not Norwegian stations file = ",file.stataux))
+#    print("@@stataux")
+#    print(stataux)
+    print(warnings())
     q(status=1)
+  }
+# from this point on
+  nn<-nrow(stataux)
+  nn.no<-nrow(statauxNO)
+insertRow <- function(existingDF, newrow, r) {
+  if (nrow(existingDF)>=r) {
+    existingDF[seq(r+1,nrow(existingDF)+1),] <- existingDF[seq(r,nrow(existingDF)),]
+    existingDF[r,] <- newrow
+  } else {
+    existingDF[r,] <- newrow
+  }
+  existingDF
+}
+  for (i in 1:nn.no) {
+    if (!(statauxNO$STNR[i] %in% stataux$STNR)) {
+      stataux<-insertRow(stataux, statauxNO[i,], nn+1)
+      nn<-nn+1
+      if (is.na(stataux$DEPT_NO[nn])) stataux$DEPT_NO[nn]<-1
+    }
   }
 # Select stations having the geographical information needed
 # first step: lat, lon and elevation must be present
   lat_dec<-suppressWarnings(as.numeric(stataux$LAT_DEC))
   lon_dec<-suppressWarnings(as.numeric(stataux$LON_DEC))
   z<-suppressWarnings(as.numeric(stataux$AMSL))
-  indx<-which( !is.na(lat_dec) & !is.na(lon_dec) & !is.na(z) & 
-               lon_dec>lon.mn & lon_dec<lon.mx & 
-               lat_dec>lat.mn & lat_dec<lat.mx)
+  indx1<-!is.na(lat_dec) & !is.na(lon_dec) & !is.na(z)
+  indx2<-lon_dec>lon.mn & lon_dec<lon.mx & lat_dec>lat.mn & lat_dec<lat.mx
+  indx2[is.na(indx2)]<-F
+  indx<-which(indx1 & indx2)
+  print(paste("total number of stations in KDVH=",length(lat_dec)))
+  print(paste("total number of stations in the predefined domain=",length(indx)))
+# debug
+#  print(paste("lon_dec[indx],lat_dec[indx]\n"))
+#  print(paste(lon_dec[indx],lat_dec[indx],"\n"))
 # second step: the location must be in Norway or on the border (lee than max.Km)
 #  intermediate step: transformation in Km-coordinates ETRS_LAEA, which has a transformation 
 #    less problematic than UTM33
   coord<-SpatialPoints(cbind(lon_dec[indx],lat_dec[indx]), proj4string=CRS(proj4.wgs84))
   coord.new<-spTransform(coord, CRS(proj4.ETRS_LAEA))
   xy.RR<-coordinates(coord.new)
-  x<-round(xy.RR[,1],0)
-  y<-round(xy.RR[,2],0)
+  x<-as.numeric(round(xy.RR[,1],0))
+  y<-as.numeric(round(xy.RR[,2],0))
+# debug
+#  print(paste("x,y,dept\n"))
+#  print(paste(x,y,stataux$DEPT_NO[indx],"\n"))
+#
   stations.tmp<-data.frame(matrix(nrow=length(indx),ncol=7))
   names(stations.tmp)<-c("stnr","dept_no","lat_dec","lon_dec","z","x","y")
   stations.tmp$stnr<-suppressWarnings(as.numeric(stataux$STNR[indx]))
@@ -73,6 +146,7 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   aux.no<- stations.tmp$dept_no>=1 & stations.tmp$dept_no<=28
   # Norwegian stations -> Norwegian mainland!
   indx.no<-which(stations.tmp$dept_no>=1 & stations.tmp$dept_no<=20)
+  print(paste("total number of Norwegian stations in the predefined domain=",length(indx.no)))
   Disth<-matrix(ncol=n.stn,nrow=n.stn,data=0.)
   Disth<-(outer(stations.tmp$y,stations.tmp$y,FUN="-")**2.+outer(stations.tmp$x,stations.tmp$x,FUN="-")**2.)**0.5/1000.
   aux.in<-vector(length=n.stn)
@@ -84,6 +158,7 @@ getStationMetadata<-function(from.year,to.year,max.Km)
 # final step: create the structure stations containing the selected stations in utm33 coordinates
 # note: for each of the selected we will obtain an analysis value
   n<-length(indx.in)
+  print(paste("total number of stations within the domain of interest (predefined domain AND not too distant from a Norwegian station)=",n))
   stations<-data.frame(matrix(nrow=n,ncol=5))
   names(stations)<-c("stnr","z","x","y","NO")
   lat_dec<-stations.tmp$lat_dec[indx.in]

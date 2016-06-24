@@ -24,7 +24,12 @@ function trim()
     echo -n "$var";
 }
 # whereis R?
-  R=/usr/bin/R
+  module load R/R-3.2.1-met
+#  R=/usr/bin/R
+  R=R
+# Variables
+  export R_LIBS=/home/senorge2/projects/share/rpackages
+  echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments
 #----------------------------
@@ -108,8 +113,8 @@ function trim()
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_TEMP1d24h/Bspat_TEMP1d24h.R
-  BLACKL=$MAINDIR/etc/blacklists/seNorge2_TEMP1d_blacklist.txt
-  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_TEMP1d_suspect_observations.txt
+#  BLACKL=$MAINDIR/etc/blacklists/seNorge2_TEMP1d_blacklist.txt
+#  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_TEMP1d_suspect_observations.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
@@ -125,6 +130,7 @@ function trim()
     echo "============================================================================="
     echo "$R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d24h_$DATEcur.log 2>&1"
     $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_TEMP1d24h_$DATEcur.log 2>&1
+    echo status=$?
     SECcur=$(( SECcur+86400 ))
   done
 #--------------------------

@@ -23,7 +23,12 @@ function trim()
     echo -n "$var";
 }
 # whereis R?
-  R=/usr/bin/R
+  module load R/R-3.2.1-met
+#  R=/usr/bin/R
+  R=R
+# Variables
+  export R_LIBS=/home/senorge2/projects/share/rpackages
+  echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments
 #----------------------------
@@ -104,16 +109,16 @@ function trim()
   echo "seNorge2_PREC1h.sh "`date +%Y-%m-%d" "%H:%M`" > elaborations from "$DATESTART" UTC to "$DATEEND" UTC"
   echo "configuration file: "$CONFIG_FILE" configuration parameter:"$CONFIG_PAR
   echo "main directory:"$MAINDIR
-  vis="vis-m1"
-  if [ "$CONFIG_PAR" == "$vis" ]; then
-    export R_LIBS=/home/cristianl/programs/spatial_interpolation/lib/rpacks
-    echo $R_LIBS
-  fi
+#  vis="vis-m1"
+#  if [ "$CONFIG_PAR" == "$vis" ]; then
+#    export R_LIBS=/home/cristianl/programs/spatial_interpolation/lib/rpacks
+#    echo $R_LIBS
+#  fi
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PREC1h/Bspat_PREC1h.R
-#  BLACKL=$MAINDIR/etc/blacklists/seNorge2_PREC1h_blacklist.txt
-#  ERROBS=$MAINDIR/etc/suspect_observations/seNorge2_PREC1h_suspect_observations.txt
+#  BLACKL=/home/senorge2/data/seNorge2_blacklists/seNorge2_PREC1d_blacklist.txt
+#  ERROBS=/home/senorge2/data/seNorge2_blacklists/suspect_observations_empty.txt
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------
@@ -129,6 +134,7 @@ function trim()
     echo "================================================================================"
     echo "`date +%Y-%m-%d" "%H:%M` > $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1h_$DATEcur_$DATEcur.log 2>&1"
     $R --vanilla $DATEcur $CONFIG_FILE $CONFIG_PAR < $Bspat > $LOGDIR/Bspat_PREC1h_$DATEcur_$DATEcur.log 2>&1
+    echo status=$?
     SECcur=$(( SECcur+86400 ))
   done
 #--------------------------

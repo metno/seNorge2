@@ -333,21 +333,11 @@ rm(xy,rc,rowgrid,colgrid,cells,aux,stackGeoGrid)
 #    obtained from lat,lon. Furthermore, the location must be in Norway or on
 #    the border (less than max.Km.stnINdomain)
 # 2. stations in CG
-file.tmp<-paste("/lustre/mnt/cristianl/seNorge2/TEMP1h_old/station_dataset/",yyyymm,"/seNorge_v2_0_TEMP1h_station_",yyyymmddhh,".txt",sep="")
-flag.filetmp<-F
-if (file.exists(file.tmp)){
-  stations<-read.csv(file=file.tmp,header=T,sep=";")
-  names(stations)<-c("year","month","day","hour","stnr","x","y","z","yo","yb","ya","yav","yidi","yidiv","dqcflag","X")
-  snum<-length(stations$x)
-  if (snum>10) flag.filetmp<-T
-}
-if (!flag.filetmp){
 if (!testmode) {
   stations<-getStationMetadata(from.year=yyyy,to.year=yyyy,
                                max.Km=max.Km.stnINdomain)
 } else {
   stations<-read.csv(file=station.info)
-}
 }
 LOBS<-length(stations$stnr)
 print(LOBS)
@@ -412,7 +402,6 @@ r <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
 r[]<-NA
 # get data from KDVH
-if (!flag.filetmp){
 if (!testmode) {
 data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd, h=h,
                      to.yyyy=yyyy, to.mm=mm, to.dd=dd,
@@ -423,9 +412,6 @@ data<-getStationData(var="TA", from.yyyy=yyyy, from.mm=mm, from.dd=dd, h=h,
 }
 print(data)
 yo<-as.numeric(data$value)
-} else {
-yo<-as.numeric(stations$yo)
-}
 yo.h.pos<-which(!is.na(yo))
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
