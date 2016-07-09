@@ -6,8 +6,8 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   require(raster)
   require(rgdal)
   #
-  file.statauxNO<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NorwegianStations.txt" 
-  file.stataux<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NotNorwegianStations.txt" 
+  file.statauxNO<-"/lustre/storeB/users/cristianl/data/KDVHstationMetadata/KDVHstationMetadata_NorwegianStations.txt" 
+  file.stataux<-"/lustre/storeB/users/cristianl/data/KDVHstationMetadata/KDVHstationMetadata_NotNorwegianStations.txt" 
   # CRS strings
   proj4.wgs84<-"+proj=longlat +datum=WGS84"
   proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
@@ -39,22 +39,49 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   while (o.cont<=10) {
     statauxNO<-NULL
     stataux<-NULL
-#    try(statauxNO <-read.table(myurlno, header = TRUE,  sep = ";",
-#                             stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-#                             encoding = "UTF-8", quote = "",na.strings="NA",
-#                             strip.white=T))
     if (file.exists(file.statauxNO)) {
-      statauxNO <-read.table(file=file.statauxNO,
-                             header=TRUE,sep=";",
-                             stringsAsFactors=FALSE,na.strings="NA",strip.white=T,
-                             fileEncoding="ISO-8859-1",encoding="UTF-8",quote="")
+      print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      if (Sys.getlocale("LC_CTYPE")=="C") {
+        Sys.setlocale(category = "LC_CTYPE", locale = "en_US.UTF-8")
+        print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      }
+      enc.str.list<-c("Latin1","ISO-8859-1","ISO-8859-15","latin-9")
+      for (enc.str in enc.str.list) {
+        print(enc.str)
+        deb<-try( statauxNO <-read.table(file=file.statauxNO,
+                                         header=TRUE,sep=";",
+                                         stringsAsFactors=FALSE,
+                                         na.strings="NA",strip.white=T,
+                                         fileEncoding=enc.str,
+                                         quote="",skipNul=T))
+        if (attr(deb,"class")!="try-error") break
+      }
+      if (attr(deb,"class")=="try-error") quit(status=1)
     }
     if (file.exists(file.stataux)) {
-      stataux   <-read.table(file=file.stataux,
-                             header=TRUE,sep=";",
-                             stringsAsFactors=FALSE,fileEncoding="ISO-8859-1",
-                             encoding="UTF-8",quote="",na.strings="NA",
-                             strip.white=T)
+#      stataux   <-read.table(file=file.stataux,
+#                             header=TRUE,sep=";",
+#                             stringsAsFactors=FALSE,
+#                             fileEncoding="Latin1",
+#                             quote="",na.strings="NA",
+#                             strip.white=T)
+      print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      if (Sys.getlocale("LC_CTYPE")=="C") {
+        Sys.setlocale(category = "LC_CTYPE", locale = "en_US.UTF-8")
+        print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      }
+      enc.str.list<-c("Latin1","ISO-8859-1","ISO-8859-15","latin-9")
+      for (enc.str in enc.str.list) {
+        print(enc.str)
+        deb<-try( stataux <-read.table(file=file.stataux,
+                                         header=TRUE,sep=";",
+                                         stringsAsFactors=FALSE,
+                                         na.strings="NA",strip.white=T,
+                                         fileEncoding=enc.str,
+                                         quote="",skipNul=T))
+        if (attr(deb,"class")!="try-error") break
+      }
+      if (attr(deb,"class")=="try-error") quit(status=1)
     }
 # column names
 # DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO
