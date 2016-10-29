@@ -117,13 +117,10 @@ function trim()
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PRECcor1d/Bspat_PRECcor1d.R
-<<<<<<< HEAD
   BLACKL=/home/cristianl/data/seNorge2_blacklists/seNorge2_PREC1d_blacklist.txt
   ERROBS=/home/cristianl/data/seNorge2_blacklists/suspect_observations_empty.txt
-=======
   BLACKL=/home/senorge2/data/seNorge2_blacklists/seNorge2_PREC1d_blacklist.txt
   ERROBS=/home/senorge2/data/seNorge2_blacklists/suspect_observations_empty.txt
->>>>>>> 387a507d4ca0fb9322d2fbb430a26453ded3a1af
 #--------------------------------------------------
 #  Clean temporary directories, if needed 
 #--------------------------------------------------

@@ -525,27 +525,6 @@ print(out.file.stn)
 print("event outputs (text)")
 print(out.file.eve)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-# HEADER HEADER HEADER HEADER HEADER HEADER HEADER HEADER
-# define header for the station data output file
-cat(paste("year","month","day","nday","stid",
-          "x","y","z","eve.lab","yo",
-          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
-          file=out.file.stn,append=F)
-cat(paste("year","month","day","nday","eve.lab","nobs",
-          "area","volume",
-          "mean.idi.x","mean.idi.y","mean.idiv.y",
-          "mean.rain","max.rain.x",
-          "max.rain.yo","max.rain.ya","max.rain.yav",
-          "x.loc","y.loc","s.maj.ax","s.min.ax","dir.s.maj.ax",
-          "cv.rel.all","cv.bias.all","cv.rmse.all","cv.made.all",
-          "cv.rel.q50","cv.bias.q50","cv.rmse.q50","cv.made.q50",
-          "mean.idiv.y.q50","n.q50",
-          "cv.rel.q75","cv.bias.q75","cv.rmse.q75","cv.made.q75",
-          "mean.idiv.y.q75","n.q75",
-          "idi.norm.fac",
-          "\n",sep=";"),
-          file=out.file.eve,append=F)
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # [] Grid
 # CRS Coordinate Reference System
 r.orog.FG<-raster(filenamedem)
@@ -707,6 +686,31 @@ print(data)
 yo<-data$value
 y.notNA<-which(!is.na(yo))
 L.y.notNA<-length(y.notNA)
+if (L.y.notNA==0) {
+  print("ERROR: 0 observations available. Most likely problems with KDVH-query")
+  quit(status=1)
+}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# HEADER HEADER HEADER HEADER HEADER HEADER HEADER HEADER
+# define header for the station data output file
+cat(paste("year","month","day","nday","stid",
+          "x","y","z","eve.lab","yo",
+          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
+          file=out.file.stn,append=F)
+cat(paste("year","month","day","nday","eve.lab","nobs",
+          "area","volume",
+          "mean.idi.x","mean.idi.y","mean.idiv.y",
+          "mean.rain","max.rain.x",
+          "max.rain.yo","max.rain.ya","max.rain.yav",
+          "x.loc","y.loc","s.maj.ax","s.min.ax","dir.s.maj.ax",
+          "cv.rel.all","cv.bias.all","cv.rmse.all","cv.made.all",
+          "cv.rel.q50","cv.bias.q50","cv.rmse.q50","cv.made.q50",
+          "mean.idiv.y.q50","n.q50",
+          "cv.rel.q75","cv.bias.q75","cv.rmse.q75","cv.made.q75",
+          "mean.idiv.y.q75","n.q75",
+          "idi.norm.fac",
+          "\n",sep=";"),
+          file=out.file.eve,append=F)
 for (i in 1:L.y.tot) {
   if (is.na(data$value[i])) next
   ydqc.flag[i]<--1
@@ -902,36 +906,40 @@ while (L.yo.ok>0) {
     Lnor.1st.aux[nnor.1st.aux]<-length(c(aux,nodes[which(!(nodes%in%aux))]))
     nor.1st.aux[nnor.1st.aux,1:Lnor.1st.aux[nnor.1st.aux]]<-c(aux,nodes[which(!(nodes%in%aux))])
   } # END: Cycle over the dry stations
-  rm(aux,close2b,tri.rr,nodes)
+  if (L.yo.ok.dry>0) rm(aux,close2b,tri.rr,nodes)
 # Reorganise no-rain area labels
   y.nor.1st<-vector(length=L.y.tot)
   y.nor.1st[1:L.y.tot]<-NA
   nnor.1st.vec<-0
-  for (nor.1st in 1:nnor.1st.aux) {
-    if (Lnor.1st.aux[nor.1st]==0) next
-    nnor.1st.vec<-nnor.1st.vec+1
-    Lnor.1st.vec[nnor.1st.vec]<-Lnor.1st.aux[nor.1st]
-    nor.1st.vec[nnor.1st.vec,1:Lnor.1st.vec[nnor.1st.vec]]<-nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]]
-    y.nor.1st[nor.1st.vec[nnor.1st.vec,1:Lnor.1st.vec[nnor.1st.vec]]]<-nnor.1st.vec
+  if (nnor.1st.aux>0) {
+    for (nor.1st in 1:nnor.1st.aux) {
+      if (Lnor.1st.aux[nor.1st]==0) next
+      nnor.1st.vec<-nnor.1st.vec+1
+      Lnor.1st.vec[nnor.1st.vec]<-Lnor.1st.aux[nor.1st]
+      nor.1st.vec[nnor.1st.vec,1:Lnor.1st.vec[nnor.1st.vec]]<-nor.1st.aux[nor.1st,1:Lnor.1st.aux[nor.1st]]
+      y.nor.1st[nor.1st.vec[nnor.1st.vec,1:Lnor.1st.vec[nnor.1st.vec]]]<-nnor.1st.vec
+    }
   }
   rm(nor.1st.aux,Lnor.1st.aux,nnor.1st.aux)
 # DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC 
 # identify dry-stations surrounded only by wet-stations (close enough)
   flag.dry.dqc<-F
-  for (j in 1:nnor.1st.vec) {
-    nor.1st.j<-nor.1st.vec[j,1:Lnor.1st.vec[j]]
-    indx.dry.stns<-which(nor.1st.j %in% yo.ok.pos.dry)
-    n.dry<-length(indx.dry.stns)
-    if (n.dry>1) next
-    nor.1st.j.dry<-nor.1st.j[indx.dry.stns]
-    aux.dist<-Disth[nor.1st.j.dry,nor.1st.j]
-    min.dist.from.dry.stn<-min(aux.dist[aux.dist>0])
-    if (min.dist.from.dry.stn<DQC.min.dist.allowed) {
-      flag.dry.dqc<-T
-      ydqc.flag[nor.1st.j.dry]<-200
+  if (nnor.1st.vec>0) {
+    for (j in 1:nnor.1st.vec) {
+      nor.1st.j<-nor.1st.vec[j,1:Lnor.1st.vec[j]]
+      indx.dry.stns<-which(nor.1st.j %in% yo.ok.pos.dry)
+      n.dry<-length(indx.dry.stns)
+      if (n.dry>1) next
+      nor.1st.j.dry<-nor.1st.j[indx.dry.stns]
+      aux.dist<-Disth[nor.1st.j.dry,nor.1st.j]
+      min.dist.from.dry.stn<-min(aux.dist[aux.dist>0])
+      if (min.dist.from.dry.stn<DQC.min.dist.allowed) {
+        flag.dry.dqc<-T
+        ydqc.flag[nor.1st.j.dry]<-200
+      }
     }
+    rm(nor.1st.j,indx.dry.stns)
   }
-  rm(nor.1st.j,indx.dry.stns)
   if (exists("aux.dist")) rm(aux.dist,min.dist.from.dry.stn,nor.1st.j.dry)
   if (flag.dry.dqc) next
 #------------------------------------------------------------------------------
@@ -1031,28 +1039,32 @@ while (L.yo.ok>0) {
   y.eve.1st<-vector(length=L.y.tot)
   y.eve.1st[1:L.y.tot]<-NA
   neve.1st.vec<-0
-  for (eve.1st in 1:neve.1st.aux) {
-    if (Leve.1st.aux[eve.1st]==0) next
-    neve.1st.vec<-neve.1st.vec+1
-    Leve.1st.vec[neve.1st.vec]<-Leve.1st.aux[eve.1st]
-    eve.1st.vec[neve.1st.vec,1:Leve.1st.vec[neve.1st.vec]]<-eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]]
-    y.eve.1st[eve.1st.vec[neve.1st.vec,1:Leve.1st.vec[neve.1st.vec]]]<-neve.1st.vec
+  if (neve.1st.aux>0) {
+    for (eve.1st in 1:neve.1st.aux) {
+      if (Leve.1st.aux[eve.1st]==0) next
+      neve.1st.vec<-neve.1st.vec+1
+      Leve.1st.vec[neve.1st.vec]<-Leve.1st.aux[eve.1st]
+      eve.1st.vec[neve.1st.vec,1:Leve.1st.vec[neve.1st.vec]]<-eve.1st.aux[eve.1st,1:Leve.1st.aux[eve.1st]]
+      y.eve.1st[eve.1st.vec[neve.1st.vec,1:Leve.1st.vec[neve.1st.vec]]]<-neve.1st.vec
+    }
   }
   rm(eve.1st.aux,Leve.1st.aux,neve.1st.aux)
 # DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC DQC 
 # wet-stations surrounded only by dry-stations (close enough)
   flag.wet.dqc<-F
-  for (j in 1:neve.1st.vec) {
-    eve.1st.j<-eve.1st.vec[j,1:Leve.1st.vec[j]]
-    indx.wet.stns<-which(eve.1st.j %in% yo.ok.pos.wet)
-    n.wet<-length(indx.wet.stns)
-    if (n.wet>1) next
-    eve.1st.j.wet<-eve.1st.j[indx.wet.stns]
-    aux.dist<-Disth[eve.1st.j.wet,eve.1st.j]
-    min.dist.from.wet.stn<-min(aux.dist[aux.dist>0])
-    if (min.dist.from.wet.stn<DQC.min.dist.allowed) {
-      flag.wet.dqc<-T
-      ydqc.flag[eve.1st.j.wet]<-300
+  if (neve.1st.vec>0) {
+    for (j in 1:neve.1st.vec) {
+      eve.1st.j<-eve.1st.vec[j,1:Leve.1st.vec[j]]
+      indx.wet.stns<-which(eve.1st.j %in% yo.ok.pos.wet)
+      n.wet<-length(indx.wet.stns)
+      if (n.wet>1) next
+      eve.1st.j.wet<-eve.1st.j[indx.wet.stns]
+      aux.dist<-Disth[eve.1st.j.wet,eve.1st.j]
+      min.dist.from.wet.stn<-min(aux.dist[aux.dist>0])
+      if (min.dist.from.wet.stn<DQC.min.dist.allowed) {
+        flag.wet.dqc<-T
+        ydqc.flag[eve.1st.j.wet]<-300
+      }
     }
   }
   rm(eve.1st.j,indx.wet.stns)

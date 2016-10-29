@@ -536,27 +536,6 @@ print(out.file.stn)
 print("event outputs (text)")
 print(out.file.eve)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-# HEADER HEADER HEADER HEADER HEADER HEADER HEADER HEADER
-# define header for the station data output file
-cat(paste("year","month","day","nday","stid",
-          "x","y","z","eve.lab","yo",
-          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
-          file=out.file.stn,append=F)
-cat(paste("year","month","day","nday","eve.lab","nobs",
-          "area","volume",
-          "mean.idi.x","mean.idi.y","mean.idiv.y",
-          "mean.rain","max.rain.x",
-          "max.rain.yo","max.rain.ya","max.rain.yav",
-          "x.loc","y.loc","s.maj.ax","s.min.ax","dir.s.maj.ax",
-          "cv.rel.all","cv.bias.all","cv.rmse.all","cv.made.all",
-          "cv.rel.q50","cv.bias.q50","cv.rmse.q50","cv.made.q50",
-          "mean.idiv.y.q50","n.q50",
-          "cv.rel.q75","cv.bias.q75","cv.rmse.q75","cv.made.q75",
-          "mean.idiv.y.q75","n.q75",
-          "idi.norm.fac",
-          "\n",sep=";"),
-          file=out.file.eve,append=F)
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # [] Grid
 # CRS Coordinate Reference System
 r.orog.FG<-raster(filenamedem)
@@ -724,6 +703,32 @@ print(data)
 yo<-data$value
 y.notNA<-which(!is.na(yo))
 L.y.notNA<-length(y.notNA)
+if (L.y.notNA==0) {
+  print("ERROR: 0 observations available. Most likely problems with KDVH-query")
+  quit(status=1)
+}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# HEADER HEADER HEADER HEADER HEADER HEADER HEADER HEADER
+# define header for the station data output file
+cat(paste("year","month","day","nday","stid",
+          "x","y","z","eve.lab","yo",
+          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
+          file=out.file.stn,append=F)
+cat(paste("year","month","day","nday","eve.lab","nobs",
+          "area","volume",
+          "mean.idi.x","mean.idi.y","mean.idiv.y",
+          "mean.rain","max.rain.x",
+          "max.rain.yo","max.rain.ya","max.rain.yav",
+          "x.loc","y.loc","s.maj.ax","s.min.ax","dir.s.maj.ax",
+          "cv.rel.all","cv.bias.all","cv.rmse.all","cv.made.all",
+          "cv.rel.q50","cv.bias.q50","cv.rmse.q50","cv.made.q50",
+          "mean.idiv.y.q50","n.q50",
+          "cv.rel.q75","cv.bias.q75","cv.rmse.q75","cv.made.q75",
+          "mean.idiv.y.q75","n.q75",
+          "idi.norm.fac",
+          "\n",sep=";"),
+          file=out.file.eve,append=F)
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 for (i in 1:L.y.tot) {
   if (is.na(data$value[i])) next
   ydqc.flag[i]<--1

@@ -379,10 +379,6 @@ D.b[row(D.b)==col(D.b)]<-D.b[row(D.b)==col(D.b)]+eps2.b
 #print(ndays)
 #------------------------------------------------------------------------------
 # Elaborations
-# define header for the station data output file
-cat(paste("year","month","day","stid","x","y","z","yo",
-          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
-    file=out.file.stn,append=F)
 # r is the raster structure used for map production
 r <-raster(ncol=nx, nrow=ny, xmn=xmn, xmx=xmx, ymn=ymn, ymx=ymx,
             crs=proj4.utm33)
@@ -399,6 +395,14 @@ if (!testmode) {
 yo<-as.numeric(data$value)
 yo[which(VecS %in% c(42550,42600))]<-NA
 yo.h.pos<-which(!is.na(yo))
+if (yo.h.pos==0) {
+  print("ERROR: 0 observations available. Most likely problems with KDVH-query")
+  quit(status=1)
+}
+# define header for the station data output file
+cat(paste("year","month","day","stid","x","y","z","yo",
+          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
+    file=out.file.stn,append=F)
 # BACKGROUND AT STATION LOCATIONS
 # For each station, compute a non-linear vertical profile using 
 # the Lsubsample (closest) surrounding stations.
