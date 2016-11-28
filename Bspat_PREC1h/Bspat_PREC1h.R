@@ -5,6 +5,7 @@ rm(list=ls())
 library(igraph)
 library(raster)
 library(ncdf)
+library(ncdf4)
 library(cluster)
 #-----------------------------------------------------------------------------
 # + manage fatal error
@@ -51,8 +52,9 @@ if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )
   ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
 main.path<-config_list[[p]]$opt$main.path
 main.path.output<-config_list[[p]]$opt$main.path.output
+main.path.thredds<-config_list[[p]]$opt$main.path.thredds
 testmode<-config_list[[p]]$opt$testmode
-if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
+if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) | !(file.exists(main.path.thredds)) ) 
   ext<-error_exit("Fatal Error: path not found")
 # geographical information
 main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
@@ -235,7 +237,15 @@ if (!(file.exists(h.path.main.stn))) dir.create(h.path.main.stn,showWarnings=F)
 if (!(file.exists(h.path.main.grd))) dir.create(h.path.main.grd,showWarnings=F) 
 if (!(file.exists(h.path.add)))      dir.create(h.path.add,showWarnings=F) 
 if (!(file.exists(h.path.add.grd)))  dir.create(h.path.add.grd,showWarnings=F) 
-if (!(file.exists(h.path.add.eve)))  dir.create(h.path.add.eve,showWarnings=F) 
+if (!(file.exists(h.path.add.eve)))  dir.create(h.path.add.eve,showWarnings=F)
+# 
+dir.create(file.path(main.path.thredds,"seNorge2"), showWarnings = FALSE)
+h.tpath.main<-paste(main.path.thredds,"/seNorge2/provisional_archive/PREC1h",sep="")
+h.tpath.main.stn<-paste(h.tpath.main,"/station_dataset",sep="")
+h.tpath.main.grd<-paste(h.tpath.main,"/gridded_dataset",sep="")
+if (!(file.exists(h.tpath.main)))     dir.create(h.tpath.main,showWarnings=F) 
+if (!(file.exists(h.tpath.main.stn))) dir.create(h.tpath.main.stn,showWarnings=F) 
+if (!(file.exists(h.tpath.main.grd))) dir.create(h.tpath.main.grd,showWarnings=F) 
 # Setup output files
 for (i in 1:length(yyyymm.v)) {
   dir.create(paste(h.path.main.stn,"/",yyyymm.v[i],sep=""),showWarnings=F)
@@ -255,6 +265,17 @@ h.files.grd<- paste(h.path.main.grd,"/",yyyymm.v,
 h.files.idi<- paste(h.path.add.grd,"/",yyyymm.v,
                     "/seNorge_v2_0_PREC1h_grid_normIDI_",
                     yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
+# Setup thredds files 
+for (i in 1:length(yyyymm.v)) {
+  dir.create(paste(h.tpath.main.stn,"/",yyyymm.v[i],sep=""),showWarnings=F)
+  dir.create(paste(h.tpath.main.grd,"/",yyyymm.v[i],sep=""),showWarnings=F)
+}
+h.thr.files.stn<- paste(h.tpath.main.stn,"/",yyyymm.v,
+                       "/seNorge_v2_0_PREC1h_station_",
+                       yyyymmddhh.v,"_",yyyymmddhh.v,".txt",sep="")
+h.thr.files.grd<- paste(h.tpath.main.grd,"/",yyyymm.v,
+                           "/seNorge_v2_0_PREC1h_grid_",
+                           yyyymmddhh.v,"_",yyyymmddhh.v,".nc",sep="")
 #..............................................................................
 print("Input files:")
 print("PREC1d stations:")
@@ -274,6 +295,11 @@ print("PREC1h station outputs (text)")
 print(h.files.stn)
 print("PREC1h event outputs (text)")
 print(h.files.eve)
+print("thredds files:")
+print("analysis on the grid (netcdf)")
+print(h.thr.files.grd)
+print("station threddss (text)")
+print(h.thr.files.stn)
 #..............................................................................
 # -- read daily prec at station locations --
 #csv:year,month,day,nday,stid,x,y,z,eve.lab,yo,yb,ya,yav,yidi,yidiv,dqcflag
@@ -464,6 +490,10 @@ for (i in 1:nt) {
             "x","y","z","eve.lab","yo",
             "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
             file=h.files.stn[i],append=F)
+  cat(paste("year","month","day","hour","nhour","stid",
+            "x","y","z","eve.lab","yo",
+            "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
+            file=h.thr.files.stn[i],append=F)
   cat(paste("year","month","day","hour","nhour","eve.lab","nobs",
             "area","volume",
             "mean.idi.x","mean.idi.y","mean.idiv.y",
@@ -484,6 +514,7 @@ for (i in 1:nt) {
   projection(b2r)<-proj4.utm33
   h.xa<-extract(b2r,1:ncell(b2r))
   h.xa[mask.FG][is.na(h.xa[mask.FG])]<-0
+  b2r[]<-NA
   b2r[mask.FG]<-h.xa[mask.FG]
   # Detect clumps (patches) of connected cells. Each clump gets a unique ID.
   print("..")
@@ -500,7 +531,7 @@ for (i in 1:nt) {
   n.eve<-length(eve.labels)
   if (n.eve==0) {
 # Station Points - Write output on file 
-    print("out1")
+    print(paste("write output file",h.files.stn[i]))
     cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
               formatC(d.y$stid,format="f",digits=0),
               formatC(d.y$x,format="f",digits=0),
@@ -515,23 +546,73 @@ for (i in 1:nt) {
               NA, #yidiv
               formatC(h.h.dqcflag[,i],format="f",digits=0),
               "\n",sep=";"),file=h.files.stn[i],append=T)
+    print(paste("write output file",h.thr.files.stn[i]))
+    cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
+              formatC(d.y$stid,format="f",digits=0),
+              formatC(d.y$x,format="f",digits=0),
+              formatC(d.y$y,format="f",digits=0),
+              formatC(d.y$z,format="f",digits=0),
+              NA,
+              formatC(h.yo[,i],format="f",digits=1),
+              NA, #yb
+              formatC(h.ya[,i],format="f",digits=2),
+              formatC(h.yav[,i],format="f",digits=2),
+              NA, #yidi
+              NA, #yidiv
+              formatC(h.h.dqcflag[,i],format="f",digits=0),
+              "\n",sep=";"),file=h.thr.files.stn[i],append=T)
 # Analysis on the Grid 
-    print("out3")
-    nogrid.ncout(file.name=h.files.grd[i],
-                 grid=t(as.matrix(b2r)),
-                 x=x.FG,y=y.FG,grid.type=grid.type,
-                 times=c(paste(yyyymmddhh.v[i],"00",sep="")),
-                 prod.date=prod.date,
-                 proj4.string=proj4.utm33,
-                 var.name=xa.var.name,
-                 var.longname=xa.var.longname,
-                 var.unit=xa.var.unit,
-                 var.mv=xa.var.mv,
-                 var.version=xa.var.version,
-                 times.unit=xa.times.unit,
-                 times.ref=xa.times.ref,
-                 reference=xa.reference,
-                 source.string=xa.source.nc)
+    print(paste("write output file",h.files.grd[i]))
+    ncdf4io::nc4out(file.name=h.files.grd[i],
+                grid=t(as.matrix(b2r)),
+                x=x.FG,y=y.FG,grid.type=grid.type,
+                times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+                prod.date=prod.date,
+                proj4.string=proj4.utm33,
+                var.name=xa.var.name,
+                var.longname=xa.var.longname,
+                var.unit=xa.var.unit,
+                var.mv=xa.var.mv,
+                var.version=xa.var.version,
+                times.unit=xa.times.unit,
+                times.ref=xa.times.ref,
+                reference=xa.reference,
+                source.string=xa.source.nc,
+                lonlat.out=F,
+                round.dig=1)
+    print(paste("write output file",h.thr.files.grd[i]))
+    ncdf4io::nc4out(file.name=h.thr.files.grd[i],
+                grid=t(as.matrix(b2r)),
+                x=x.FG,y=y.FG,grid.type=grid.type,
+                times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+                prod.date=prod.date,
+                proj4.string=proj4.utm33,
+                var.name=xa.var.name,
+                var.longname=xa.var.longname,
+                var.unit=xa.var.unit,
+                var.mv=xa.var.mv,
+                var.version=xa.var.version,
+                times.unit=xa.times.unit,
+                times.ref=xa.times.ref,
+                reference=xa.reference,
+                source.string=xa.source.nc,
+                lonlat.out=F,
+                round.dig=1)
+#    nogrid.ncout(file.name=h.files.grd[i],
+#                 grid=t(as.matrix(b2r)),
+#                 x=x.FG,y=y.FG,grid.type=grid.type,
+#                 times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+#                 prod.date=prod.date,
+#                 proj4.string=proj4.utm33,
+#                 var.name=xa.var.name,
+#                 var.longname=xa.var.longname,
+#                 var.unit=xa.var.unit,
+#                 var.mv=xa.var.mv,
+#                 var.version=xa.var.version,
+#                 times.unit=xa.times.unit,
+#                 times.ref=xa.times.ref,
+#                 reference=xa.reference,
+#                 source.string=xa.source.nc)
     next
   }
   # event labels for station points
@@ -712,7 +793,22 @@ for (i in 1:nt) {
     }
   }
 # Station Points - Write output on file 
-  print("out1")
+  print(paste("write output file",h.files.stn[i]))
+  cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
+            formatC(d.y$stid,format="f",digits=0),
+            formatC(d.y$x,format="f",digits=0),
+            formatC(d.y$y,format="f",digits=0),
+            formatC(d.y$z,format="f",digits=0),
+            formatC(h.y.eve,format="f",digits=0),
+            formatC(h.yo[,i],format="f",digits=1),
+            NA, #yb
+            formatC(h.ya[,i],format="f",digits=2),
+            formatC(h.yav[,i],format="f",digits=2),
+            NA, #yidi
+            NA, #yidiv
+            formatC(h.h.dqcflag[,i],format="f",digits=0),
+            "\n",sep=";"),file=h.files.stn[i],append=T)
+  print(paste("write output file",h.thr.files.stn[i]))
   cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
             formatC(d.y$stid,format="f",digits=0),
             formatC(d.y$x,format="f",digits=0),
@@ -728,7 +824,7 @@ for (i in 1:nt) {
             formatC(h.h.dqcflag[,i],format="f",digits=0),
             "\n",sep=";"),file=h.files.stn[i],append=T)
 # Precipitation Events - Write output on file 
-  print("out2")
+  print(paste("write output file",h.files.eve[i]))
   cat(paste(yyyy.v[i],mm.v[i],dd.v[i],hh.v[i],hrt.nhour,
             eve.labels,
             n.y.eve,
@@ -766,22 +862,57 @@ for (i in 1:nt) {
             NA, # idi.norm.fac
             "\n",sep=";"),file=h.files.eve[i],append=T)
 # Analysis on the Grid 
-  print("out3")
-  nogrid.ncout(file.name=h.files.grd[i],
-               grid=t(as.matrix(b2r)),
-               x=x.FG,y=y.FG,grid.type=grid.type,
-               times=c(paste(yyyymmddhh.v[i],"00",sep="")),
-               prod.date=prod.date,
-               proj4.string=proj4.utm33,
-               var.name=xa.var.name,
-               var.longname=xa.var.longname,
-               var.unit=xa.var.unit,
-               var.mv=xa.var.mv,
-               var.version=xa.var.version,
-               times.unit=xa.times.unit,
-               times.ref=xa.times.ref,
-               reference=xa.reference,
-               source.string=xa.source.nc)
+  print(paste("write output file",h.files.grd[i]))
+  ncdf4io::nc4out(file.name=h.files.grd[i],
+                  grid=t(as.matrix(b2r)),
+                  x=x.FG,y=y.FG,grid.type=grid.type,
+                  times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+                  prod.date=prod.date,
+                  proj4.string=proj4.utm33,
+                  var.name=xa.var.name,
+                  var.longname=xa.var.longname,
+                  var.unit=xa.var.unit,
+                  var.mv=xa.var.mv,
+                  var.version=xa.var.version,
+                  times.unit=xa.times.unit,
+                  times.ref=xa.times.ref,
+                  reference=xa.reference,
+                  source.string=xa.source.nc,
+                  lonlat.out=F,
+                  round.dig=1)
+  print(paste("write output file",h.thr.files.grd[i]))
+  ncdf4io::nc4out(file.name=h.thr.files.grd[i],
+                  grid=t(as.matrix(b2r)),
+                  x=x.FG,y=y.FG,grid.type=grid.type,
+                  times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+                  prod.date=prod.date,
+                  proj4.string=proj4.utm33,
+                  var.name=xa.var.name,
+                  var.longname=xa.var.longname,
+                  var.unit=xa.var.unit,
+                  var.mv=xa.var.mv,
+                  var.version=xa.var.version,
+                  times.unit=xa.times.unit,
+                  times.ref=xa.times.ref,
+                  reference=xa.reference,
+                  source.string=xa.source.nc,
+                  lonlat.out=F,
+                  round.dig=1)
+#  nogrid.ncout(file.name=h.files.grd[i],
+#               grid=t(as.matrix(b2r)),
+#               x=x.FG,y=y.FG,grid.type=grid.type,
+#               times=c(paste(yyyymmddhh.v[i],"00",sep="")),
+#               prod.date=prod.date,
+#               proj4.string=proj4.utm33,
+#               var.name=xa.var.name,
+#               var.longname=xa.var.longname,
+#               var.unit=xa.var.unit,
+#               var.mv=xa.var.mv,
+#               var.version=xa.var.version,
+#               times.unit=xa.times.unit,
+#               times.ref=xa.times.ref,
+#               reference=xa.reference,
+#               source.string=xa.source.nc)
 }
 #..............................................................................
 # Exit with success

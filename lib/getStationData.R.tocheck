@@ -6,8 +6,10 @@ getStationMetadata<-function(from.year,to.year,max.Km)
   require(raster)
   require(rgdal)
   #
-  file.statauxNO<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NorwegianStations.txt" 
-  file.stataux<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NotNorwegianStations.txt" 
+#  file.statauxNO<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NorwegianStations.txt" 
+#  file.stataux<-"/home/senorge2/data/KDVHstationMetadata/KDVHstationMetadata_NotNorwegianStations.txt" 
+  file.statauxNO<-""
+  file.stataux<-""
   # CRS strings
   proj4.wgs84<-"+proj=longlat +datum=WGS84"
   proj4.ETRS_LAEA<-"+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs"
@@ -24,37 +26,69 @@ getStationMetadata<-function(from.year,to.year,max.Km)
 # 8 TELEMARK, 9 AUST-AGDER, 10 VEST-AGDER, 11 ROGALAND, 12 HORDALAND, 
 # 14 SOGN OG FJORDANE, 15 MØRE OG ROMSDAL, 16 SØR-TRØNDELAG, 
 # 17 NORD-TRØNDELAG, 18 NORDLAND, 19 TROMS, 20 FINNMARK,
-#  myurlno <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
-#                   "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
-#                   "&fy=",from.year,"&ty=",to.year,
-#                   "&cnr=1&cnr=2&cnr=3&cnr=4&cnr=5&cnr=6&cnr=7&cnr=8&cnr=9",
-#                   "&cnr=10&cnr=11&cnr=12&cnr=14&cnr=15&cnr=16&cnr=17",
-#                   "&cnr=18&cnr=19&cnr=20&cnr=13",sep="")
-#  myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
-#                 "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
-#                 "&fy=",from.year,"&ty=",to.year,sep="")
+  myurlno <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
+                   "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
+                   "&fy=",from.year,"&ty=",to.year,
+                   "&cnr=1&cnr=2&cnr=3&cnr=4&cnr=5&cnr=6&cnr=7&cnr=8&cnr=9",
+                   "&cnr=10&cnr=11&cnr=12&cnr=14&cnr=15&cnr=16&cnr=17",
+                   "&cnr=18&cnr=19&cnr=20&cnr=13",sep="")
+  myurl <- paste("http://klapp.oslo.dnmi.no/metnopub/production/metno?",
+                 "re=16&nod=NA&ct=text/plain&ddel=dot&del=semicolon",
+                 "&fy=",from.year,"&ty=",to.year,sep="")
 # Read files and not make a query to the database because of the problem in getting
 #  the data from KDVH.
   o.cont<-1
   while (o.cont<=10) {
     statauxNO<-NULL
     stataux<-NULL
-#    try(statauxNO <-read.table(myurlno, header = TRUE,  sep = ";",
-#                             stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1",
-#                             encoding = "UTF-8", quote = "",na.strings="NA",
-#                             strip.white=T))
+    try(statauxNO <-read.table(myurlno, header = TRUE,  sep = ";",
+                               stringsAsFactors = FALSE,
+                               fileEncoding = "ISO-8859-1",
+                               encoding = "UTF-8", quote = "",na.strings="NA",
+                               strip.white=T))
     if (file.exists(file.statauxNO)) {
-      statauxNO <-read.table(file=file.statauxNO,
-                             header=TRUE,sep=";",
-                             stringsAsFactors=FALSE,na.strings="NA",strip.white=T,
-                             fileEncoding="ISO-8859-1",encoding="UTF-8",quote="")
+      print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      if (Sys.getlocale("LC_CTYPE")=="C") {
+        Sys.setlocale(category = "LC_CTYPE", locale = "en_US.UTF-8")
+        print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      }
+      enc.str.list<-c("Latin1","ISO-8859-1","ISO-8859-15","latin-9")
+      for (enc.str in enc.str.list) {
+        print(enc.str)
+        deb<-try( statauxNO <-read.table(file=file.statauxNO,
+                                         header=TRUE,sep=";",
+                                         stringsAsFactors=FALSE,
+                                         na.strings="NA",strip.white=T,
+                                         fileEncoding=enc.str,
+                                         quote="",skipNul=T))
+        if (attr(deb,"class")!="try-error") break
+      }
+      if (attr(deb,"class")=="try-error") quit(status=1)
     }
+    stataux   <-read.table(file=file.stataux,
+                           header=TRUE,sep=";",
+                           stringsAsFactors=FALSE,
+                           fileEncoding="Latin1",
+                           quote="",na.strings="NA",
+                           strip.white=T)
     if (file.exists(file.stataux)) {
-      stataux   <-read.table(file=file.stataux,
-                             header=TRUE,sep=";",
-                             stringsAsFactors=FALSE,fileEncoding="ISO-8859-1",
-                             encoding="UTF-8",quote="",na.strings="NA",
-                             strip.white=T)
+      print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      if (Sys.getlocale("LC_CTYPE")=="C") {
+        Sys.setlocale(category = "LC_CTYPE", locale = "en_US.UTF-8")
+        print(paste("Sys.getlocale(\"LC_CTYPE\")=",Sys.getlocale("LC_CTYPE")))
+      }
+      enc.str.list<-c("Latin1","ISO-8859-1","ISO-8859-15","latin-9")
+      for (enc.str in enc.str.list) {
+        print(enc.str)
+        deb<-try( stataux <-read.table(file=file.stataux,
+                                         header=TRUE,sep=";",
+                                         stringsAsFactors=FALSE,
+                                         na.strings="NA",strip.white=T,
+                                         fileEncoding=enc.str,
+                                         quote="",skipNul=T))
+        if (attr(deb,"class")!="try-error") break
+      }
+      if (attr(deb,"class")=="try-error") quit(status=1)
     }
 # column names
 # DEPARTMENT;DEPT_NO;MUNICIPALITY;MUNI_NO;ST_NAME;STNR;UTM_E;UTM_N;AMSL;LAT_DEC;LON_DEC;WMO_NO

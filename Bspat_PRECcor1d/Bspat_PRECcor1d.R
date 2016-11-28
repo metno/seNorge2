@@ -142,7 +142,8 @@ library(igraph)
 library(raster)
 #rasterOptions(chunksize=2e+07,maxmemory=3e+08)
 library(rgdal)
-library(ncdf)
+library(ncdf4)
+library(ncdf4io)
 require(tripack)
 require(cluster)
 # CRS strings
@@ -361,8 +362,9 @@ if (p==length(config_list) & (config_list[[p]]$pname!=config_par) )
   ext<-error_exit("Fatal Error: configuration parameter not in configuration file")
 main.path<-config_list[[p]]$opt$main.path
 main.path.output<-config_list[[p]]$opt$main.path.output
+main.path.thredds<-config_list[[p]]$opt$main.path.thredds
 testmode<-config_list[[p]]$opt$testmode
-if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) ) 
+if ( !(file.exists(main.path)) | !(file.exists(main.path.output)) | !(file.exists(main.path.thredds)) ) 
   ext<-error_exit("Fatal Error: path not found")
 # geographical information
 main.path.geoinfo<-paste(main.path,"/geoinfo",sep="")
@@ -501,6 +503,14 @@ if (!(file.exists(path2output.main.grd))) dir.create(path2output.main.grd,showWa
 if (!(file.exists(path2output.add)))      dir.create(path2output.add,showWarnings=F) 
 if (!(file.exists(path2output.add.grd)))  dir.create(path2output.add.grd,showWarnings=F) 
 if (!(file.exists(path2output.add.eve)))  dir.create(path2output.add.eve,showWarnings=F) 
+#
+dir.create(file.path(main.path.thredds,"seNorge2"), showWarnings = FALSE)
+path2thredds.main<-paste(main.path.thredds,"/seNorge2/provisional_archive/PRECcor1d",sep="")
+path2thredds.main.stn<-paste(path2thredds.main,"/station_dataset",sep="")
+path2thredds.main.grd<-paste(path2thredds.main,"/gridded_dataset",sep="")
+if (!(file.exists(path2thredds.main)))     dir.create(path2thredds.main,showWarnings=F) 
+if (!(file.exists(path2thredds.main.stn))) dir.create(path2thredds.main.stn,showWarnings=F) 
+if (!(file.exists(path2thredds.main.grd))) dir.create(path2thredds.main.grd,showWarnings=F) 
 # Setup output files 
 dir.create(paste(path2output.main.stn,"/",yyyymm.b,sep=""),showWarnings=F)
 dir.create(paste(path2output.main.grd,"/",yyyymm.b,sep=""),showWarnings=F)
@@ -535,6 +545,20 @@ print("station outputs (text)")
 print(out.file.stn)
 print("event outputs (text)")
 print(out.file.eve)
+# Setup thredds files 
+dir.create(paste(path2thredds.main.stn,"/",yyyymm.b,sep=""),showWarnings=F)
+dir.create(paste(path2thredds.main.grd,"/",yyyymm.b,sep=""),showWarnings=F)
+thr.file.stn<- paste(path2thredds.main.stn,"/",yyyymm.b,
+                     "/seNorge_v2_0_PRECcor1d_station_",
+                     yyyymmdd.b,"_",yyyymmdd.e,".txt",sep="")
+thr.file.grd.ana<- paste(path2thredds.main.grd,"/",yyyymm.b,
+                         "/seNorge_v2_0_PRECcor1d_grid_",
+                         yyyymmdd.b,"_",yyyymmdd.e,".nc",sep="")
+print("thredds files:")
+print("analysis on the grid (netcdf)")
+print(thr.file.grd.ana)
+print("station threddss (text)")
+print(thr.file.stn)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # [] Grid
 # CRS Coordinate Reference System
@@ -714,6 +738,10 @@ cat(paste("year","month","day","nday","stid",
           "x","y","z","eve.lab","yo",
           "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
           file=out.file.stn,append=F)
+cat(paste("year","month","day","nday","stid",
+          "x","y","z","eve.lab","yo",
+          "yb","ya","yav","yidi","yidiv","dqcflag","\n",sep=";"),
+          file=thr.file.stn,append=F)
 cat(paste("year","month","day","nday","eve.lab","nobs",
           "area","volume",
           "mean.idi.x","mean.idi.y","mean.idiv.y",
@@ -828,42 +856,107 @@ while (L.yo.ok>0) {
               rep(NA,n.stn.output), #yidiv.eve
               formatC(ydqc.flag[stn.output],format="f",digits=0),
               "\n",sep=";"),file=out.file.stn,append=T)
+    cat(paste(yyyy.b,mm.b,dd.b,nday,
+              formatC(VecS[stn.output],format="f",digits=0),
+              formatC(VecX[stn.output],format="f",digits=0),
+              formatC(VecY[stn.output],format="f",digits=0),
+              formatC(VecZ[stn.output],format="f",digits=0),
+              rep(NA,n.stn.output), #eve.lab
+              formatC(yo[stn.output],format="f",digits=1),
+              rep(NA,n.stn.output), #yb
+              rep(0,n.stn.output), #ya
+              rep(NA,n.stn.output), #yav
+              rep(NA,n.stn.output), #yidi.eve
+              rep(NA,n.stn.output), #yidiv.eve
+              formatC(ydqc.flag[stn.output],format="f",digits=0),
+              "\n",sep=";"),file=thr.file.stn,append=T)
     # Figures
     r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
     r.aux.FG[mask.FG]<-round(xa.FG,1)
-    nogrid.ncout(file.name=out.file.grd.ana,
-                 grid=t(as.matrix(r.aux.FG)),
-                 x=x.FG,y=y.FG,grid.type=grid.type,
-                 times=c(paste(yyyymmdd.b,"0000",sep="")),
-                 prod.date=prod.date,
-                 proj4.string=proj4.utm33,
-                 var.name=xa.var.name,
-                 var.longname=xa.var.longname,
-                 var.unit=xa.var.unit,
-                 var.mv=xa.var.mv,
-                 var.version=xa.var.version,
-                 times.unit=xa.times.unit,
-                 times.ref=xa.times.ref,
-                 reference=xa.reference,
-                 source.string=xa.source.nc)
-    nogrid.ncout(file.name=out.file.grd.idi,
-                 grid=t(as.matrix(r.aux.FG)),
-                 x=x.FG,y=y.FG,grid.type=grid.type,
-                 times=c(paste(yyyymmdd.b,"0000",sep="")),
-                 prod.date=prod.date,
-                 proj4.string=proj4.utm33,
-                 var.name=xidi.var.name,
-                 var.longname=xidi.var.longname,
-                 var.unit=xidi.var.unit,
-                 var.mv=xidi.var.mv,
-                 var.version=xidi.var.version,
-                 times.unit=xidi.times.unit,
-                 times.ref=xidi.times.ref,
-                 reference=xidi.reference,
-                 source.string=xidi.source.nc)
+    ncdf4io::nc4out(file.name=out.file.grd.ana,
+                    grid=t(as.matrix(r.aux.FG)),
+                    x=x.FG,y=y.FG,grid.type=grid.type,
+                    times=c(paste(yyyymmdd.b,"0000",sep="")),
+                    prod.date=prod.date,
+                    proj4.string=proj4.utm33,
+                    var.name=xa.var.name,
+                    var.longname=xa.var.longname,
+                    var.unit=xa.var.unit,
+                    var.mv=xa.var.mv,
+                    var.version=xa.var.version,
+                    times.unit=xa.times.unit,
+                    times.ref=xa.times.ref,
+                    reference=xa.reference,
+                    source.string=xa.source.nc,
+                    lonlat.out=F,
+                    round.dig=1)
+    ncdf4io::nc4out(file.name=thr.file.grd.ana,
+                    grid=t(as.matrix(r.aux.FG)),
+                    x=x.FG,y=y.FG,grid.type=grid.type,
+                    times=c(paste(yyyymmdd.b,"0000",sep="")),
+                    prod.date=prod.date,
+                    proj4.string=proj4.utm33,
+                    var.name=xa.var.name,
+                    var.longname=xa.var.longname,
+                    var.unit=xa.var.unit,
+                    var.mv=xa.var.mv,
+                    var.version=xa.var.version,
+                    times.unit=xa.times.unit,
+                    times.ref=xa.times.ref,
+                    reference=xa.reference,
+                    source.string=xa.source.nc,
+                    lonlat.out=F,
+                    round.dig=1)
+    ncdf4io::nc4out(file.name=out.file.grd.idi,
+                    grid=t(as.matrix(r.aux.FG)),
+                    x=x.FG,y=y.FG,grid.type=grid.type,
+                    times=c(paste(yyyymmdd.b,"0000",sep="")),
+                    prod.date=prod.date,
+                    proj4.string=proj4.utm33,
+                    var.name=xidi.var.name,
+                    var.longname=xidi.var.longname,
+                    var.unit=xidi.var.unit,
+                    var.mv=xidi.var.mv,
+                    var.version=xidi.var.version,
+                    times.unit=xidi.times.unit,
+                    times.ref=xidi.times.ref,
+                    reference=xidi.reference,
+                    source.string=xidi.source.nc,
+                    lonlat.out=F,
+                    round.dig=1)
+#    nogrid.ncout(file.name=out.file.grd.ana,
+#                 grid=t(as.matrix(r.aux.FG)),
+#                 x=x.FG,y=y.FG,grid.type=grid.type,
+#                 times=c(paste(yyyymmdd.b,"0000",sep="")),
+#                 prod.date=prod.date,
+#                 proj4.string=proj4.utm33,
+#                 var.name=xa.var.name,
+#                 var.longname=xa.var.longname,
+#                 var.unit=xa.var.unit,
+#                 var.mv=xa.var.mv,
+#                 var.version=xa.var.version,
+#                 times.unit=xa.times.unit,
+#                 times.ref=xa.times.ref,
+#                 reference=xa.reference,
+#                 source.string=xa.source.nc)
+#    nogrid.ncout(file.name=out.file.grd.idi,
+#                 grid=t(as.matrix(r.aux.FG)),
+#                 x=x.FG,y=y.FG,grid.type=grid.type,
+#                 times=c(paste(yyyymmdd.b,"0000",sep="")),
+#                 prod.date=prod.date,
+#                 proj4.string=proj4.utm33,
+#                 var.name=xidi.var.name,
+#                 var.longname=xidi.var.longname,
+#                 var.unit=xidi.var.unit,
+#                 var.mv=xidi.var.mv,
+#                 var.version=xidi.var.version,
+#                 times.unit=xidi.times.unit,
+#                 times.ref=xidi.times.ref,
+#                 reference=xidi.reference,
+#                 source.string=xidi.source.nc)
     print("Success exit")
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1574,27 +1667,75 @@ while (L.yo.ok>0) {
               rep(NA,n.stn.output), #yidiv.eve
               formatC(ydqc.flag[stn.output],format="f",digits=0),
               "\n",sep=";"),file=out.file.stn,append=T)
+    cat(paste(yyyy.b,mm.b,dd.b,nday,
+              formatC(VecS[stn.output],format="f",digits=0),
+              formatC(VecX[stn.output],format="f",digits=0),
+              formatC(VecY[stn.output],format="f",digits=0),
+              formatC(VecZ[stn.output],format="f",digits=0),
+              rep(NA,n.stn.output), #eve.lab
+              formatC(yo[stn.output],format="f",digits=1),
+              rep(NA,n.stn.output), #yb
+              rep(0,n.stn.output), #ya
+              rep(NA,n.stn.output), #yav
+              rep(NA,n.stn.output), #yidi.eve
+              rep(NA,n.stn.output), #yidiv.eve
+              formatC(ydqc.flag[stn.output],format="f",digits=0),
+              "\n",sep=";"),file=thr.file.stn,append=T)
     # Figures
     r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
     xa.FG<-vector(mode="numeric",length=Lgrid.FG)
     xa.FG[]<-0
     r.aux.FG[mask.FG]<-round(xa.FG,1)
-    nogrid.ncout(file.name=out.file.grd.ana,
-             grid=t(as.matrix(r.aux.FG)),
-             x=x.FG,y=y.FG,grid.type=grid.type,
-             times=c(paste(yyyymmdd.b,"0000",sep="")),
-             prod.date=prod.date,
-             proj4.string=proj4.utm33,
-             var.name=xa.var.name,
-             var.longname=xa.var.longname,
-             var.unit=xa.var.unit,
-             var.mv=xa.var.mv,
-             var.version=xa.var.version,
-             times.unit=xa.times.unit,
-             times.ref=xa.times.ref,
-             reference=xa.reference,
-             source.string=xa.source.nc)
+    ncdf4io::nc4out(file.name=out.file.grd.ana,
+                    grid=t(as.matrix(r.aux.FG)),
+                    x=x.FG,y=y.FG,grid.type=grid.type,
+                    times=c(paste(yyyymmdd.b,"0000",sep="")),
+                    prod.date=prod.date,
+                    proj4.string=proj4.utm33,
+                    var.name=xa.var.name,
+                    var.longname=xa.var.longname,
+                    var.unit=xa.var.unit,
+                    var.mv=xa.var.mv,
+                    var.version=xa.var.version,
+                    times.unit=xa.times.unit,
+                    times.ref=xa.times.ref,
+                    reference=xa.reference,
+                    source.string=xa.source.nc,
+                    lonlat.out=F,
+                    round.dig=1)
+    ncdf4io::nc4out(file.name=thr.file.grd.ana,
+                    grid=t(as.matrix(r.aux.FG)),
+                    x=x.FG,y=y.FG,grid.type=grid.type,
+                    times=c(paste(yyyymmdd.b,"0000",sep="")),
+                    prod.date=prod.date,
+                    proj4.string=proj4.utm33,
+                    var.name=xa.var.name,
+                    var.longname=xa.var.longname,
+                    var.unit=xa.var.unit,
+                    var.mv=xa.var.mv,
+                    var.version=xa.var.version,
+                    times.unit=xa.times.unit,
+                    times.ref=xa.times.ref,
+                    reference=xa.reference,
+                    source.string=xa.source.nc,
+                    lonlat.out=F,
+                    round.dig=1)
+#    nogrid.ncout(file.name=out.file.grd.ana,
+#             grid=t(as.matrix(r.aux.FG)),
+#             x=x.FG,y=y.FG,grid.type=grid.type,
+#             times=c(paste(yyyymmdd.b,"0000",sep="")),
+#             prod.date=prod.date,
+#             proj4.string=proj4.utm33,
+#             var.name=xa.var.name,
+#             var.longname=xa.var.longname,
+#             var.unit=xa.var.unit,
+#             var.mv=xa.var.mv,
+#             var.version=xa.var.version,
+#             times.unit=xa.times.unit,
+#             times.ref=xa.times.ref,
+#             reference=xa.reference,
+#             source.string=xa.source.nc)
     print("Success exit")
     quit(status=0)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -2142,6 +2283,20 @@ cat(paste(yyyy.b,mm.b,dd.b,nday,
           formatC(ydqc.flag[stn.output],format="f",digits=0),
           "\n",sep=";"),file=out.file.stn,append=T)
 cat(paste(yyyy.b,mm.b,dd.b,nday,
+          formatC(VecS[stn.output],format="f",digits=0),
+          formatC(VecX[stn.output],format="f",digits=0),
+          formatC(VecY[stn.output],format="f",digits=0),
+          formatC(VecZ[stn.output],format="f",digits=0),
+          formatC(y.eve[stn.output],format="f",digits=0),
+          formatC(yo[stn.output],format="f",digits=1),
+          formatC(yb[stn.output],format="f",digits=2),
+          formatC(ya[stn.output],format="f",digits=2),
+          formatC(yav[stn.output],format="f",digits=2),
+          formatC(yidi.eve[stn.output],format="f",digits=4),
+          formatC(yidiv.eve[stn.output],format="f",digits=4),
+          formatC(ydqc.flag[stn.output],format="f",digits=0),
+          "\n",sep=";"),file=thr.file.stn,append=T)
+cat(paste(yyyy.b,mm.b,dd.b,nday,
           eve.labels,
           n.y.eve,
           formatC(area.eve,format="f",digits=0),
@@ -2182,40 +2337,92 @@ r.aux.FG[]<-NA
 r.aux.FG[mask.FG]<-round(xidi.FG,1)
 r.aux.FG[mask.FG[xidi.FG>0]]<-round(100*xidi.FG[xidi.FG>0],1)
 if (xidi.flag.write) {
-  nogrid.ncout(file.name=out.file.grd.idi,
-               grid=t(as.matrix(r.aux.FG)),
-               x=x.FG,y=y.FG,grid.type=grid.type,
-               times=c(paste(yyyymmdd.b,"0000",sep="")),
-               prod.date=prod.date,
-               proj4.string=proj4.utm33,
-               var.name=xidi.var.name,
-               var.longname=xidi.var.longname,
-               var.unit=xidi.var.unit,
-               var.mv=xidi.var.mv,
-               var.version=xidi.var.version,
-               times.unit=xidi.times.unit,
-               times.ref=xidi.times.ref,
-               reference=xidi.reference,
-               source.string=xidi.source.nc)
+  ncdf4io::nc4out(file.name=out.file.grd.idi,
+                  grid=t(as.matrix(r.aux.FG)),
+                  x=x.FG,y=y.FG,grid.type=grid.type,
+                  times=c(paste(yyyymmdd.b,"0000",sep="")),
+                  prod.date=prod.date,
+                  proj4.string=proj4.utm33,
+                  var.name=xidi.var.name,
+                  var.longname=xidi.var.longname,
+                  var.unit=xidi.var.unit,
+                  var.mv=xidi.var.mv,
+                  var.version=xidi.var.version,
+                  times.unit=xidi.times.unit,
+                  times.ref=xidi.times.ref,
+                  reference=xidi.reference,
+                  source.string=xidi.source.nc,
+                  lonlat.out=F,
+                  round.dig=1)
+#  nogrid.ncout(file.name=out.file.grd.idi,
+#               grid=t(as.matrix(r.aux.FG)),
+#               x=x.FG,y=y.FG,grid.type=grid.type,
+#               times=c(paste(yyyymmdd.b,"0000",sep="")),
+#               prod.date=prod.date,
+#               proj4.string=proj4.utm33,
+#               var.name=xidi.var.name,
+#               var.longname=xidi.var.longname,
+#               var.unit=xidi.var.unit,
+#               var.mv=xidi.var.mv,
+#               var.version=xidi.var.version,
+#               times.unit=xidi.times.unit,
+#               times.ref=xidi.times.ref,
+#               reference=xidi.reference,
+#               source.string=xidi.source.nc)
 }
 # Figure: Analysis on high-resolution grid
 r.aux.FG[mask.FG]<-round(xa.FG,1)
 if (xa.flag.write) {
-  nogrid.ncout(file.name=out.file.grd.ana,
-               grid=t(as.matrix(r.aux.FG)),
-               x=x.FG,y=y.FG,grid.type=grid.type,
-               times=c(paste(yyyymmdd.b,"0000",sep="")),
-               prod.date=prod.date,
-               proj4.string=proj4.utm33,
-               var.name=xa.var.name,
-               var.longname=xa.var.longname,
-               var.unit=xa.var.unit,
-               var.mv=xa.var.mv,
-               var.version=xa.var.version,
-               times.unit=xa.times.unit,
-               times.ref=xa.times.ref,
-               reference=xa.reference,
-               source.string=xa.source.nc)
+#  r<-matrix(data=getValues(raster),ncol=length(y),nrow=length(x))
+  ncdf4io::nc4out(file.name=out.file.grd.ana,
+                  grid=t(as.matrix(r.aux.FG)),
+                  x=x.FG,y=y.FG,grid.type=grid.type,
+                  times=c(paste(yyyymmdd.b,"0000",sep="")),
+                  prod.date=prod.date,
+                  proj4.string=proj4.utm33,
+                  var.name=xa.var.name,
+                  var.longname=xa.var.longname,
+                  var.unit=xa.var.unit,
+                  var.mv=xa.var.mv,
+                  var.version=xa.var.version,
+                  times.unit=xa.times.unit,
+                  times.ref=xa.times.ref,
+                  reference=xa.reference,
+                  source.string=xa.source.nc,
+                  lonlat.out=F,
+                  round.dig=1)
+  ncdf4io::nc4out(file.name=thr.file.grd.ana,
+                  grid=t(as.matrix(r.aux.FG)),
+                  x=x.FG,y=y.FG,grid.type=grid.type,
+                  times=c(paste(yyyymmdd.b,"0000",sep="")),
+                  prod.date=prod.date,
+                  proj4.string=proj4.utm33,
+                  var.name=xa.var.name,
+                  var.longname=xa.var.longname,
+                  var.unit=xa.var.unit,
+                  var.mv=xa.var.mv,
+                  var.version=xa.var.version,
+                  times.unit=xa.times.unit,
+                  times.ref=xa.times.ref,
+                  reference=xa.reference,
+                  source.string=xa.source.nc,
+                  lonlat.out=F,
+                  round.dig=1)
+#  nogrid.ncout(file.name=out.file.grd.ana,
+#               grid=t(as.matrix(r.aux.FG)),
+#               x=x.FG,y=y.FG,grid.type=grid.type,
+#               times=c(paste(yyyymmdd.b,"0000",sep="")),
+#               prod.date=prod.date,
+#               proj4.string=proj4.utm33,
+#               var.name=xa.var.name,
+#               var.longname=xa.var.longname,
+#               var.unit=xa.var.unit,
+#               var.mv=xa.var.mv,
+#               var.version=xa.var.version,
+#               times.unit=xa.times.unit,
+#               times.ref=xa.times.ref,
+#               reference=xa.reference,
+#               source.string=xa.source.nc)
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # Success: exit!

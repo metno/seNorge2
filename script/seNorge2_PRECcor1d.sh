@@ -27,7 +27,7 @@ function trim()
 #  R=/usr/bin/R
   R=R
 # Variables
-  export R_LIBS=/home/cristianl/Rpackages
+  export R_LIBS=/home/senorge2/projects/share/rpackages
   echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments
@@ -117,8 +117,6 @@ function trim()
 #------------------------------------------------------------------------------
 # Variables
   Bspat=$MAINDIR/Bspat_PRECcor1d/Bspat_PRECcor1d.R
-  BLACKL=/home/cristianl/data/seNorge2_blacklists/seNorge2_PREC1d_blacklist.txt
-  ERROBS=/home/cristianl/data/seNorge2_blacklists/suspect_observations_empty.txt
   BLACKL=/home/senorge2/data/seNorge2_blacklists/seNorge2_PREC1d_blacklist.txt
   ERROBS=/home/senorge2/data/seNorge2_blacklists/suspect_observations_empty.txt
 #--------------------------------------------------
