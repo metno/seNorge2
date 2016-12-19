@@ -1270,7 +1270,7 @@ while (L.yo.ok>0) {
         rm(G.dry)
         xidi.CG.dry[i]<-sum(K.dry)
         rm(K.dry)
-        if (xidi.CG.dry[i]>xidi.CG.wet[i]) x.dry.CG[i]<-1
+        if ((0.6*xidi.CG.dry[i])>xidi.CG.wet[i]) x.dry.CG[i]<-1
       } # END: compare IDIs
     } # END: cycle over xindx.nor.CG
   } # END: cycle over nor.1st
@@ -1385,7 +1385,7 @@ while (L.yo.ok>0) {
         rm(G.dry)
         xidi.CG.dry[i]<-sum(K.dry)
         rm(K.dry)
-        if (xidi.CG.wet[i]>=xidi.CG.dry[i]) x.wet.CG[i]<-1
+        if (xidi.CG.wet[i]>=(0.6*xidi.CG.dry[i])) x.wet.CG[i]<-1
       }
     } # END: cycle over xindx.eve.CG
   } # END: cycle over eve.1st
