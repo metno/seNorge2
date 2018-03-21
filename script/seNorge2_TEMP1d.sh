@@ -23,11 +23,13 @@ function trim()
     echo -n "$var";
 }
 # whereis R?
-  module load R/R-3.2.1-met
+  source /etc/profile.d/modules.sh
+  module load R/R-3.3.1-met
+  module load netcdf/4.4.1
 #  R=/usr/bin/R
   R=R
 # Variables
-  export R_LIBS=/home/senorge2/projects/share/rpackages
+  export R_LIBS=/home/senorge2/projects/xshare/rpackages
   echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments

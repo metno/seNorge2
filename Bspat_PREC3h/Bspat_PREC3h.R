@@ -388,6 +388,7 @@ for (i in 1:nt) {
   hrt.ra.i[]<-NA
   hrt.ra.i[]<-t(data)
   rm(data)
+  hrt.ra.i<-mask(hrt.ra.i,r.orog.FG)
   hrt.ra.i.filt<-focal(hrt.ra.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
   projection(hrt.ra.i.filt)<-proj4.utm33
   # accumulate/store prec fields for subsequent elaboration
@@ -525,6 +526,7 @@ for (i in 1:nt) {
   projection(b2r)<-proj4.utm33
   h.xa<-extract(b2r,1:ncell(b2r))
   h.xa[mask.FG][is.na(h.xa[mask.FG])]<-0
+  b2r[]<-NA
   b2r[mask.FG]<-h.xa[mask.FG]
   # Detect clumps (patches) of connected cells. Each clump gets a unique ID.
   print("..")

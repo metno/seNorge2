@@ -1436,6 +1436,7 @@ while (L.yo.ok>0) {
   rm(f.lab,aux,r.CG.eve.wet)
   # Detect (outer) edges - used for smoothing along the event borders 
   r.edge.CG<-edge(r.eve.CG,type="outer")
+  r.edge.CG<-r.edge.CG[[1]]
   x.edge.CG<-getValues(r.edge.CG)[mask.CG]
   x.edge.CG[x.edge.CG!=1]<-NA
   r.edge.CG[]<-NA
@@ -2191,6 +2192,13 @@ r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
 r.aux.FG[]<-NA
 r.aux.FG[mask.FG]<-xa.FG
+# smooth the borders
+rtmp.FG<-r.aux.FG
+rtmp.FG[rtmp.FG>=rr.inf]<-1
+rtmp1.FG<-focal(rtmp.FG,w=matrix(1,7,7), fun=mean)
+rtmp2.FG<-focal(r.aux.FG,w=matrix(1,7,7), fun=mean)
+rtmp3.FG<-rtmp1.FG*r.aux.FG+(1-rtmp1.FG)*rtmp2.FG
+r.aux.FG<-rtmp3.FG
 #r.aux.FG<-trim(r.aux.FG)
 ya.tmp<-extract(r.aux.FG,cbind(VecX,VecY))
 y.eve[is.na(ya)]<-NA

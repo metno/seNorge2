@@ -22,12 +22,10 @@ function trim()
     var="${var%%,}";   # remove trailing comma characters
     echo -n "$var";
 }
-# whereis R?
-  module load R/R-3.2.1-met
-#  R=/usr/bin/R
+  module add R/R-3.3.1-met
+  module add netcdf/4.4.1
   R=R
-# Variables
-  export R_LIBS=/home/senorge2/projects/share/rpackages
+  export R_LIBS=/home/senorge2/projects/xshare/rpackages
   echo "R_LIBS="$R_LIBS
 #----------------------------
 # Read command line arguments

@@ -593,12 +593,88 @@ na1<-(-999.)
 #    obtained from lat,lon. Furthermore, the location must be in Norway or on
 #    the border (less than max.Km.stnINdomain)
 # 2. stations in CG
-if (!testmode) {
-  stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.e,
-                                   max.Km=max.Km.stnINdomain)
+#if (!testmode) {
+#  stations.tmp<-getStationMetadata(from.year=yyyy.b,to.year=yyyy.e,
+#                                   max.Km=max.Km.stnINdomain)
+#} else {
+#  stations.tmp<-read.csv(file=station.info)
+#}
+#----------
+#PATCH
+mme<-formatC(mm.e,flag="0",width=2)
+dde<-formatC(dd.e,flag="0",width=2)
+hhe<-formatC(hh.e,flag="0",width=2)
+
+if (file.exists(file_blacklist)) {
+  bstid<-read.csv(file_blacklist,header=T,stringsAsFactors=F,strip.white=T)
+  bstid<-paste("SN",bstid$Stnr,":0",sep="")
 } else {
-  stations.tmp<-read.csv(file=station.info)
+  bstid<-integer(0)
 }
+
+for (bname in c("kdvh_Norway_nowmo_met_pp_",
+                "kdvh_Norway_nowmo_nomet_pp_",
+                "kdvh_Norway_wmo_pp_",
+                "smhi_Sweden_pp_")) {
+  ffin<-file.path("/lustre/storeB/project/metkl/senorge2/case/case_real/three_hourly_data",yyyy.e,mme,dde,paste(bname,yyyy.e,mme,dde,hhe,".txt",sep=""))
+  if (!file.exists(ffin)) next
+  saux<-read.table(file=ffin,
+                            header=T,sep=";",stringsAsFactors=F,strip.white=T)
+  if (length(saux$sourceId)==0) next
+  ix<-which(!is.na(saux$RR_1))
+  if (length(ix)==0) next
+  NOtmp<-rep(T,length(ix))
+  if (bname=="smhi_Sweden_pp_") {
+    saux$sourceId[ix]<-saux$sourceId[ix]+200000
+    saux$sourceId[ix]<-paste("SE",saux$sourceId[ix],":0",sep="")
+    NOtmp[]<-F
+  }
+  auxblist<-saux$sourceId[ix] %in% bstid
+  auxplau<-saux$RR_1[ix]>=yo.dqc.plausible.min & 
+           saux$RR_1[ix]<=yo.dqc.plausible.max
+  if (!exists("stations.tmp")) {
+    stations.tmp<-data.frame(stnr=saux$sourceId[ix],
+                             x=saux$x_utm33[ix],
+                             y=saux$y_utm33[ix],
+                             z=saux$z[ix],
+                             NO=NOtmp,
+                             stringsAsFactors=F)
+    data0<-data.frame(ntime=rep(3,length(ix)),
+                     nvalue=rep(3,length(ix)),
+                     value=saux$RR_1[ix],
+                     KDVHflag=rep(0,length(ix)),
+                     err.ext=rep(F,length(ix)),
+                     blist=auxblist,
+                     plausible=auxplau,
+                     stringsAsFactors=F)
+  } else {
+    stations.tmp<-rbind(stations.tmp,
+                        data.frame(stnr=saux$sourceId[ix],
+                             x=saux$x_utm33[ix],
+                             y=saux$y_utm33[ix],
+                             z=saux$z[ix],
+                             NO=NOtmp,
+                             stringsAsFactors=F))
+    data0<-rbind(data0,
+                data.frame(ntime=rep(3,length(ix)),
+                     nvalue=rep(3,length(ix)),
+                     value=saux$RR_1[ix],
+                     KDVHflag=rep(0,length(ix)),
+                     err.ext=rep(F,length(ix)),
+                     blist=auxblist,
+                     plausible=auxplau,
+                     stringsAsFactors=F))
+  }
+}
+if (!exists("stations.tmp")) {
+  print("ERROR while reading metadata")
+  quit(status=1)
+}
+for (i in 1:length(stations.tmp$stnr)) {
+  stations.tmp$stnr[i]<-substr(strsplit(stations.tmp$stnr[i],":")[[1]][1],
+                               3,nchar(stations.tmp$stnr[i]))
+}
+#----------
 n.tmp<-length(stations.tmp$stnr)
 stn.out.CG<-vector(length=n.tmp)
 stn.out.CG[1:n.tmp]<-F
@@ -617,6 +693,14 @@ stations$NO<-stations.tmp$NO[which(!stn.out.CG)]
 stations$z<-stations.tmp$z[which(!stn.out.CG)]
 stations$y<-stations.tmp$y[which(!stn.out.CG)]
 stations$x<-stations.tmp$x[which(!stn.out.CG)]
+data<-data.frame(ntime=data0$ntime[which(!stn.out.CG)],
+                 nvalue=data0$nvalue[which(!stn.out.CG)],
+                 value=data0$value[which(!stn.out.CG)],
+                 KDVHflag=data0$KDVHflag[which(!stn.out.CG)],
+                 err.ext=data0$err.ext[which(!stn.out.CG)],
+                 blist=data0$blist[which(!stn.out.CG)],
+                 plausible=data0$plausible[which(!stn.out.CG)])
+rm(data0)
 # [] define Vectors and Matrices
 VecX<-vector(mode="numeric",length=L.y.tot)
 VecY<-vector(mode="numeric",length=L.y.tot)
@@ -662,46 +746,47 @@ yo[]<-NA
 # set DQC flag to NA for every station/observation
 ydqc.flag[]<-NA
 # cycle over days to get data from KDVH
-if (!testmode) {
-  if (nhour==1) {
-    data<-getStationData(var="RR_1", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
-                         to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
-                         h=hh.b,
-                         qa=NULL, statlist=stations, outside.Norway=T,
-                         err.file=file_errobs, blist=file_blacklist,
-                         val.min.allowed=yo.dqc.plausible.min,
-                         val.max.allowed=yo.dqc.plausible.max,verbose=T)
-  } else {
-    for (d in 1:nday) {
-      yyyy.d<-dayseq$year[d]+1900
-      mm.d<-dayseq$mon[d]+1
-      dd.d<-dayseq$mday[d]
-      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon+1)==mm.d & timeseq$mday==dd.d)
-      hh.d<-timeseq$hour[aux]
-      data.tmp<-getStationData(var="RR_1", from.yyyy=yyyy.d, from.mm=mm.d, from.dd=dd.d,
-                               to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
-                               h=hh.d,
-                               qa=NULL, statlist=stations, outside.Norway=T,
-                               err.file=file_errobs, blist=file_blacklist, 
-                               val.min.allowed=yo.dqc.plausible.min, 
-                               val.max.allowed=yo.dqc.plausible.max,fun="sum",verbose=T)
-      if (d==1) {
-        data<-data.tmp
-      } else {
-        if (any(data$stnr!=data.tmp$stnr)) print("differenti")
-        data$ntime[1:L.y.tot]<-data$ntime[1:L.y.tot]+length(hh.d)
-        data$nvalue[1:L.y.tot]<-data$nvalue[1:L.y.tot]+data.tmp$nvalue[1:L.y.tot]
-        data$value[1:L.y.tot]<-data$value[1:L.y.tot]+data.tmp$value[1:L.y.tot]
-        data$KDVHflag[data.tmp$KDVHflag==100]<-100
-        data$err.ext[data.tmp$err.ext]<-T
-        data$blist[data.tmp$blist]<-T
-        data$plausible[!data.tmp$plausible]<-F
-      }
-    }
-  }
-} else {
-  data<-read.csv(file=observed.data)
-}
+#if (!testmode) {
+#  if (nhour==1) {
+#    data<-getStationData(var="RR_1", from.yyyy=yyyy.b, from.mm=mm.b, from.dd=dd.b,
+#                         to.yyyy=yyyy.e, to.mm=mm.e, to.dd=dd.e,
+#                         h=hh.b,
+#                         qa=NULL, statlist=stations, outside.Norway=T,
+#                         err.file=file_errobs, blist=file_blacklist,
+#                         val.min.allowed=yo.dqc.plausible.min,
+#                         val.max.allowed=yo.dqc.plausible.max,verbose=T)
+#  } else {
+#    for (d in 1:nday) {
+#      yyyy.d<-dayseq$year[d]+1900
+#      mm.d<-dayseq$mon[d]+1
+#      dd.d<-dayseq$mday[d]
+#      aux<-which( (timeseq$year+1900)==yyyy.d & (timeseq$mon+1)==mm.d & timeseq$mday==dd.d)
+#      hh.d<-timeseq$hour[aux]
+#      data.tmp<-getStationData(var="RR_1", from.yyyy=yyyy.d, from.mm=mm.d, from.dd=dd.d,
+#                               to.yyyy=yyyy.d, to.mm=mm.d, to.dd=dd.d,
+#                               h=hh.d,
+#                               qa=NULL, statlist=stations, outside.Norway=T,
+#                               err.file=file_errobs, blist=file_blacklist, 
+#                               val.min.allowed=yo.dqc.plausible.min, 
+#                               val.max.allowed=yo.dqc.plausible.max,fun="sum",verbose=T)
+#      if (d==1) {
+#        data<-data.tmp
+#      } else {
+#        if (any(data$stnr!=data.tmp$stnr)) print("differenti")
+#        data$ntime[1:L.y.tot]<-data$ntime[1:L.y.tot]+length(hh.d)
+#        data$nvalue[1:L.y.tot]<-data$nvalue[1:L.y.tot]+data.tmp$nvalue[1:L.y.tot]
+#        data$value[1:L.y.tot]<-data$value[1:L.y.tot]+data.tmp$value[1:L.y.tot]
+#        data$KDVHflag[data.tmp$KDVHflag==100]<-100
+#        data$err.ext[data.tmp$err.ext]<-T
+#        data$blist[data.tmp$blist]<-T
+#        data$plausible[!data.tmp$plausible]<-F
+#      }
+#    }
+#  }
+#} else {
+#  data<-read.csv(file=observed.data)
+#}
+#----------
 # debug: start
 print("Observed data (alligned with station info):")
 print(data)
@@ -1437,6 +1522,7 @@ while (L.yo.ok>0) {
   rm(f.lab,aux,r.CG.eve.wet)
   # Detect (outer) edges - used for smoothing along the event borders 
   r.edge.CG<-edge(r.eve.CG,type="outer")
+  r.edge.CG<-r.edge.CG[[1]]
   x.edge.CG<-getValues(r.edge.CG)[mask.CG]
   x.edge.CG[x.edge.CG!=1]<-NA
   r.edge.CG[]<-NA
@@ -2192,6 +2278,13 @@ r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
 r.aux.FG[]<-NA
 r.aux.FG[mask.FG]<-xa.FG
+# smooth the borders
+rtmp.FG<-r.aux.FG
+rtmp.FG[rtmp.FG>=rr.inf]<-1
+rtmp1.FG<-focal(rtmp.FG,w=matrix(1,7,7), fun=mean)
+rtmp2.FG<-focal(r.aux.FG,w=matrix(1,7,7), fun=mean)
+rtmp3.FG<-rtmp1.FG*r.aux.FG+(1-rtmp1.FG)*rtmp2.FG
+r.aux.FG<-rtmp3.FG
 #r.aux.FG<-trim(r.aux.FG)
 ya.tmp<-extract(r.aux.FG,cbind(VecX,VecY))
 y.eve[is.na(ya)]<-NA

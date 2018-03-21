@@ -1022,13 +1022,16 @@ while (L.yo.ok>0) {
       nor.1st.j<-nor.1st.vec[j,1:Lnor.1st.vec[j]]
       indx.dry.stns<-which(nor.1st.j %in% yo.ok.pos.dry)
       n.dry<-length(indx.dry.stns)
-      if (n.dry>1) next
-      nor.1st.j.dry<-nor.1st.j[indx.dry.stns]
-      aux.dist<-Disth[nor.1st.j.dry,nor.1st.j]
-      min.dist.from.dry.stn<-min(aux.dist[aux.dist>0])
-      if (min.dist.from.dry.stn<DQC.min.dist.allowed) {
-        flag.dry.dqc<-T
-        ydqc.flag[nor.1st.j.dry]<-200
+# 2017.10.21 CL modified DQC
+#      if (n.dry>1) next
+      if (n.dry==1 | (n.dry<4 & (n.dry/Lnor.1st.vec[j])<0.2) ) {
+        nor.1st.j.dry<-nor.1st.j[indx.dry.stns]
+        aux.dist<-Disth[nor.1st.j.dry,nor.1st.j]
+        min.dist.from.dry.stn<-min(aux.dist[aux.dist>0])
+        if (min.dist.from.dry.stn<DQC.min.dist.allowed) {
+          flag.dry.dqc<-T
+          ydqc.flag[nor.1st.j.dry]<-200
+        }
       }
     }
     rm(nor.1st.j,indx.dry.stns)
@@ -1445,6 +1448,7 @@ while (L.yo.ok>0) {
   rm(f.lab,aux,r.CG.eve.wet)
   # Detect (outer) edges - used for smoothing along the event borders 
   r.edge.CG<-edge(r.eve.CG,type="outer")
+  r.edge.CG<-r.edge.CG[[1]]
   x.edge.CG<-getValues(r.edge.CG)[mask.CG]
   x.edge.CG[x.edge.CG!=1]<-NA
   r.edge.CG[]<-NA
@@ -2200,6 +2204,13 @@ r.aux.FG <-raster(ncol=nx.FG, nrow=ny.FG, xmn=xmn.FG, xmx=xmx.FG,
                   ymn=ymn.FG, ymx=ymx.FG, crs=proj4.utm33)
 r.aux.FG[]<-NA
 r.aux.FG[mask.FG]<-xa.FG
+# smooth the borders
+rtmp.FG<-r.aux.FG
+rtmp.FG[rtmp.FG>=rr.inf]<-1
+rtmp1.FG<-focal(rtmp.FG,w=matrix(1,7,7), fun=mean)
+rtmp2.FG<-focal(r.aux.FG,w=matrix(1,7,7), fun=mean)
+rtmp3.FG<-rtmp1.FG*r.aux.FG+(1-rtmp1.FG)*rtmp2.FG
+r.aux.FG<-rtmp3.FG
 #r.aux.FG<-trim(r.aux.FG)
 ya.tmp<-extract(r.aux.FG,cbind(VecX,VecY))
 y.eve[is.na(ya)]<-NA

@@ -377,6 +377,7 @@ for (i in 1:nt) {
   hrt.ra.i[]<-NA
   hrt.ra.i[]<-t(data)
   rm(data)
+  hrt.ra.i<-mask(hrt.ra.i,r.orog.FG)
   hrt.ra.i.filt<-focal(hrt.ra.i,w=matrix(1,nc=11,nr=11),fun=mean,na.rm=T)
   projection(hrt.ra.i.filt)<-proj4.utm33
   # accumulate/store prec fields for subsequent elaboration
